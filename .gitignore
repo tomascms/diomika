@@ -1,0 +1,72 @@
+# Secrets — nunca versionar .env (fica só na VM / PC local)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Env antigos (não usar)
+backend-api/.env
+frontend-web/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+temp/
+*.png
+
+# Logs & runtime state
+logs/
+backend-api/logs/
+backend-api/data/admin_users.json
+backend-api/data/admin_users.tmp
+*.log
+backend-api/logs/dlq_events.jsonl
+
+# Schema snapshot (gerado automaticamente)
+backend-api/.schema_snapshot.json
+backend-api/.email_worker_state.json
+backend-api/.email_worker_heartbeat.json
+backend-api/sql/generated_*.sql
+deploy/urls.toml
+deploy/beta.state.json
+deploy/production.ready.json
+deploy/artifacts/
+deploy/backups/
+deploy/launch.state.json
+deploy/alerts.log
+deploy/proof/
+deploy/backups/
+*.sql.gz
+deploy/cloudflared-*.log
+deploy/beta-api.log
+deploy/extreme_test.log
+deploy/generated_catalog_infra.sql
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+
+# IDE & OS
+.cursor/
+.vscode/
+.idea/
+.local-jobs.json
+.local-pids.json
+.DS_Store
+Thumbs.db
+
+# Build
+backoffice-desktop/release/
+*.timestamp-*-*.mjs
+.eslintcache
+
+# Local runtime / secret backups (nunca commit)
+dump.rdb
+.env*.bak*
+.env.env.bak_clean
+deploy/.cf_token_tmp
+.local-previews/

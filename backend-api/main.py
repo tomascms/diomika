@@ -1,0 +1,174 @@
+"""
+API FastAPI da Diomika (catálogo, orçamentos, contacto, admin local-only).
+
+Arranque local: porta 8001 (INICIAR_DIOMIKA / Backoffice / Tunnel). Docker compose usa :8000.
+Produção: GCP e2-micro + Cloudflare Tunnel → api.diomika.com
+"""
+import logging
+import os
+from contextlib import asynccontextmanager
+
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+
+from core.env_loader import load_project_env
+
+load_project_env()
+
+from core.auth import require_ops
+from core.local_only import admin_must_be_local
+from core.config import get_settings
+from core.health import build_health
+from core.middleware import (
+    RequestIdMiddleware,
+    SecurityHeadersMiddleware,
+    GlobalRateLimitMiddleware,
+    CatalogCacheHeadersMiddleware,
+    BodySizeLimitMiddleware,
+    ALLOWED_CORS_HEADERS,
+)
+from core.path_guard import PrivilegedPathMiddleware
+from core.version import VERSION
+from routes import (
+    categories,
+    system,
+    contact,
+    admin,
+    orcamentos,
+    encomendas,
+    catalog_generic,
+    admin_crud,
+    admin_auth,
+    privacy,
+)
+
+logging.basicConfig(level=logging.INFO)
+
+from core.log_safe import install_log_redaction
+
+install_log_redaction()
+
+logger = logging.getLogger("diomika-api")
+
+settings = get_settings()
+settings.validate_startup()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from core.background_workers import start_background_workers, stop_background_workers
+    from core.schema_engine import bootstrap_database_schema
+
+    if (os.getenv("SCHEMA_BOOTSTRAP") or "1").strip().lower() not in ("0", "false", "no"):
+        bootstrap_database_schema(logger)
+    else:
+        logger.info("SCHEMA_BOOTSTRAP=0 — skip bootstrap (replica ou init já feito)")
+    start_background_workers()
+    yield
+    stop_background_workers()
+
+
+app = FastAPI(
+    title="Diomika API",
+    version=VERSION,
+    description="API Diomika — catálogo schema-driven, sagas, Supabase",
+    docs_url="/api/docs" if settings.docs_enabled else None,
+    redoc_url="/api/redoc" if settings.docs_enabled else None,
+    openapi_url="/openapi.json" if settings.docs_enabled else None,
+    lifespan=lifespan,
+)
+
+# Ordem: path guard primeiro (outermost = last add) — Starlette inverte
+app.add_middleware(GlobalRateLimitMiddleware)
+app.add_middleware(BodySizeLimitMiddleware)
+app.add_middleware(CatalogCacheHeadersMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestIdMiddleware)
+app.add_middleware(PrivilegedPathMiddleware)
+if settings.is_production:
+    allowed_hosts = [h.strip() for h in (os.getenv("ALLOWED_HOSTS") or "").split(",") if h.strip()]
+    # Fail-closed: sem hosts → middleware com lista vazia rejeita tudo (validate_startup já exige)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts or ["invalid.invalid"])
+    if settings.is_beta:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origin_regex=r"https://.*\.(trycloudflare\.com|pages\.dev)$",
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=ALLOWED_CORS_HEADERS,
+        )
+    else:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=ALLOWED_CORS_HEADERS,
+        )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+if not settings.api_secret_key and not settings.is_production:
+    logger.warning("API_SECRET_KEY não definido — endpoints admin abertos apenas em dev local.")
+
+from core.admin_users import ensure_bootstrap
+
+ensure_bootstrap()
+
+app.include_router(admin_auth.router)
+app.include_router(privacy.router)
+app.include_router(catalog_generic.router)
+app.include_router(categories.router)
+app.include_router(system.router)
+app.include_router(contact.router)
+app.include_router(orcamentos.router)
+app.include_router(encomendas.router)
+app.include_router(admin_crud.router)
+app.include_router(admin.router)
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception(request, exc):  # type: ignore[no-untyped-def]
+    """Em produção não devolve stack traces ao cliente."""
+    from fastapi.responses import JSONResponse
+
+    if isinstance(exc, HTTPException):
+        raise exc
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    if settings.is_production:
+        return JSONResponse(status_code=500, content={"detail": "Erro interno"})
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+
+@app.get("/health")
+def health_check():
+    return build_health(detailed=False)
+
+
+@app.get("/health/ready")
+def health_ready():
+    body = build_health(ready=True)
+    if not body.get("database"):
+        raise HTTPException(status_code=503, detail=body)
+    return body
+
+
+@app.get(
+    "/health/detail",
+    dependencies=[Depends(admin_must_be_local), Depends(require_ops)],
+)
+def health_detail():
+    """Detalhe ops — só localhost em produção final (público: /health e /health/ready)."""
+    return build_health(detailed=True)
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    # Local Windows / Tunnel → 8001. Override: DIOMIKA_API_PORT=8000
+    _port = int(os.getenv("DIOMIKA_API_PORT") or "8001")
+    uvicorn.run(app, host="127.0.0.1", port=_port)

@@ -1,0 +1,98 @@
+"""Queries — catálogo de assentos."""
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+
+from core.database import get_db
+from core.visibility import is_visible
+
+
+@dataclass
+class AssentoCatalogueQuery:
+    id_categoria: str
+
+
+def _modelo_cores(data: dict) -> list[dict]:
+    """Cores próprias do modelo (sempre id_modelo)."""
+    cores = [c for c in (data.get("modelo_cores") or []) if c.get("visibilidade", True)]
+    cores.sort(key=lambda c: c.get("numero", 0))
+    return cores
+
+
+def catalogue_assento_models(q: AssentoCatalogueQuery):
+    db = get_db()
+    res = (
+        db.table("modelos_assentos")
+        .select(
+            "*, categories(nome, carrinho_step, carrinho_min, slug, tipo_catalogo), "
+            "modelo_cores(numero, nome, imagem, visibilidade), "
+            "assento(ean, barcode_url, visibilidade)"
+        )
+        .eq("id_categoria", q.id_categoria)
+        .eq("visibilidade", True)
+        .order("nome")
+        .execute()
+    )
+    out = []
+    for row in res.data or []:
+        assento_rows = [a for a in (row.get("assento") or []) if a.get("visibilidade", True)]
+        if not assento_rows:
+            continue
+        row["assento"] = assento_rows[0]
+        row["modelo_cores"] = _modelo_cores(row)
+        out.append(row)
+    return out
+
+
+def assento_model_detail(id_modelo: str):
+    db = get_db()
+    res = (
+        db.table("modelos_assentos")
+        .select("*, categories(*), modelo_cores(*), assento(*)")
+        .eq("id", id_modelo)
+        .single()
+        .execute()
+    )
+    data = res.data
+    if not data:
+        return None
+    if not is_visible(data):
+        return None
+    assento_rows = [a for a in (data.get("assento") or []) if a.get("visibilidade", True)]
+    data["assento"] = assento_rows[0] if assento_rows else None
+    data["modelo_cores"] = _modelo_cores(data)
+    alturas = data.get("alturas") or []
+    if isinstance(alturas, str):
+        try:
+            alturas = json.loads(alturas)
+        except Exception:
+            alturas = []
+    data["alturas"] = sorted(alturas)
+    return data
+
+
+def resolve_assento_line(ean: str, numero_cor: int, altura: str | None = None) -> dict:
+    db = get_db()
+    row = db.table("assento").select("*, modelos_assentos(*)").eq("ean", ean).limit(1).execute()
+    item = (row.data or [None])[0]
+    if not item:
+        return {}
+    modelo = item.get("modelos_assentos") or {}
+    if isinstance(modelo, list) and modelo:
+        modelo = modelo[0]
+    detail = assento_model_detail(str(item["id_modelo"])) or {}
+    cor_nome = f"Cor {numero_cor}"
+    for c in detail.get("modelo_cores") or []:
+        if int(c.get("numero", 0)) == int(numero_cor):
+            cor_nome = c.get("nome") or cor_nome
+            break
+    return {
+        "ean": ean,
+        "numero_cor": numero_cor,
+        "altura": altura or "",
+        "modelo": modelo.get("nome", ""),
+        "dimensoes": altura or "",
+        "cor_nome": cor_nome,
+        "tipo_produto": "assento",
+    }

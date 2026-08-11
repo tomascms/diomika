@@ -1,0 +1,61 @@
+{
+  "domain": "diomika.com",
+  "notes": [
+    "Único custo: comprar diomika.com (recomendado na Cloudflare Registrar — DNS fica na mesma conta).",
+    "Resto da stack: €0 (Pages + Tunnel + Supabase Free + Oracle Always Free ou PC+Tunnel).",
+    "api: CNAME do Tunnel (Public Hostname) ou A/AAAA da VM.",
+    "www: Pages → Custom domains → www.diomika.com."
+  ],
+  "records_after_zone_active": [
+    {
+      "type": "CNAME",
+      "name": "api",
+      "content": "<tunnel-uuid>.cfargotunnel.com",
+      "proxied": true,
+      "comment": "Cloudflare Tunnel public hostname api.diomika.com → http://localhost:8000"
+    },
+    {
+      "type": "CNAME",
+      "name": "www",
+      "content": "diomika-loja.pages.dev",
+      "proxied": true,
+      "comment": "Preferir Pages → Custom domains → www.diomika.com"
+    },
+    {
+      "type": "CNAME",
+      "name": "@",
+      "content": "diomika-loja.pages.dev",
+      "proxied": true,
+      "comment": "Opcional: apex → loja (CNAME flattening na Cloudflare)"
+    }
+  ],
+  "tunnel": {
+    "name": "diomika-api",
+    "public_hostname": {
+      "subdomain": "api",
+      "domain": "diomika.com",
+      "service": "http://localhost:8000"
+    },
+    "compose": "docker compose -f deploy/docker-compose.free.yml --profile tunnel up -d --build",
+    "env": [
+      "CLOUDFLARE_TUNNEL_TOKEN",
+      "API_BASE_URL=https://api.diomika.com",
+      "ALLOWED_HOSTS=api.diomika.com",
+      "TRUST_PROXY=1",
+      "CORS_ORIGINS=https://www.diomika.com,https://diomika-loja.pages.dev",
+      "REDIS_URL=redis://127.0.0.1:6379/0",
+      "SUPABASE_STORAGE_PRIVATE=1"
+    ]
+  },
+  "pages_custom_domain": {
+    "project": "diomika-loja",
+    "hostname": "www.diomika.com"
+  },
+  "day_commands": [
+    "python deploy/domain_day_prepare.py",
+    "python deploy/apply_waf.py --domain diomika.com",
+    "python deploy/storage_private_cutover.py",
+    "python deploy/launch.py all --mode production --dry-run",
+    "python deploy/launch.py all --mode production"
+  ]
+}
