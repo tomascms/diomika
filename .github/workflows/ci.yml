@@ -27,7 +27,7 @@ jobs:
           TURNSTILE_SECRET_KEY: test-turnstile
         run: python deploy/security_gate.py
       - name: Gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml
