@@ -1,0 +1,27 @@
+name: Uptime
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check API health
+        env:
+          API_URL: ${{ secrets.API_HEALTH_URL }}
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "Skip: define secret API_HEALTH_URL (ex: https://api.diomika.com)"
+            exit 0
+          fi
+          pip install certifi httpx
+          python deploy/uptime_check.py --url "$API_URL"

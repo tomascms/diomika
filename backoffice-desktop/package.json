@@ -1,0 +1,53 @@
+{
+  "name": "backoffice-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Diomika Backoffice — app local Vue + Electron (não deployar na internet)",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on http://127.0.0.1:5174 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5174 electron .\"",
+    "dev:ui": "vite",
+    "dev:browser": "vite --open",
+    "build": "vite build",
+    "start": "electron .",
+    "dist": "vite build && electron-builder --win portable"
+  },
+  "build": {
+    "appId": "pt.diomika.backoffice",
+    "productName": "Diomika Backoffice",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "Diomika-Backoffice.exe"
+    }
+  },
+  "dependencies": {
+    "vue": "^3.5.32",
+    "vue-router": "^5.0.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "concurrently": "^9.2.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "vite": "^8.0.8",
+    "wait-on": "^8.0.3"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}
