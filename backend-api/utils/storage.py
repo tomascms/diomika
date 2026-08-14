@@ -25,7 +25,23 @@ def sanitize_storage_path(dest_path: str) -> str:
     return "/".join(parts)
 
 
+def storage_backend() -> str:
+    """Auto: R2 se credenciais existirem; senão Supabase (ambos free-tier possíveis)."""
+    forced = (os.getenv("STORAGE_BACKEND") or "").strip().lower()
+    if forced in ("r2", "supabase"):
+        return forced
+    if all(
+        (os.getenv(k) or "").strip()
+        for k in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY")
+    ):
+        return "r2"
+    return "supabase"
+
+
 def storage_is_private() -> bool:
+    if storage_backend() == "r2":
+        # R2 público via R2_PUBLIC_BASE_URL ou signed
+        return not bool((os.getenv("R2_PUBLIC_BASE_URL") or "").strip())
     return (os.getenv("SUPABASE_STORAGE_PRIVATE") or "").strip().lower() in ("1", "true", "yes")
 
 
@@ -34,6 +50,10 @@ def signed_url_ttl() -> int:
 
 
 def get_public_url(storage_path: str) -> str:
+    if storage_backend() == "r2":
+        from utils.storage_r2 import resolve_url
+
+        return resolve_url(storage_path)
     bucket = get_db().storage.from_(BUCKET)
     url = bucket.get_public_url(storage_path)
     if isinstance(url, dict):
@@ -43,6 +63,10 @@ def get_public_url(storage_path: str) -> str:
 
 def get_signed_url(storage_path: str, expires_in: int | None = None) -> str:
     """URL assinada — falha fechada (nunca cai para pública se storage privado)."""
+    if storage_backend() == "r2":
+        from utils.storage_r2 import get_signed_url as r2_signed
+
+        return r2_signed(storage_path, expires_in)
     ttl = expires_in if expires_in is not None else signed_url_ttl()
     bucket = get_db().storage.from_(BUCKET)
     res = bucket.create_signed_url(storage_path, ttl)
@@ -58,6 +82,11 @@ def get_signed_url(storage_path: str, expires_in: int | None = None) -> str:
 def resolve_delivery_url(storage_path: str) -> str:
     from core.config import get_settings
 
+    if storage_backend() == "r2":
+        from utils.storage_r2 import resolve_url
+
+        return resolve_url(storage_path)
+
     settings = get_settings()
     # Produção final: nunca cair para URL pública
     if settings.is_production and not settings.is_beta:
@@ -70,7 +99,7 @@ def resolve_delivery_url(storage_path: str) -> str:
 
 
 def upload_bytes(data: bytes, dest_path: str, content_type: str = "image/png") -> str:
-    """Envia bytes para o Supabase Storage e devolve URL (pública ou assinada)."""
+    """Envia bytes para o storage (Supabase ou R2) e devolve URL."""
     from utils.image_validation import validate_upload_bytes
 
     dest_path = sanitize_storage_path(dest_path)
@@ -91,6 +120,11 @@ def upload_bytes(data: bytes, dest_path: str, content_type: str = "image/png") -
         content_type = "image/gif"
     else:
         raise ValueError("Extensão de imagem não permitida")
+
+    if storage_backend() == "r2":
+        from utils.storage_r2 import upload_bytes as r2_upload
+
+        return r2_upload(data, dest_path, content_type)
 
     bucket = get_db().storage.from_(BUCKET)
     try:

@@ -36,6 +36,10 @@ def allowed_fetch_hosts() -> set[str]:
             "hooks.slack.com",
             "discord.com",
             "discordapp.com",
+            "api.axiom.co",
+            "eu-central-1.aws.edge.axiom.co",
+            "us-east-1.aws.edge.axiom.co",
+            "ntfy.sh",
         }
     )
     return hosts

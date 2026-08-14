@@ -1,0 +1,43 @@
+# Opção avançada: tudo num VPS (Hetzner, DigitalOcean, etc.)
+# Uso: docker compose up -d
+# Requer ficheiro .env na raiz com todas as variáveis.
+
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      DIOMIKA_ENV: production
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  email-worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DIOMIKA_ENV: production
+    command: python workers/email_worker.py
+
+  outbox-worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DIOMIKA_ENV: production
+    command: python workers/outbox_worker.py
+
+  # Frontend estático (opcional no VPS — ou usa Vercel)
+  # frontend:
+  #   image: nginx:alpine
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./frontend-web/dist:/usr/share/nginx/html:ro

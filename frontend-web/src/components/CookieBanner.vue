@@ -2,24 +2,31 @@
 import { ref, onMounted } from 'vue'
 
 const CONSENT_KEY = 'diomika_cookie_consent'
-const analyticsId = import.meta.env.VITE_ANALYTICS_ID || ''
+const posthogKey = import.meta.env.VITE_POSTHOG_KEY || ''
+const posthogHost = import.meta.env.VITE_POSTHOG_HOST || 'https://eu.i.posthog.com'
 
 const visible = ref(false)
 
-const loadAnalytics = () => {
-  if (!analyticsId || document.getElementById('diomika-analytics')) return
-  const script = document.createElement('script')
-  script.id = 'diomika-analytics'
-  script.defer = true
-  script.dataset.domain = analyticsId
-  script.src = 'https://plausible.io/js/script.js'
-  document.head.appendChild(script)
+const loadPosthog = async () => {
+  if (!posthogKey || window.__diomikaPosthog) return
+  try {
+    const { default: posthog } = await import('posthog-js')
+    posthog.init(posthogKey, {
+      api_host: posthogHost,
+      persistence: 'localStorage',
+      autocapture: true,
+      capture_pageview: true,
+    })
+    window.__diomikaPosthog = true
+  } catch {
+    /* ignore */
+  }
 }
 
 const accept = () => {
   localStorage.setItem(CONSENT_KEY, 'accepted')
   visible.value = false
-  loadAnalytics()
+  loadPosthog()
 }
 
 const reject = () => {
@@ -30,10 +37,12 @@ const reject = () => {
 onMounted(() => {
   const saved = localStorage.getItem(CONSENT_KEY)
   if (saved === 'accepted') {
-    loadAnalytics()
+    loadPosthog()
     return
   }
   if (saved === 'rejected') return
+  // Sem key PostHog: não mostrar banner (nada a consentir além do essencial)
+  if (!posthogKey) return
   visible.value = true
 })
 </script>
@@ -42,7 +51,7 @@ onMounted(() => {
   <Transition name="slide-up">
     <aside v-if="visible" class="cookie-banner" role="dialog" aria-label="Consentimento de cookies">
       <p>
-        Utilizamos cookies analíticos opcionais para melhorar o site.
+        Utilizamos analytics (PostHog) para melhorar o site — só com o seu consentimento.
         <RouterLink to="/privacidade">Saiba mais</RouterLink>.
       </p>
       <div class="cookie-actions">

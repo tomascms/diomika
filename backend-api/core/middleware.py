@@ -1,6 +1,8 @@
 """Middleware: segurança, request-id, rate limit global."""
 from __future__ import annotations
 
+import os
+import time
 import uuid
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -72,8 +74,48 @@ class GlobalRateLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+class LatencyAlertMiddleware(BaseHTTPMiddleware):
+    """Alerta se request demorar mais que ALERT_LATENCY_MS (default 2000 — sempre on)."""
+
+    def __init__(self, app):
+        super().__init__(app)
+        try:
+            self.threshold_ms = max(0, int(os.getenv("ALERT_LATENCY_MS") or "2000"))
+        except ValueError:
+            self.threshold_ms = 2000
+
+    async def dispatch(self, request: Request, call_next):
+        if self.threshold_ms <= 0:
+            return await call_next(request)
+        t0 = time.perf_counter()
+        response = await call_next(request)
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        if elapsed_ms >= self.threshold_ms and not request.url.path.startswith("/health"):
+            try:
+                from core.alerts import send_alert
+
+                send_alert(
+                    "Latência elevada",
+                    severity="warning",
+                    detail={
+                        "path": request.url.path,
+                        "method": request.method,
+                        "ms": int(elapsed_ms),
+                        "threshold_ms": self.threshold_ms,
+                        "request_id": getattr(request.state, "request_id", None),
+                    },
+                )
+            except Exception:
+                pass
+        return response
+
+
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
-    """Rejeita bodies demasiado grandes (DoS) — Content-Length e stream."""
+    """Rejeita bodies demasiado grandes (DoS) via Content-Length.
+
+    Não consumir request.stream() aqui: BaseHTTPMiddleware + re-inject
+    do body parte o parsing JSON (login/admin POST → 422 body missing).
+    """
 
     MAX_BYTES = int(__import__("os").getenv("MAX_REQUEST_BODY_BYTES") or str(2 * 1024 * 1024))
 
@@ -85,18 +127,4 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
                     return Response("Payload demasiado grande", status_code=413)
             except ValueError:
                 return Response("Content-Length inválido", status_code=400)
-
-        if request.method in ("POST", "PUT", "PATCH"):
-            body = bytearray()
-            async for chunk in request.stream():
-                body.extend(chunk)
-                if len(body) > self.MAX_BYTES:
-                    return Response("Payload demasiado grande", status_code=413)
-            payload = bytes(body)
-
-            async def receive():
-                return {"type": "http.request", "body": payload, "more_body": False}
-
-            request = Request(request.scope, receive)
-
         return await call_next(request)

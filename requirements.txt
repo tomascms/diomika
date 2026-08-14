@@ -16,3 +16,6 @@ certifi
 pip-system-certs
 pyotp
 redis
+sentry-sdk[fastapi]
+boto3
+vulture

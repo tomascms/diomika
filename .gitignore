@@ -10,6 +10,7 @@ frontend-web/.env
 
 # Python
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *.egg-info/
 .venv/
@@ -49,6 +50,10 @@ deploy/generated_catalog_infra.sql
 node_modules/
 dist/
 dist-ssr/
+frontend-web/.wrangler/
+frontend-web/playwright-report/
+frontend-web/test-results/
+backoffice-desktop/build/
 
 # IDE & OS
 .cursor/

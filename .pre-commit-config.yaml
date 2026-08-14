@@ -1,0 +1,15 @@
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.2
+    hooks:
+      - id: gitleaks
+        args: [--config, .gitleaks.toml]
+
+  - repo: local
+    hooks:
+      - id: verify-bundle-secrets
+        name: verify bundle secrets
+        entry: python deploy/verify_bundle_secrets.py
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

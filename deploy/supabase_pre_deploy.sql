@@ -342,6 +342,12 @@ CREATE INDEX IF NOT EXISTS idx_encomendas_created
 CREATE INDEX IF NOT EXISTS idx_contact_messages_created
   ON contact_messages (created_at DESC);
 
+CREATE INDEX IF NOT EXISTS idx_contact_messages_email
+  ON contact_messages (lower(email));
+
+CREATE INDEX IF NOT EXISTS idx_pedidos_orcamento_email
+  ON pedidos_orcamento (lower(email));
+
 CREATE INDEX IF NOT EXISTS idx_saga_running
   ON saga_instances (updated_at) WHERE status = 'running';
 

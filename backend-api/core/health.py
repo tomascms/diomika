@@ -106,7 +106,9 @@ def build_health(*, detailed: bool = False, ready: bool = False) -> dict:
 
     from core.notify import contact_notify_email
     from core.rate_limit import redis_available
+    from core.feature_flags import flags_snapshot
     from utils.storage import storage_is_private
+    import os
 
     settings = get_settings()
     breaker = get_smtp_breaker()
@@ -125,4 +127,7 @@ def build_health(*, detailed: bool = False, ready: bool = False) -> dict:
         "smtp_circuit": "open" if breaker.opened_at else "closed",
         "email_worker": worker,
         "outbox_pending": pending,
+        "feature_flags": flags_snapshot(),
+        "sentry": bool((os.getenv("SENTRY_DSN") or "").strip()),
+        "axiom": bool((os.getenv("AXIOM_TOKEN") or "").strip()),
     }

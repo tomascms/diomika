@@ -69,6 +69,10 @@ async def send_message(
     idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ):
     """Formulario publico — saga DB + email + outbox."""
+    from core.feature_flags import flag
+
+    if not flag("CONTACT_FORM", True):
+        raise HTTPException(status_code=503, detail="Formulário temporariamente indisponível.")
     rate_limit(request, "contact_form", max_calls=5, window_seconds=60)
 
     key = (idempotency_key or "").strip()

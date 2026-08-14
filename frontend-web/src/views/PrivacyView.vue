@@ -53,17 +53,16 @@
       <section>
         <h2>Partilha com terceiros</h2>
         <p>
-          Utilizamos fornecedores de alojamento e base de dados (Supabase) e email (Gmail/SMTP) para
-          operar o serviço. Não vendemos os seus dados a terceiros.
+          Utilizamos fornecedores de alojamento e base de dados (Supabase), email (Gmail/SMTP) e, com o
+          seu consentimento, analytics (PostHog) para melhorar o serviço. Não vendemos os seus dados.
         </p>
       </section>
 
       <section>
         <h2>Cookies e analytics</h2>
         <p>
-          Utilizamos cookies estritamente necessários para o funcionamento do site. Cookies analíticos
-          (Plausible Analytics) só são activados se aceitar no banner de consentimento — dados agregados,
-          sem perfil individual.
+          Utilizamos cookies estritamente necessários para o funcionamento do site. Analytics de produto
+          (PostHog) só são activados se aceitar no banner de consentimento.
         </p>
       </section>
 

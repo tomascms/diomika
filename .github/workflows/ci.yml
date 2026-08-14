@@ -85,3 +85,15 @@ jobs:
 
       - name: Bundle secrets scan
         run: python deploy/verify_bundle_secrets.py
+
+      - name: Dead code (soft)
+        run: pip install vulture -q && python deploy/check_dead_code.py
+
+      - name: Playwright e2e (prod smoke)
+        working-directory: frontend-web
+        env:
+          E2E_SITE_URL: https://www.diomika.com
+          E2E_API_URL: https://api.diomika.com
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e

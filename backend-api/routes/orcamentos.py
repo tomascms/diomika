@@ -68,6 +68,10 @@ async def submit_orcamento(
     request: Request,
     idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ):
+    from core.feature_flags import flag
+
+    if not flag("ORCAMENTO_FORM", True):
+        raise HTTPException(status_code=503, detail="Formulário temporariamente indisponível.")
     rate_limit(request, "orcamento_form", max_calls=5, window_seconds=60)
 
     if body.website:

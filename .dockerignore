@@ -37,6 +37,8 @@ backend-api/sql/generated_*.sql
 deploy
 deploy/urls.toml
 
-INICIAR_DIOMIKA.py
+DIOMIKA.bat
+DIOMIKA.command
+DIOMIKA.sh
 PREPARAR_DEPLOY.py
 docker-compose.yml

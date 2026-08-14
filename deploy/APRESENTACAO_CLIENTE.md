@@ -9,7 +9,7 @@ Uma ferramenta por função. Tudo free-tier (excepto domínio).
 | Loja B2B | Vue + Cloudflare Pages | https://www.diomika.com |
 | API | FastAPI + Redis na GCP e2-micro + Tunnel | https://api.diomika.com |
 | Dados / auth BD | Supabase Free (Postgres + RLS) | — |
-| Admin | Electron **só no PC** (não na internet) | local |
+| Admin | Electron (EXE/DMG/AppImage) → API cloud | instalador |
 | Segurança edge | Cloudflare WAF + Turnstile + CSP | — |
 
 ## Monitorização (escolhas finais — sem duplicados)
@@ -27,7 +27,7 @@ Removido de propósito (era pior/duplicado): Plausible, pageviews first-party `/
 
 ## Segurança já no produto (podes dizer isto)
 
-- Admin inacessível na internet (só localhost + WAF)
+- Admin só via app oficial Diomika (gate + login); browsers sem app são bloqueados no WAF
 - Rate limit + Turnstile + honeypot nos formulários
 - Sessões curtas, passwords scrypt, sem enumeração de login
 - RLS no Supabase (anon não lê dados sensíveis)
@@ -54,5 +54,5 @@ Ver valores discutidos à parte (€300–450/mês recomendado).
 
 1. Abrir loja → categorias → produto → orçamento  
 2. `https://api.diomika.com/health` → online  
-3. Tentar `/admin` na API pública → bloqueado  
-4. Backoffice: instalar EXE/DMG (liga a `api.diomika.com`) — **sem** Python no PC do cliente  
+3. Abrir backoffice (EXE/DMG) → login → catálogo  
+4. Browser em `/admin` na API pública → bloqueado (só a app passa) 
