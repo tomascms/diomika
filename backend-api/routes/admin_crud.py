@@ -276,6 +276,9 @@ def delete_record(request: Request, table_name: str, record_id: str, hard: bool 
         raise HTTPException(status_code=403, detail="Hard delete desactivado em produção.")
     try:
         if hard:
+            if table_name in ("modelos_almofadas", "modelos_assentos"):
+                # modelo_cores sem FK polimórfica — limpar cores do modelo
+                get_db().table("modelo_cores").delete().eq("id_modelo", record_id).execute()
             get_db().table(table_name).delete().eq("id", record_id).execute()
             _invalidate_catalog_cache()
             _audit(request, "hard_delete", table_name, resource_id=record_id)

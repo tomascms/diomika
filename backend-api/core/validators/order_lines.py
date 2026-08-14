@@ -9,30 +9,42 @@ from models.catalog_registry import CATALOG_TYPES, storefront_mode_for_tipo
 
 
 def _load_products_by_ean(eans: list[str]) -> tuple[dict[str, dict], dict[str, str]]:
-    """Mapa EAN → row + EAN → tipo_catalogo."""
+    """Mapa EAN → row (+ categoria via modelo) + EAN → tipo_catalogo."""
     db = get_db()
     by_ean: dict[str, dict] = {}
     product_tipo: dict[str, str] = {}
 
     for tipo, cfg in CATALOG_TYPES.items():
         ptable = cfg["product_table"]
+        mtable = cfg["model_table"]
         try:
             res = (
                 db.table(ptable)
-                .select(f"ean, id_modelo, id_categoria, categories(carrinho_step, carrinho_min)")
+                .select(
+                    f"ean, id_modelo, {mtable}(id_categoria, categories(carrinho_step, carrinho_min))"
+                )
                 .in_("ean", eans)
                 .execute()
             )
         except Exception:
             continue
         for row in res.data or []:
+            modelo = row.get(mtable) or {}
+            if isinstance(modelo, list) and modelo:
+                modelo = modelo[0]
+            if not isinstance(modelo, dict):
+                modelo = {}
+            # Normaliza para o resto do validador: categories no topo
+            row = dict(row)
+            row["categories"] = modelo.get("categories") or {}
+            row["id_categoria"] = modelo.get("id_categoria")
             by_ean[row["ean"]] = row
             product_tipo[row["ean"]] = tipo
 
     return by_ean, product_tipo
 
 
-def _valid_almofada_colors(model_ids: list[str]) -> set[tuple[str, int]]:
+def _valid_model_colors(model_ids: list[str]) -> set[tuple[str, int]]:
     if not model_ids:
         return set()
     res = (
@@ -53,7 +65,7 @@ def validate_order_lines(linhas) -> None:
     alm_model_ids = list(
         {str(r["id_modelo"]) for e, r in by_ean.items() if product_tipo.get(e) != "assento" and r.get("id_modelo")}
     )
-    valid_alm_cors = _valid_almofada_colors(alm_model_ids)
+    valid_alm_cors = _valid_model_colors(alm_model_ids)
 
     assento_details: dict[str, dict] = {}
     for ean, row in by_ean.items():

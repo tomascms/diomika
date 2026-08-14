@@ -12,7 +12,6 @@ SHARED_CATALOG_TABLES = frozenset(
     {
         "categories",
         "modelo_cores",
-        "paletas_cores",
     }
 )
 
@@ -38,7 +37,6 @@ def generate_catalog_infra_sql() -> str:
             lines.extend(
                 [
                     f"ALTER TABLE IF EXISTS {tbl} ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();",
-                    f"CREATE INDEX IF NOT EXISTS idx_{tbl}_categoria ON {tbl} (id_categoria);",
                     f"ALTER TABLE {tbl} ENABLE ROW LEVEL SECURITY;",
                     f'DROP POLICY IF EXISTS "{tbl}_public_read" ON {tbl};',
                     f'CREATE POLICY "{tbl}_public_read" ON {tbl} FOR SELECT TO anon USING (visibilidade = true);',
@@ -50,6 +48,9 @@ def generate_catalog_infra_sql() -> str:
                     f'CREATE POLICY "{tbl}_deny_anon_delete" ON {tbl} FOR DELETE TO anon USING (false);',
                 ]
             )
+            # Categoria vive no modelo; produtos filtram por id_modelo
+            if tbl == mt:
+                lines.append(f"CREATE INDEX IF NOT EXISTS idx_{tbl}_categoria ON {tbl} (id_categoria);")
 
         lines.extend(
             [

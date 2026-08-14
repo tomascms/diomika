@@ -36,9 +36,21 @@ def list_categories(q: ListCategoriesQuery):
 
 def list_almofadas(q: ListAlmofadasQuery):
     db = get_db()
-    query = db.table("almofada").select("*")
     if q.id_categoria:
-        query = query.eq("id_categoria", q.id_categoria)
+        models = (
+            db.table("modelos_almofadas")
+            .select("id")
+            .eq("id_categoria", q.id_categoria)
+            .execute()
+            .data
+            or []
+        )
+        model_ids = [str(m["id"]) for m in models if m.get("id")]
+        if not model_ids:
+            return []
+        query = db.table("almofada").select("*").in_("id_modelo", model_ids)
+    else:
+        query = db.table("almofada").select("*")
     if q.visible_only:
         query = query.eq("visibilidade", True)
     return query.execute().data

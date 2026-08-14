@@ -309,40 +309,50 @@ def order_picker_for_category(category_id: str):
 
     pt = cfg["product_table"]
     mt = cfg["model_table"]
-    products = (
-        db.table(pt)
-        .select(f"ean, dimensoes, id_modelo, {mt}(nome)")
+    models = (
+        db.table(mt)
+        .select("id, nome")
         .eq("id_categoria", category_id)
         .eq("visibilidade", True)
         .execute()
         .data
         or []
     )
-    model_ids = list({str(p["id_modelo"]) for p in products if p.get("id_modelo")})
+    model_by_id = {str(m["id"]): m for m in models}
+    model_ids = list(model_by_id.keys())
+    if not model_ids:
+        return {"mode": "variantes", "tipo": tipo, "carrinho_step": step, "carrinho_min": min_q, "products": []}
+
+    products = (
+        db.table(pt)
+        .select("ean, dimensoes, id_modelo")
+        .in_("id_modelo", model_ids)
+        .eq("visibilidade", True)
+        .execute()
+        .data
+        or []
+    )
     cores_map: dict[str, list] = {}
-    if model_ids:
-        cores_res = (
-            db.table("modelo_cores")
-            .select("id_modelo, numero, nome")
-            .in_("id_modelo", model_ids)
-            .eq("visibilidade", True)
-            .execute()
-        )
-        for c in cores_res.data or []:
-            mid = str(c["id_modelo"])
-            cores_map.setdefault(mid, []).append({"numero": c["numero"], "nome": c.get("nome") or ""})
+    cores_res = (
+        db.table("modelo_cores")
+        .select("id_modelo, numero, nome")
+        .in_("id_modelo", model_ids)
+        .eq("visibilidade", True)
+        .execute()
+    )
+    for c in cores_res.data or []:
+        mid = str(c["id_modelo"])
+        cores_map.setdefault(mid, []).append({"numero": c["numero"], "nome": c.get("nome") or ""})
 
     enriched = []
     for p in products:
         mid = str(p.get("id_modelo") or "")
-        modelo = p.get(mt)
-        if isinstance(modelo, list) and modelo:
-            modelo = modelo[0]
+        modelo = model_by_id.get(mid) or {}
         enriched.append(
             {
                 "ean": p["ean"],
                 "dimensoes": p.get("dimensoes"),
-                "modelo_nome": modelo.get("nome") if isinstance(modelo, dict) else "",
+                "modelo_nome": modelo.get("nome") or "",
                 "cores": cores_map.get(mid, []),
             }
         )

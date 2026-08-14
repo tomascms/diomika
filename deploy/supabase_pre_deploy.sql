@@ -196,16 +196,8 @@ CREATE POLICY "barcodes_no_anon_update" ON storage.objects FOR UPDATE TO anon US
 DROP POLICY IF EXISTS "barcodes_no_anon_delete" ON storage.objects;
 CREATE POLICY "barcodes_no_anon_delete" ON storage.objects FOR DELETE TO anon USING (false);
 
--- === Assentos + paletas (migration_assentos.sql) ===
+-- === Assentos (sem paletas — cores em modelo_cores.id_modelo) ===
 -- Categorias são criadas apenas no backoffice — sem INSERT automático.
-
-CREATE TABLE IF NOT EXISTS paletas_cores (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    nome text NOT NULL,
-    slug text DEFAULT '',
-    visibilidade boolean DEFAULT true,
-    created_at timestamptz DEFAULT now()
-);
 
 CREATE TABLE IF NOT EXISTS modelos_assentos (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -216,14 +208,12 @@ CREATE TABLE IF NOT EXISTS modelos_assentos (
     material_forro text NOT NULL DEFAULT '',
     material_enchimento text NOT NULL DEFAULT '',
     alturas jsonb NOT NULL DEFAULT '[]'::jsonb,
-    id_paleta uuid REFERENCES paletas_cores(id) ON DELETE SET NULL,
     visibilidade boolean DEFAULT true,
     created_at timestamptz DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS assento (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    id_categoria uuid NOT NULL REFERENCES categories(id),
     id_modelo uuid NOT NULL UNIQUE REFERENCES modelos_assentos(id) ON DELETE CASCADE,
     ean text NOT NULL UNIQUE,
     barcode_url text,
@@ -231,34 +221,26 @@ CREATE TABLE IF NOT EXISTS assento (
     created_at timestamptz DEFAULT now()
 );
 
-INSERT INTO paletas_cores (nome, slug, visibilidade)
-SELECT 'Fantasia', 'fantasia', true
-WHERE NOT EXISTS (SELECT 1 FROM paletas_cores WHERE slug = 'fantasia');
-
+-- Compat: BD antigas com paletas / id_categoria no produto
 ALTER TABLE modelo_cores DROP CONSTRAINT IF EXISTS modelo_cores_id_modelo_fkey;
-ALTER TABLE modelo_cores ALTER COLUMN id_modelo DROP NOT NULL;
-ALTER TABLE modelo_cores ADD COLUMN IF NOT EXISTS id_paleta uuid REFERENCES paletas_cores(id) ON DELETE CASCADE;
-ALTER TABLE modelo_cores DROP CONSTRAINT IF EXISTS modelo_cores_id_modelo_numero_key;
-DROP INDEX IF EXISTS modelo_cores_id_modelo_numero_key;
-CREATE UNIQUE INDEX IF NOT EXISTS modelo_cores_model_numero_idx
-    ON modelo_cores (id_modelo, numero) WHERE id_modelo IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS modelo_cores_paleta_numero_idx
-    ON modelo_cores (id_paleta, numero) WHERE id_paleta IS NOT NULL;
 ALTER TABLE modelo_cores DROP CONSTRAINT IF EXISTS modelo_cores_owner_check;
-ALTER TABLE modelo_cores ADD CONSTRAINT modelo_cores_owner_check CHECK (
-    (id_modelo IS NOT NULL AND id_paleta IS NULL) OR
-    (id_modelo IS NULL AND id_paleta IS NOT NULL)
-);
-
+DROP INDEX IF EXISTS modelo_cores_paleta_numero_idx;
+DROP INDEX IF EXISTS idx_modelo_cores_paleta;
+ALTER TABLE modelo_cores DROP COLUMN IF EXISTS template_modelo;
+ALTER TABLE modelo_cores DROP COLUMN IF EXISTS id_paleta;
+DELETE FROM modelo_cores WHERE id_modelo IS NULL;
+ALTER TABLE modelo_cores ALTER COLUMN id_modelo SET NOT NULL;
+DROP INDEX IF EXISTS modelo_cores_model_numero_idx;
+CREATE UNIQUE INDEX IF NOT EXISTS modelo_cores_model_numero_idx ON modelo_cores (id_modelo, numero);
+ALTER TABLE modelos_assentos DROP COLUMN IF EXISTS id_paleta;
+ALTER TABLE almofada DROP COLUMN IF EXISTS id_categoria;
+ALTER TABLE assento DROP COLUMN IF EXISTS id_categoria;
+DROP TABLE IF EXISTS paletas_cores CASCADE;
 DROP TABLE IF EXISTS paleta_cores CASCADE;
 DROP TABLE IF EXISTS modelo_assento_cores CASCADE;
 
-ALTER TABLE paletas_cores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE modelos_assentos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE assento ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "paletas_public_read" ON paletas_cores;
-CREATE POLICY "paletas_public_read" ON paletas_cores FOR SELECT TO anon USING (visibilidade = true);
 
 DROP POLICY IF EXISTS "modelos_assentos_public_read" ON modelos_assentos;
 CREATE POLICY "modelos_assentos_public_read" ON modelos_assentos FOR SELECT TO anon USING (visibilidade = true);
@@ -266,25 +248,15 @@ CREATE POLICY "modelos_assentos_public_read" ON modelos_assentos FOR SELECT TO a
 DROP POLICY IF EXISTS "assento_public_read" ON assento;
 CREATE POLICY "assento_public_read" ON assento FOR SELECT TO anon USING (visibilidade = true);
 
--- Templates de cores por nome de modelo dentro da paleta
-ALTER TABLE modelo_cores ADD COLUMN IF NOT EXISTS template_modelo text;
-
-INSERT INTO paletas_cores (nome, slug, visibilidade)
-SELECT 'Catálogo', 'catalogo', true
-WHERE NOT EXISTS (SELECT 1 FROM paletas_cores WHERE slug = 'catalogo');
-
 -- Índices de catálogo (consultas da loja e backoffice)
 CREATE INDEX IF NOT EXISTS idx_categories_tipo ON categories (tipo_catalogo);
 CREATE INDEX IF NOT EXISTS idx_modelos_almofadas_categoria ON modelos_almofadas (id_categoria);
 CREATE INDEX IF NOT EXISTS idx_modelos_assentos_categoria ON modelos_assentos (id_categoria);
-CREATE INDEX IF NOT EXISTS idx_almofada_categoria ON almofada (id_categoria);
 CREATE INDEX IF NOT EXISTS idx_almofada_modelo ON almofada (id_modelo);
 CREATE INDEX IF NOT EXISTS idx_almofada_ean ON almofada (ean);
-CREATE INDEX IF NOT EXISTS idx_assento_categoria ON assento (id_categoria);
 CREATE INDEX IF NOT EXISTS idx_assento_modelo ON assento (id_modelo);
 CREATE INDEX IF NOT EXISTS idx_assento_ean ON assento (ean);
-CREATE INDEX IF NOT EXISTS idx_modelo_cores_modelo ON modelo_cores (id_modelo) WHERE id_modelo IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_modelo_cores_paleta ON modelo_cores (id_paleta) WHERE id_paleta IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_modelo_cores_modelo ON modelo_cores (id_modelo);
 
 -- === Segurança produção ===
 -- Contacto só via API (Turnstile + rate limit); bloquear INSERT anon directo

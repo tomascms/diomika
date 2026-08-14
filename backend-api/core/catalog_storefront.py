@@ -31,7 +31,7 @@ def _category_select() -> str:
 
 
 def _attach_modelo_cores(rows: list[dict]) -> None:
-    """Cores por modelo ou paleta — query separada (sem embed PostgREST)."""
+    """Cores do modelo — query separada (sem embed PostgREST / sem paletas)."""
     if not rows:
         return
 
@@ -42,7 +42,7 @@ def _attach_modelo_cores(rows: list[dict]) -> None:
     if model_ids:
         direct = (
             db.table("modelo_cores")
-            .select("id_modelo, numero, nome, imagem, visibilidade, template_modelo")
+            .select("id_modelo, numero, nome, imagem, visibilidade")
             .in_("id_modelo", model_ids)
             .execute()
             .data
@@ -53,63 +53,25 @@ def _attach_modelo_cores(rows: list[dict]) -> None:
             if mid in cores_by_model:
                 cores_by_model[mid].append(cor)
 
-    palette_ids = list({str(row["id_paleta"]) for row in rows if row.get("id_paleta")})
-    palette_cores: dict[str, list[dict]] = {}
-    if palette_ids:
-        palette_rows = (
-            db.table("modelo_cores")
-            .select("id_paleta, template_modelo, numero, nome, imagem, visibilidade")
-            .in_("id_paleta", palette_ids)
-            .execute()
-            .data
-            or []
-        )
-        for cor in palette_rows:
-            pid = str(cor.get("id_paleta") or "")
-            palette_cores.setdefault(pid, []).append(cor)
-
     for row in rows:
         mid = str(row.get("id") or "")
-        cores = list(cores_by_model.get(mid, []))
-        if not cores and row.get("id_paleta"):
-            model_name = (row.get("nome") or "").strip()
-            for cor in palette_cores.get(str(row["id_paleta"]), []):
-                template = (cor.get("template_modelo") or "").strip()
-                if template and template != model_name:
-                    continue
-                cores.append(cor)
-        row["modelo_cores"] = _modelo_cores({"modelo_cores": cores})
+        row["modelo_cores"] = _modelo_cores({"modelo_cores": cores_by_model.get(mid, [])})
 
 
-def _lookup_cor_nome(db, *, id_modelo: str | None, id_paleta: str | None, model_name: str, numero_cor: int) -> str:
+def _lookup_cor_nome(db, *, id_modelo: str | None, numero_cor: int) -> str:
     cor_nome = f"Cor {numero_cor}"
-    if id_modelo:
-        cr = (
-            db.table("modelo_cores")
-            .select("nome, numero, template_modelo")
-            .eq("id_modelo", str(id_modelo))
-            .eq("numero", numero_cor)
-            .limit(1)
-            .execute()
-        )
-        if cr.data:
-            return cr.data[0].get("nome") or cor_nome
-
-    if id_paleta:
-        rows = (
-            db.table("modelo_cores")
-            .select("nome, numero, template_modelo")
-            .eq("id_paleta", str(id_paleta))
-            .eq("numero", numero_cor)
-            .execute()
-            .data
-            or []
-        )
-        for row in rows:
-            template = (row.get("template_modelo") or "").strip()
-            if template and template != model_name:
-                continue
-            return row.get("nome") or cor_nome
+    if not id_modelo:
+        return cor_nome
+    cr = (
+        db.table("modelo_cores")
+        .select("nome, numero")
+        .eq("id_modelo", str(id_modelo))
+        .eq("numero", numero_cor)
+        .limit(1)
+        .execute()
+    )
+    if cr.data:
+        return cr.data[0].get("nome") or cor_nome
     return cor_nome
 
 
@@ -265,8 +227,6 @@ def resolve_product_line(ean: str, numero_cor: int, altura: str | None = None) -
         cor_nome = _lookup_cor_nome(
             db,
             id_modelo=str(id_modelo) if id_modelo else None,
-            id_paleta=str(modelo.get("id_paleta")) if modelo.get("id_paleta") else None,
-            model_name=model_name,
             numero_cor=numero_cor,
         )
 

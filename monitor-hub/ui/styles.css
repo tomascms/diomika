@@ -1,0 +1,140 @@
+:root {
+  --bg: #0f1419;
+  --panel: #161d27;
+  --border: #243041;
+  --text: #e8eef6;
+  --muted: #8b9bb0;
+  --accent: #3d8bfd;
+  --sidebar: 200px;
+  --chrome: 52px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  user-select: none;
+}
+
+body {
+  display: grid;
+  grid-template-columns: var(--sidebar) 1fr;
+}
+
+#sidebar {
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.brand {
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  padding: 4px 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+#projects {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.project-btn {
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.project-btn:hover { background: #1c2633; }
+.project-btn.active {
+  background: #1a2a40;
+  border-color: #2d4a73;
+  color: #cfe0ff;
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+  padding: 8px;
+}
+
+.hint code {
+  color: #b7c7db;
+  font-size: 10px;
+}
+
+#main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+#tabs-bar {
+  height: var(--chrome);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  background: #121820;
+}
+
+#tabs {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tab-btn {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.tab-btn:hover { color: var(--text); background: #1a222d; }
+.tab-btn.active {
+  color: var(--text);
+  background: #1e2c40;
+  border-color: #355787;
+}
+
+#reload {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 16px;
+}
+
+#reload:hover { border-color: var(--accent); }
+
+#webview-slot {
+  flex: 1;
+  background: #0a0d11;
+}

@@ -20,13 +20,34 @@ def _modelo_cores(data: dict) -> list[dict]:
     return cores
 
 
+def _attach_cores(rows: list[dict]) -> None:
+    if not rows:
+        return
+    db = get_db()
+    model_ids = [str(r["id"]) for r in rows if r.get("id")]
+    by_model: dict[str, list] = {mid: [] for mid in model_ids}
+    if model_ids:
+        for cor in (
+            db.table("modelo_cores")
+            .select("id_modelo, numero, nome, imagem, visibilidade")
+            .in_("id_modelo", model_ids)
+            .execute()
+            .data
+            or []
+        ):
+            mid = str(cor.get("id_modelo") or "")
+            if mid in by_model:
+                by_model[mid].append(cor)
+    for row in rows:
+        row["modelo_cores"] = _modelo_cores({"modelo_cores": by_model.get(str(row.get("id") or ""), [])})
+
+
 def catalogue_assento_models(q: AssentoCatalogueQuery):
     db = get_db()
     res = (
         db.table("modelos_assentos")
         .select(
             "*, categories(nome, carrinho_step, carrinho_min, slug, tipo_catalogo), "
-            "modelo_cores(numero, nome, imagem, visibilidade), "
             "assento(ean, barcode_url, visibilidade)"
         )
         .eq("id_categoria", q.id_categoria)
@@ -34,8 +55,10 @@ def catalogue_assento_models(q: AssentoCatalogueQuery):
         .order("nome")
         .execute()
     )
+    rows = res.data or []
+    _attach_cores(rows)
     out = []
-    for row in res.data or []:
+    for row in rows:
         assento_rows = [a for a in (row.get("assento") or []) if a.get("visibilidade", True)]
         if not assento_rows:
             continue
@@ -49,7 +72,7 @@ def assento_model_detail(id_modelo: str):
     db = get_db()
     res = (
         db.table("modelos_assentos")
-        .select("*, categories(*), modelo_cores(*), assento(*)")
+        .select("*, categories(*), assento(*)")
         .eq("id", id_modelo)
         .single()
         .execute()
@@ -59,6 +82,7 @@ def assento_model_detail(id_modelo: str):
         return None
     if not is_visible(data):
         return None
+    _attach_cores([data])
     assento_rows = [a for a in (data.get("assento") or []) if a.get("visibilidade", True)]
     data["assento"] = assento_rows[0] if assento_rows else None
     data["modelo_cores"] = _modelo_cores(data)

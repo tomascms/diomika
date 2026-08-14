@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Monitor Hub</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <aside id="sidebar">
+    <div class="brand">Monitor Hub</div>
+    <nav id="projects"></nav>
+    <p class="hint">Edita <code>projects.json</code> para novos projectos / abas.</p>
+  </aside>
+  <div id="main">
+    <header id="tabs-bar">
+      <div id="tabs"></div>
+      <button type="button" id="reload" title="Recarregar aba">↻</button>
+    </header>
+    <div id="webview-slot" aria-hidden="true"></div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

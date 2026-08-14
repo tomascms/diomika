@@ -1,7 +1,12 @@
 # Monitorização — hub único Diomika
 
-Um só sítio com **todos os painéis** onde tens login neste projecto.
-Não guarda passwords nem tokens — só links e o que cada um vigia.
+**App local (recomendado):** `monitor-hub/` — Electron com sidebar de projectos + abas (Cloudflare, Sentry, Axiom, …). Sessão de login por projecto; podes acrescentar outros clientes em `projects.json`.
+
+```bash
+cd monitor-hub && npm install && npm start
+```
+
+Abaixo fica a lista de referência dos mesmos painéis (links). Não guarda passwords nem tokens.
 
 ---
 

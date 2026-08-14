@@ -59,7 +59,10 @@ const load = async () => {
       formData.value = { ...(await api.getRecord(table.value, recordId.value)) }
     } else {
       formData.value = { visibilidade: true }
-      if (route.query.id_categoria) formData.value.id_categoria = route.query.id_categoria
+      const hasCategoria = (schema.value?.fields || []).some((f) => f.name === 'id_categoria')
+      if (hasCategoria && route.query.id_categoria) {
+        formData.value.id_categoria = route.query.id_categoria
+      }
     }
   } catch (e) {
     error.value = e.message

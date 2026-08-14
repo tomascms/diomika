@@ -1,0 +1,18 @@
+{
+  "projects": [
+    {
+      "id": "diomika",
+      "name": "Diomika",
+      "tabs": [
+        { "id": "cloudflare", "label": "Cloudflare", "url": "https://dash.cloudflare.com/" },
+        { "id": "sentry", "label": "Sentry", "url": "https://diomika.sentry.io/" },
+        { "id": "axiom", "label": "Axiom", "url": "https://app.axiom.co/diomika-5pui/datasets/diomika" },
+        { "id": "posthog", "label": "PostHog", "url": "https://eu.posthog.com/project/248877" },
+        { "id": "uptime", "label": "UptimeRobot", "url": "https://dashboard.uptimerobot.com/monitors" },
+        { "id": "gcp", "label": "GCP", "url": "https://console.cloud.google.com/" },
+        { "id": "supabase", "label": "Supabase", "url": "https://supabase.com/dashboard" },
+        { "id": "github", "label": "GitHub", "url": "https://github.com/tomascms/diomika" }
+      ]
+    }
+  ]
+}

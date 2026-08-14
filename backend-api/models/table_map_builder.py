@@ -52,7 +52,6 @@ def build_catalog_table_map(catalog_types: dict) -> dict[str, dict]:
         }
 
         product_filters: list[dict] = [
-            {"field": "id_categoria", "relation": "categories", "label": "Categoria"},
             {"field": "id_modelo", "relation": mt, "label": "Modelo"},
             {"field": "ean", "type": "search", "label": "EAN"},
         ]

@@ -135,40 +135,22 @@ class ModeloAlmofada(BaseModel):
 
 
 class ModeloCor(BaseModel):
-    """Cor associada a um modelo ou a uma paleta partilhada."""
+    """Cor de um modelo (almofada ou assento). Sem paletas partilhadas."""
     id: UUID = Field(default_factory=uuid4, json_schema_extra={"ui_hidden": True})
-    id_modelo: Optional[UUID] = Field(
-        None,
-        description="Modelo (cores directas)",
+    id_modelo: UUID = Field(
+        ...,
+        description="Modelo dono (almofada ou assento)",
         json_schema_extra={"ui_relation": "modelos_almofadas"},
-    )
-    id_paleta: Optional[UUID] = Field(
-        None,
-        description="Paleta (cores partilhadas)",
-        json_schema_extra={"ui_relation": "paletas_cores"},
-    )
-    template_modelo: Optional[str] = Field(
-        None,
-        description="Nome do modelo na paleta (opcional — filtra cores por modelo)",
     )
     numero: int = Field(..., ge=1, description="Número da cor")
     nome: str = Field(default="", description="Nome da cor (opcional)")
     imagem: str = Field(..., description="URL da imagem desta cor")
     visibilidade: bool = Field(default=True)
 
-    @model_validator(mode="after")
-    def validate_owner(self) -> "ModeloCor":
-        has_model = self.id_modelo is not None
-        has_palette = self.id_paleta is not None
-        if has_model == has_palette:
-            raise ValueError("Indique id_modelo ou id_paleta (apenas um).")
-        return self
-
 
 class Almofada(BaseModel):
-    """Variante por tamanho/EAN — cor fica em modelo_cores."""
+    """Variante por tamanho/EAN — cor fica em modelo_cores. Categoria via modelo."""
     id: UUID = Field(default_factory=uuid4, json_schema_extra={"ui_hidden": True})
-    id_categoria: UUID = Field(..., description="Categoria", json_schema_extra={"ui_relation": "categories"})
     id_modelo: UUID = Field(..., description="Modelo", json_schema_extra={"ui_relation": "modelos_almofadas"})
     ean: str = Field(..., pattern=r"^\d{13}$", description="EAN-13")
     barcode_url: Optional[str] = Field(None, json_schema_extra={"ui_readonly": True})
@@ -273,11 +255,6 @@ class ModeloAssento(BaseModel):
         description="Alturas disponíveis (ex: 32mm, 45mm)",
         json_schema_extra={"ui_widget": "string_list", "ui_label": "Alturas"},
     )
-    id_paleta: Optional[UUID] = Field(
-        None,
-        description="Paleta de cores partilhada",
-        json_schema_extra={"ui_relation": "paletas_cores"},
-    )
     visibilidade: bool = Field(default=True)
 
     @model_validator(mode="after")
@@ -296,9 +273,8 @@ class ModeloAssento(BaseModel):
 
 
 class Assento(BaseModel):
-    """Um EAN/código de barras por modelo — cor e altura escolhidas na encomenda."""
+    """Um EAN/código de barras por modelo — cor e altura escolhidas no pedido. Categoria via modelo."""
     id: UUID = Field(default_factory=uuid4, json_schema_extra={"ui_hidden": True})
-    id_categoria: UUID = Field(..., description="Categoria", json_schema_extra={"ui_relation": "categories"})
     id_modelo: UUID = Field(..., description="Modelo", json_schema_extra={"ui_relation": "modelos_assentos"})
     ean: str = Field(..., pattern=r"^\d{13}$", description="EAN-13")
     barcode_url: Optional[str] = Field(None, json_schema_extra={"ui_readonly": True})

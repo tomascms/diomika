@@ -56,7 +56,7 @@ async function attachModeloCores(rows) {
   if (modelIds.length) {
     const { data: direct } = await supabase
       .from('modelo_cores')
-      .select('id_modelo, numero, nome, imagem, visibilidade, template_modelo')
+      .select('id_modelo, numero, nome, imagem, visibilidade')
       .in('id_modelo', modelIds)
 
     for (const cor of direct || []) {
@@ -65,36 +65,9 @@ async function attachModeloCores(rows) {
     }
   }
 
-  const paletteIds = [...new Set(rows.map((row) => row.id_paleta).filter(Boolean).map(String))]
-  const paletteCores = {}
-
-  if (paletteIds.length) {
-    const { data: paletteRows } = await supabase
-      .from('modelo_cores')
-      .select('id_paleta, template_modelo, numero, nome, imagem, visibilidade')
-      .in('id_paleta', paletteIds)
-
-    for (const cor of paletteRows || []) {
-      const pid = String(cor.id_paleta || '')
-      if (!paletteCores[pid]) paletteCores[pid] = []
-      paletteCores[pid].push(cor)
-    }
-  }
-
   for (const row of rows) {
     const mid = String(row.id || '')
-    let cores = [...(coresByModel[mid] || [])]
-
-    if (!cores.length && row.id_paleta) {
-      const modelName = (row.nome || '').trim()
-      for (const cor of paletteCores[String(row.id_paleta)] || []) {
-        const template = (cor.template_modelo || '').trim()
-        if (template && template !== modelName) continue
-        cores.push(cor)
-      }
-    }
-
-    row.modelo_cores = modeloCores({ modelo_cores: cores })
+    row.modelo_cores = modeloCores({ modelo_cores: coresByModel[mid] || [] })
   }
 }
 

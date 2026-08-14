@@ -1,8 +1,9 @@
+-- LEGADO — não usar em deploys novos.
+-- Substituído por: migration_drop_paletas.sql + schemas.py (cores só em id_modelo).
+-- Mantido só como histórico da introdução de assentos.
+
 -- Assentos + paletas reutilizáveis (Fantasia, etc.)
-
--- Correr no Supabase SQL Editor após migration_v2_3_catalog.sql
-
--- Cores: reutiliza modelo_cores (id_modelo ou id_paleta)
+-- Cores: reutiliza modelo_cores (id_modelo ou id_paleta)  ← OBSOLETO
 
 -- Categorias são criadas apenas no backoffice — sem INSERT automático.
 
