@@ -23,6 +23,8 @@ backend-api/logs/
 *.jsonl
 backend-api/data/admin_users.json
 backend-api/data/admin_users.tmp
+backend-api/data/admin_users.json.bak
+backend-api/data/*.json.bak
 *.log
 backend-api/logs/dlq_events.jsonl
 
