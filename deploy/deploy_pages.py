@@ -3,9 +3,9 @@
 Deploy beta privada — stack 100% grátis (Cloudflare Tunnel + Pages).
 
 Uso:
-  python deploy/deploy_beta.py --deploy          # tunnel API + build + Pages (se token)
-  python deploy/deploy_beta.py --build --api-url URL
-  python deploy/deploy_beta.py --deploy --pages-only
+  python deploy/deploy_pages.py --deploy          # tunnel API + build + Pages (se token)
+  python deploy/deploy_pages.py --build --api-url URL
+  python deploy/deploy_pages.py --deploy --pages-only
 
 Requisitos:
   - cloudflared (winget install Cloudflare.cloudflared)
@@ -315,7 +315,7 @@ def deploy_full(env: dict[str, str], pages_project: str, *, detach: bool = False
     API_BASE_URL={api_public}
 
   Nota: URLs trycloudflare/pages.dev — não partilhar publicamente.
-  Endgame produção: deploy/FREE_STACK.md
+  Endgame produção: docs/FREE_STACK.md
 
   Tunnels activos — mantém este terminal/processo. Ctrl+C para parar.
 """
@@ -336,7 +336,7 @@ def deploy_full(env: dict[str, str], pages_project: str, *, detach: bool = False
 
 def pages_deploy_only(env: dict[str, str], project: str, api_url: str) -> int:
     if not DIST.is_dir() or not (DIST / "index.html").is_file():
-        print("ERRO: dist/ em falta — corre primeiro: python deploy/deploy_beta.py --build --api-url URL")
+        print("ERRO: dist/ em falta — corre primeiro: python deploy/deploy_pages.py --build --api-url URL")
         return 1
     pages_url = deploy_cloudflare_pages(DIST, project, env)
     if not pages_url:

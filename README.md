@@ -34,11 +34,11 @@ Artefactos em `backoffice-desktop/release/`.
 
 ```powershell
 python deploy/deploy_vm.py
-python deploy/deploy_beta.py --pages-deploy --api-url https://api.diomika.com
+python deploy/deploy_pages.py --pages-deploy --api-url https://api.diomika.com
 python deploy/verify_production.py
 ```
 
-**Cliente:** [`deploy/APRESENTACAO_CLIENTE.md`](deploy/APRESENTACAO_CLIENTE.md) · Ops: `deploy/OPS.md`
+Docs: [`docs/`](docs/) · Ops: [`deploy/README.md`](deploy/README.md) · BD: [`docs/BD_COMERCIAL.md`](docs/BD_COMERCIAL.md)
 
 ## Config (servidor / developers)
 

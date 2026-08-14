@@ -43,7 +43,7 @@ Removido de propósito (era pior/duplicado): Plausible, pageviews first-party `/
 5. **Slack/Discord webhook** → `ALERT_WEBHOOK_URL`  
 6. **R2** (quando quiseres CDN imagens) → `R2_*` (activa sozinho)
 
-Depois: `python deploy/deploy_vm.py` e `python deploy/deploy_beta.py --pages-deploy --api-url https://api.diomika.com`
+Depois: `python deploy/deploy_vm.py` e `python deploy/deploy_pages.py --pages-deploy --api-url https://api.diomika.com`
 
 ## Manutenção mensal (proposta comercial)
 

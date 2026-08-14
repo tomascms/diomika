@@ -37,8 +37,8 @@ def check_files() -> None:
         "requirements.txt",
         ".dockerignore",
         "README.md",
-        "deploy/FREE_STACK.md",
-        "deploy/deploy_beta.py",
+        "docs/FREE_STACK.md",
+        "deploy/deploy_pages.py",
         "deploy/deploy_vm.py",
         "deploy/create_gcp_vm.py",
         "deploy/docker-compose.free.yml",
@@ -47,8 +47,8 @@ def check_files() -> None:
         "deploy/verify_csp.py",
         "deploy/uptime_check.py",
         "deploy/verify_production.py",
-        "deploy/APRESENTACAO_CLIENTE.md",
-        "deploy/OPS.md",
+        "docs/APRESENTACAO_CLIENTE.md",
+        "docs/OPS.md",
         "deploy/smoke_test.py",
         "deploy/start_local_api.py",
         "deploy/supabase_pre_deploy.sql",
@@ -195,7 +195,7 @@ def check_supabase() -> None:
                 check(
                     f"Tabela {table}",
                     False,
-                    "python deploy/apply_production.py",
+                    "aplicar SQL: deploy/supabase_pre_deploy.sql",
                     critical=False,
                 )
         return
@@ -206,7 +206,7 @@ def check_supabase() -> None:
                 check(
                     f"Tabela {table}",
                     False,
-                    "python deploy/apply_production.py",
+                    "aplicar SQL: deploy/supabase_pre_deploy.sql",
                     critical=False,
                 )
             else:
@@ -298,7 +298,7 @@ def main() -> int:
         return 1
 
     if args.codebase:
-        print("Codebase OK. Deploy API: python deploy/deploy_vm.py | Loja: python deploy/deploy_beta.py --deploy --pages-only\n")
+        print("Codebase OK. Deploy API: python deploy/deploy_vm.py | Loja: python deploy/deploy_pages.py --deploy --pages-only\n")
     elif args.production:
         print("Produção OK.\n")
     else:

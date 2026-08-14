@@ -58,7 +58,7 @@ class Report:
 
 
 def load_env() -> dict[str, str]:
-    from deploy_beta import load_env as _load
+    from deploy_pages import load_env as _load
 
     return _load()
 

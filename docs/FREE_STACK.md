@@ -15,6 +15,6 @@ Verificação: `python deploy/verify_production.py`
 ```powershell
 python deploy/create_gcp_vm.py
 python deploy/deploy_vm.py
-python deploy/deploy_beta.py --pages-deploy --api-url https://api.diomika.com
+python deploy/deploy_pages.py --pages-deploy --api-url https://api.diomika.com
 python deploy/verify_production.py
 ```

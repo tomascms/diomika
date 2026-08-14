@@ -796,7 +796,7 @@ Esta distinção é a razão pela qual a Diomika separa `www.diomika.com` de `ap
 
 **Pages** é o serviço da Cloudflare para alojar sítios estáticos. O modelo é: entrega-se uma pasta com o resultado da compilação, e o serviço distribui-a por toda a sua rede global.
 
-Na Diomika, o processo é o que está em `deploy/deploy_beta.py`: o Vite compila `frontend-web/` para uma pasta de distribuição, e essa pasta é enviada para o Pages. Cada envio cria uma versão distinta, com endereço próprio, o que permite testar antes de promover e reverter instantaneamente para uma versão anterior se algo estiver errado. Reverter uma loja estática é trivial — muda-se o apontador para o envio anterior — o que é uma propriedade operacional muito valiosa e uma vantagem material sobre alojamento tradicional.
+Na Diomika, o processo é o que está em `deploy/deploy_pages.py`: o Vite compila `frontend-web/` para uma pasta de distribuição, e essa pasta é enviada para o Pages. Cada envio cria uma versão distinta, com endereço próprio, o que permite testar antes de promover e reverter instantaneamente para uma versão anterior se algo estiver errado. Reverter uma loja estática é trivial — muda-se o apontador para o envio anterior — o que é uma propriedade operacional muito valiosa e uma vantagem material sobre alojamento tradicional.
 
 Dois ficheiros de configuração merecem nota, ambos em `frontend-web/public/`:
 
@@ -1072,7 +1072,7 @@ O **sistema operativo** é o programa fundamental que gere o hardware de um comp
 
 #### Pages — Cloudflare Pages
 
-*Cloudflare Pages* é o serviço de alojamento de sítios estáticos da Cloudflare. Recebe uma pasta com o resultado de uma compilação e distribui-a por toda a rede global do fornecedor, servindo cada visitante do ponto mais próximo. É gratuito em condições generosas, o que o torna adequado à restrição de custo da Diomika. Na Diomika serve `www.diomika.com`, com os ficheiros compilados de `frontend-web/` pelo processo em `deploy/deploy_beta.py`. Cada publicação cria uma versão distinta com endereço próprio, o que permite testar antes de promover e reverter instantaneamente — uma propriedade operacional muito valiosa, porque reverter uma loja estática é mudar um apontador, não repetir uma instalação. A configuração de comportamento vive em dois ficheiros dentro de `frontend-web/public/`: `_headers`, que declara cabeçalhos de segurança e políticas de cache, e `_redirects`, que declara reescritas de caminho, incluindo a regra indispensável que faz qualquer rota interna servir o documento de entrada. O serviço permite ainda correr código na fronteira, capacidade que a Diomika usa em `frontend-web/functions/_middleware.js` para bloquear sondagens automáticas.
+*Cloudflare Pages* é o serviço de alojamento de sítios estáticos da Cloudflare. Recebe uma pasta com o resultado de uma compilação e distribui-a por toda a rede global do fornecedor, servindo cada visitante do ponto mais próximo. É gratuito em condições generosas, o que o torna adequado à restrição de custo da Diomika. Na Diomika serve `www.diomika.com`, com os ficheiros compilados de `frontend-web/` pelo processo em `deploy/deploy_pages.py`. Cada publicação cria uma versão distinta com endereço próprio, o que permite testar antes de promover e reverter instantaneamente — uma propriedade operacional muito valiosa, porque reverter uma loja estática é mudar um apontador, não repetir uma instalação. A configuração de comportamento vive em dois ficheiros dentro de `frontend-web/public/`: `_headers`, que declara cabeçalhos de segurança e políticas de cache, e `_redirects`, que declara reescritas de caminho, incluindo a regra indispensável que faz qualquer rota interna servir o documento de entrada. O serviço permite ainda correr código na fronteira, capacidade que a Diomika usa em `frontend-web/functions/_middleware.js` para bloquear sondagens automáticas.
 
 #### Playwright
 
@@ -1224,7 +1224,7 @@ Um *signed URL* é um endereço temporário que dá acesso a um ficheiro privado
 
 #### VM — Virtual Machine (máquina virtual)
 
-Uma **máquina virtual** é um computador simulado por software dentro de um computador físico. Tem o seu próprio sistema operativo, a sua própria memória atribuída, o seu próprio disco, e comporta-se como uma máquina independente — embora partilhe hardware com outras máquinas virtuais no mesmo anfitrião. É a tecnologia que sustenta praticamente toda a computação em nuvem: um fornecedor compra servidores grandes e aluga fatias deles. A Diomika usa uma máquina virtual pequena da camada sempre gratuita do fornecedor descrito na entrada sobre GCP, e é nela que corre o backend, junto com a cache e o programa do túnel, todos em contentores. A restrição de recursos dessa máquina é real e visível em decisões concretas: os trabalhadores de segundo plano correm **dentro** do processo da aplicação, controlado pela variável `RUN_EMBEDDED_WORKERS`, em vez de como serviços separados, precisamente para poupar memória. A criação está automatizada em `deploy/create_gcp_vm.py`, a publicação de versões em `deploy/deploy_vm.py`, e as considerações para o caso de o sistema crescer estão documentadas em `deploy/SCALE.md`. Note-se a diferença face a um contentor: uma máquina virtual simula hardware e tem o seu próprio núcleo de sistema; um contentor partilha o núcleo do anfitrião e é muito mais leve. A Diomika usa as duas tecnologias em conjunto — contentores dentro de uma máquina virtual.
+Uma **máquina virtual** é um computador simulado por software dentro de um computador físico. Tem o seu próprio sistema operativo, a sua própria memória atribuída, o seu próprio disco, e comporta-se como uma máquina independente — embora partilhe hardware com outras máquinas virtuais no mesmo anfitrião. É a tecnologia que sustenta praticamente toda a computação em nuvem: um fornecedor compra servidores grandes e aluga fatias deles. A Diomika usa uma máquina virtual pequena da camada sempre gratuita do fornecedor descrito na entrada sobre GCP, e é nela que corre o backend, junto com a cache e o programa do túnel, todos em contentores. A restrição de recursos dessa máquina é real e visível em decisões concretas: os trabalhadores de segundo plano correm **dentro** do processo da aplicação, controlado pela variável `RUN_EMBEDDED_WORKERS`, em vez de como serviços separados, precisamente para poupar memória. A criação está automatizada em `deploy/create_gcp_vm.py`, a publicação de versões em `deploy/deploy_vm.py`, e as considerações para o caso de o sistema crescer estão documentadas em `docs/SCALE.md`. Note-se a diferença face a um contentor: uma máquina virtual simula hardware e tem o seu próprio núcleo de sistema; um contentor partilha o núcleo do anfitrião e é muito mais leve. A Diomika usa as duas tecnologias em conjunto — contentores dentro de uma máquina virtual.
 
 #### VPN — Virtual Private Network (vs. Tunnel)
 
@@ -1506,7 +1506,7 @@ Seria possível ter tudo numa máquina: um servidor a entregar as páginas e, ao
 
 **3. Onde vivem os segredos.** Esta é a razão de segurança. A loja é código público: qualquer pessoa lê o JavaScript. Portanto na loja só podem existir credenciais desenhadas para serem públicas — a chave anónima do Supabase, a chave pública do Turnstile, o endereço da API. Os segredos verdadeiros — chave de serviço do Supabase, password de correio, segredo do Turnstile, `API_SECRET_KEY` — vivem apenas no `.env` da máquina virtual, nunca compilados em nada. A separação física torna esta regra fácil de verificar; existe até um verificador automático, `deploy/verify_bundle_secrets.py`.
 
-**4. Ritmos de publicação diferentes.** Mudar um texto na página "Sobre" não deve exigir reiniciar a API. Corrigir uma regra de negócio na API não deve obrigar a reconstruir a loja. Cada lado tem o seu ciclo: a loja publica-se com `deploy/deploy_beta.py --pages-deploy`; a API com `deploy/deploy_vm.py`.
+**4. Ritmos de publicação diferentes.** Mudar um texto na página "Sobre" não deve exigir reiniciar a API. Corrigir uma regra de negócio na API não deve obrigar a reconstruir a loja. Cada lado tem o seu ciclo: a loja publica-se com `deploy/deploy_pages.py --pages-deploy`; a API com `deploy/deploy_vm.py`.
 
 **5. Custo.** A Cloudflare Pages tem um plano gratuito generoso para sites estáticos. A máquina e2-micro Always Free é gratuita. O único custo do projecto é o domínio. Se a loja estivesse na máquina, a máquina teria de aguentar todo o tráfego de imagens e ficheiros, e 1 GB de memória não dá para muito.
 
@@ -1575,7 +1575,7 @@ O script guarda o endereço obtido no `.env` local como `REMOTE_VM_SSH`, para qu
 
 "Always Free" é uma quota permanente (não um período de avaliação): uma instância e2-micro numa região elegível, dentro de limites de tráfego de saída. Zero euros por mês, indefinidamente.
 
-**Porquê.** O objectivo declarado do projecto é custo total de zero excepto o domínio (`deploy/FREE_STACK.md`). Isto tem valor humano, não só financeiro: um sistema que não gera factura mensal não morre porque alguém se esqueceu de renovar um cartão de crédito.
+**Porquê.** O objectivo declarado do projecto é custo total de zero excepto o domínio (`docs/FREE_STACK.md`). Isto tem valor humano, não só financeiro: um sistema que não gera factura mensal não morre porque alguém se esqueceu de renovar um cartão de crédito.
 
 Mas a escassez molda todo o desenho, e vale a pena tornar explícita essa cadeia de consequências:
 
@@ -1587,7 +1587,7 @@ Mas a escassez molda todo o desenho, e vale a pena tornar explícita essa cadeia
 | Tráfego de saída contabilizado | As imagens são servidas pelo Supabase Storage ou pela Cloudflare R2, nunca pela máquina. |
 | Uma única máquina, uma única região | Latência maior para a Europa nas escritas — aceitável, porque as escritas são raras (formulários), e as leituras vêm do *edge*. |
 
-**Quando isto deixa de servir.** O documento `deploy/SCALE.md` existe precisamente para esse dia. Os sinais: alertas frequentes de latência (`ALERT_LATENCY_MS`), `429 Demasiados pedidos` legítimos, memória esgotada. O caminho de saída está preparado — mais processos `uvicorn`, trabalhadores em containers próprios, uma máquina maior — e nenhuma dessas mudanças exige reescrever a aplicação.
+**Quando isto deixa de servir.** O documento `docs/SCALE.md` existe precisamente para esse dia. Os sinais: alertas frequentes de latência (`ALERT_LATENCY_MS`), `429 Demasiados pedidos` legítimos, memória esgotada. O caminho de saída está preparado — mais processos `uvicorn`, trabalhadores em containers próprios, uma máquina maior — e nenhuma dessas mudanças exige reescrever a aplicação.
 
 ---
 
@@ -1874,7 +1874,7 @@ Três contentores a partir da **mesma imagem**, distinguidos apenas pelo comando
 
 **Quando usar cada um.** Se o objectivo é custo zero e o tráfego é modesto, o caminho gratuito. Se o tráfego cresce, ou se se quiser eliminar a dependência da Cloudflare como intermediário obrigatório, ou se for preciso separar trabalhadores por razões de fiabilidade, então o VPS. Nesse cenário, é obrigatório acrescentar: um proxy inverso com TLS (por exemplo Caddy, que gera certificados automaticamente), uma *firewall* que não deixe a porta 8000 aberta ao mundo, e um Redis — porque `backend-api/core/config.py` recusa arrancar em produção final sem `REDIS_URL`.
 
-**Porque os dois ficheiros coexistem.** Um sistema com apenas um caminho de publicação está preso a esse caminho. Manter a alternativa documentada e sintaticamente válida significa que a migração é uma decisão de uma tarde, não um projecto de reescrita. O ficheiro `deploy/SCALE.md` descreve esse percurso.
+**Porque os dois ficheiros coexistem.** Um sistema com apenas um caminho de publicação está preso a esse caminho. Manter a alternativa documentada e sintaticamente válida significa que a migração é uma decisão de uma tarde, não um projecto de reescrita. O ficheiro `docs/SCALE.md` descreve esse percurso.
 
 ---
 
@@ -1984,7 +1984,7 @@ editar frontend-web/src/views/HomeView.vue
         │
         ▼  npm run build  →  frontend-web/dist/  (compilação, minificação, hashes)
         │
-        ▼  python deploy/deploy_beta.py --pages-deploy
+        ▼  python deploy/deploy_pages.py --pages-deploy
         │
         ▼  Cloudflare Pages distribui dist/ por centenas de cidades
         │
@@ -3371,9 +3371,9 @@ Se houvesse que resumir estes três capítulos em princípios de engenharia, ser
 | Modelo de dados, sagas, idempotência, retenção, armazenamento | Parte VI — mesmo ficheiro |
 | Observabilidade, backoffice de secretária, publicação, decisões, perguntas frequentes | Partes VII a XII — `deploy/relatorio_parts/part_04_ops_decisoes.md` |
 | Fundamentos da web e glossário A–Z | Parte I — `deploy/relatorio_parts/part_01_fundamentos.md` |
-| Escalar para além da e2-micro | `deploy/SCALE.md` |
-| Rotina de operação e incidentes | `deploy/OPS.md` |
-| A pilha de custo zero em resumo | `deploy/FREE_STACK.md` |
+| Escalar para além da e2-micro | `docs/SCALE.md` |
+| Rotina de operação e incidentes | `docs/OPS.md` |
+| A pilha de custo zero em resumo | `docs/FREE_STACK.md` |
 
 **Recordatório final de segurança:** nada neste documento é um segredo. Todos os nomes de variáveis aqui citados — `API_SECRET_KEY`, `SUPABASE_KEY`, `TURNSTILE_SECRET_KEY`, `CLOUDFLARE_TUNNEL_TOKEN`, `DIOMIKA_DESKTOP_GATE`, `MAIL_PASSWORD` — aparecem sem valor, e devem continuar assim. Os valores vivem no ficheiro `.env` da máquina e no painel da Cloudflare Pages, nunca no repositório, nunca num relatório, nunca numa mensagem.
 
@@ -6275,7 +6275,7 @@ O compromisso tem custos concretos que devem ser conhecidos:
   acesso ao backoffice exige incluir `backend-api/data/` no procedimento de cópia da máquina virtual
   (instantâneo de disco ou cópia explícita), guardada com o mesmo cuidado que um segredo.
 * **É estado local, por instância.** Se algum dia a API correr em duas máquinas, cada uma teria o seu
-  ficheiro e as contas divergiriam. É uma limitação reconhecida e documentada em `deploy/SCALE.md`; a
+  ficheiro e as contas divergiriam. É uma limitação reconhecida e documentada em `docs/SCALE.md`; a
   evolução natural, nesse cenário, é migrar as credenciais para um armazenamento partilhado.
 * **A recuperação é manual** — é o procedimento de V.10.3.
 * **Nunca deve ser versionado** — o `.gitignore` (linhas 24-25) exclui `admin_users.json` e
@@ -6424,7 +6424,7 @@ Vale a pena entender **porquê** é sensível, mesmo sendo tecnicamente uma chav
 
 Repare-se no segmento `<regiao>` no formato do DSN. A região não é uma opção de configuração do nosso lado: é decidida **quando a organização é criada** no Sentry, e fica embutida no endereço de ingestão. Não se muda depois com uma variável de ambiente — mudar exigiria criar uma organização nova e substituir o DSN.
 
-Isto importa porque a Diomika trata a localização de dados como um critério consistente, e não caso a caso. Nos dois serviços onde a decisão está explicitamente registada no repositório, ela é europeia: o Axiom é uma organização **EU Central**, com ingestão em `eu-central-1.aws.edge.axiom.co` (`.env.example`, `deploy/env.free.example`, `deploy/OPS.md`), e o PostHog usa a instância `eu.i.posthog.com` (`CookieBanner.vue`). O raciocínio é o mesmo nos dois casos: manter os dados dentro do Espaço Económico Europeu evita toda a discussão sobre transferência internacional de dados pessoais ao abrigo do RGPD, e é a escolha coerente para os erros da API pela mesma razão.
+Isto importa porque a Diomika trata a localização de dados como um critério consistente, e não caso a caso. Nos dois serviços onde a decisão está explicitamente registada no repositório, ela é europeia: o Axiom é uma organização **EU Central**, com ingestão em `eu-central-1.aws.edge.axiom.co` (`.env.example`, `deploy/env.free.example`, `docs/OPS.md`), e o PostHog usa a instância `eu.i.posthog.com` (`CookieBanner.vue`). O raciocínio é o mesmo nos dois casos: manter os dados dentro do Espaço Económico Europeu evita toda a discussão sobre transferência internacional de dados pessoais ao abrigo do RGPD, e é a escolha coerente para os erros da API pela mesma razão.
 
 Dito isto, para o Sentry especificamente há um controlo que faz mais trabalho do que a região: o `send_default_pii=False` descrito abaixo. A região determina **onde** os dados ficam alojados; a minimização determina **que** dados chegam a sair do servidor. Um erro sem informação pessoal anexada é pouco sensível independentemente do continente onde é armazenado, e é por isso que a desactivação de PII é a decisão mais consequente das duas.
 
@@ -6562,7 +6562,7 @@ E os comentários imediatamente acima documentam ambos os formatos, para que nin
 # US legacy: https://api.axiom.co/v1/datasets/{dataset}/ingest
 ```
 
-A configuração em produção é `AXIOM_API_URL=https://eu-central-1.aws.edge.axiom.co`, como se vê em `.env.example`, `deploy/env.free.example` e `deploy/OPS.md`. A decisão de detectar por *substring* do domínio em vez de exigir uma variável extra do género `AXIOM_MODE=edge` é intencional: reduz a configuração que um operador tem de acertar. Quem cola o endereço da edge no `.env` obtém o comportamento correcto sem saber que existe uma bifurcação.
+A configuração em produção é `AXIOM_API_URL=https://eu-central-1.aws.edge.axiom.co`, como se vê em `.env.example`, `deploy/env.free.example` e `docs/OPS.md`. A decisão de detectar por *substring* do domínio em vez de exigir uma variável extra do género `AXIOM_MODE=edge` é intencional: reduz a configuração que um operador tem de acertar. Quem cola o endereço da edge no `.env` obtém o comportamento correcto sem saber que existe uma bifurcação.
 
 ### Protecção contra falsificação de pedidos do lado do servidor
 
@@ -6594,7 +6594,7 @@ const posthogHost = import.meta.env.VITE_POSTHOG_HOST || 'https://eu.i.posthog.c
 
 `eu.i.posthog.com` é a instância europeia. A escolha da região não é configuração acidental — é a mesma decisão de RGPD do Axiom, aplicada a dados mais sensíveis, porque analítica de comportamento envolve identificadores de visitante e é matéria de tratamento de dados pessoais.
 
-Vale registar que houve uma escolha entre alternativas, documentada em `deploy/APRESENTACAO_CLIENTE.md`. O Plausible foi considerado e **rejeitado**, e o mesmo documento lista o que foi "removido de propósito (era pior/duplicado): Plausible, pageviews first-party `/metrics/hit`, Grafana na VM". O Plausible é mais simples e mais leve, e por isso mesmo insuficiente: não faz funis nem análise de percursos. Havia também uma implementação caseira de contagem de visitas num endpoint próprio, que foi eliminada — manter código próprio para resolver um problema que um plano gratuito resolve melhor é custo permanente de manutenção sem benefício.
+Vale registar que houve uma escolha entre alternativas, documentada em `docs/APRESENTACAO_CLIENTE.md`. O Plausible foi considerado e **rejeitado**, e o mesmo documento lista o que foi "removido de propósito (era pior/duplicado): Plausible, pageviews first-party `/metrics/hit`, Grafana na VM". O Plausible é mais simples e mais leve, e por isso mesmo insuficiente: não faz funis nem análise de percursos. Havia também uma implementação caseira de contagem de visitas num endpoint próprio, que foi eliminada — manter código próprio para resolver um problema que um plano gratuito resolve melhor é custo permanente de manutenção sem benefício.
 
 ### Consentimento: a parte legal e a parte técnica, feitas a sério
 
@@ -6635,7 +6635,7 @@ As opções de inicialização são `persistence: 'localStorage'`, `autocapture:
 
 Ao contrário do `SENTRY_DSN`, a chave do PostHog **é embutida no código que corre no browser**. O prefixo `VITE_` no nome (`VITE_POSTHOG_KEY`) indica isso mesmo: no Vite (a ferramenta que constrói a loja), só variáveis com esse prefixo são incluídas no resultado final, precisamente para tornar essa fronteira explícita e evitar que alguém injecte um segredo de servidor por distracção.
 
-Consequência operacional relevante: como a chave é embutida na **construção** (*build*), mudá-la exige **reconstruir e voltar a publicar** a loja no Cloudflare Pages. Não é uma variável de ambiente do servidor que se altera e reinicia — é uma constante compilada no ficheiro JavaScript. Está documentado como tal em `deploy/OPS.md`, sob "analytics loja (Pages)".
+Consequência operacional relevante: como a chave é embutida na **construção** (*build*), mudá-la exige **reconstruir e voltar a publicar** a loja no Cloudflare Pages. Não é uma variável de ambiente do servidor que se altera e reinicia — é uma constante compilada no ficheiro JavaScript. Está documentado como tal em `docs/OPS.md`, sob "analytics loja (Pages)".
 
 Essa fronteira é activamente verificada. O programa `deploy/verify_bundle_secrets.py` mantém uma lista `ALLOWED_PUBLIC` onde `VITE_POSTHOG_KEY` e `VITE_POSTHOG_HOST` constam como aceitáveis no resultado da construção, e uma lista `FORBIDDEN_PATTERNS` com o que nunca pode aparecer — `service_role`, `SUPABASE_KEY`, `API_SECRET_KEY`, `MAIL_PASSWORD`, `TURNSTILE_SECRET`, `SUPABASE_DB_PASSWORD` e senhas de IMAP (*Internet Message Access Protocol*, o protocolo de leitura de correio electrónico). Ver Parte IX.4.
 
@@ -7657,16 +7657,16 @@ O `--profile tunnel` activa o serviço `cloudflared`, que está marcado com `pro
 
 ---
 
-## IX.2 `deploy_beta.py` — construir e publicar a loja
+## IX.2 `deploy_pages.py` — construir e publicar a loja
 
 ### O que faz
 
-`deploy/deploy_beta.py` trata da loja: constrói os ficheiros estáticos e publica-os no **Cloudflare Pages**, um serviço de alojamento de sítios estáticos com rede de distribuição de conteúdo (**CDN**, *Content Delivery Network*) incluída e gratuito.
+`deploy/deploy_pages.py` trata da loja: constrói os ficheiros estáticos e publica-os no **Cloudflare Pages**, um serviço de alojamento de sítios estáticos com rede de distribuição de conteúdo (**CDN**, *Content Delivery Network*) incluída e gratuito.
 
 O comando de produção documentado no `README.md` é:
 
 ```powershell
-python deploy/deploy_beta.py --pages-deploy --api-url https://api.diomika.com
+python deploy/deploy_pages.py --pages-deploy --api-url https://api.diomika.com
 ```
 
 ### A construção
@@ -8015,7 +8015,7 @@ Está desligado porque impõe um requisito ao utilizador final: instalar uma apl
 
 `backend-api/utils/storage_r2.py` implementa o carregamento e a geração de endereços assinados contra o R2, o serviço de armazenamento de objectos do Cloudflare compatível com a interface S3. Activa-se com `STORAGE_BACKEND=r2` e as variáveis `R2_*`. Usa `boto3` com assinatura `s3v4` contra `https://<conta>.r2.cloudflarestorage.com`.
 
-Está desactivado porque o armazenamento do Supabase é suficiente para o volume actual, e o R2 acrescentaria uma conta e um conjunto de credenciais para gerir. O ganho seria distribuição de imagens por rede de conteúdo — relevante com muito tráfego, irrelevante hoje. `deploy/OPS.md` documenta-o como *"opcional; se preenchido + keys → imagens em R2"*, e `deploy/SCALE.md` como *"Storage auto-R2 se `R2_*` existirem"*.
+Está desactivado porque o armazenamento do Supabase é suficiente para o volume actual, e o R2 acrescentaria uma conta e um conjunto de credenciais para gerir. O ganho seria distribuição de imagens por rede de conteúdo — relevante com muito tráfego, irrelevante hoje. `docs/OPS.md` documenta-o como *"opcional; se preenchido + keys → imagens em R2"*, e `docs/SCALE.md` como *"Storage auto-R2 se `R2_*` existirem"*.
 
 **Assinatura de código — não feita.**
 
@@ -8023,7 +8023,7 @@ Discutida em detalhe na Parte VIII.5. Decisão económica, com consequência con
 
 ### O comando único de verificação
 
-`deploy/OPS.md` resume a operação a uma linha:
+`docs/OPS.md` resume a operação a uma linha:
 
 ```powershell
 python deploy/verify_production.py
@@ -8362,7 +8362,7 @@ Precisa-se de erros, logs, analítica de produto, uptime e alertas. Há três fo
 
 ### A decisão
 
-A terceira via, e a lista está registada em `deploy/APRESENTACAO_CLIENTE.md` com a justificação de cada escolha:
+A terceira via, e a lista está registada em `docs/APRESENTACAO_CLIENTE.md` com a justificação de cada escolha:
 
 | Função | Ferramenta | Porque esta |
 |---|---|---|
@@ -8390,7 +8390,7 @@ Há também um efeito de composição interessante: os alertas escrevem no log d
 
 ### O que faria mudar
 
-Crescimento que esgotasse as quotas gratuitas, ou uma operação com pessoas de plantão a exigir correlação rápida durante incidentes. `deploy/SCALE.md` já aponta o primeiro passo nessa direcção: um alerta de orçamento na Google Cloud entre 1 e 5 dólares, para detectar crescimento de custo antes de ele surpreender.
+Crescimento que esgotasse as quotas gratuitas, ou uma operação com pessoas de plantão a exigir correlação rápida durante incidentes. `docs/SCALE.md` já aponta o primeiro passo nessa direcção: um alerta de orçamento na Google Cloud entre 1 e 5 dólares, para detectar crescimento de custo antes de ele surpreender.
 
 ## X.8 Arquitectura orientada ao esquema
 
@@ -8426,7 +8426,7 @@ Existe ainda `POST /system/schema/sync?dry_run=true`, que mostra o que seria alt
 
 ### O objectivo
 
-Está declarado em vários documentos, incluindo `deploy/FREE_STACK.md`: *"Único gasto: domínio `diomika.com`."* Infra-estrutura recorrente de zero euros por mês.
+Está declarado em vários documentos, incluindo `docs/FREE_STACK.md`: *"Único gasto: domínio `diomika.com`."* Infra-estrutura recorrente de zero euros por mês.
 
 ### Como se consegue
 
@@ -8460,7 +8460,7 @@ Cinco serviços gratuitos em vez de uma plataforma paga forçou a que cada integ
 
 **Nenhum acordo de nível de serviço.** Nenhum destes fornecedores garante nada para um plano gratuito. Não há a quem recorrer numa interrupção.
 
-**Quotas que podem ser atingidas.** Especialmente na observabilidade. `deploy/SCALE.md` reconhece isto e prescreve o alerta de orçamento como primeiro sinal.
+**Quotas que podem ser atingidas.** Especialmente na observabilidade. `docs/SCALE.md` reconhece isto e prescreve o alerta de orçamento como primeiro sinal.
 
 **Capacidade limitada.** Uma `e2-micro` tem um tecto real, registado em `RELATORIO_TECNICO.md` §12.
 
@@ -8468,7 +8468,7 @@ Cinco serviços gratuitos em vez de uma plataforma paga forçou a que cada integ
 
 ### O caminho de saída, já documentado
 
-`deploy/SCALE.md` é curto e útil precisamente por isso:
+`docs/SCALE.md` é curto e útil precisamente por isso:
 
 1. Alerta de orçamento na Google Cloud entre 1 e 5 dólares — detecção precoce.
 2. Mais trabalhadores, ou upgrade do Supabase, se o processador da base de dados estiver alto.
@@ -8506,7 +8506,7 @@ Esta secção existe porque um relatório técnico que só descreve o que funcio
 
 **Exemplo concreto e documentado.** A interface do UptimeRobot mudou o caminho de criação de monitores de `/create` para `/new/http`, invalidando um procedimento escrito.
 
-**O que mitiga.** Cada integração é opcional: remover uma variável de ambiente desactiva a peça sem afectar o resto. Nenhum dado de negócio vive exclusivamente num serviço de observabilidade — a fonte de verdade é o PostgreSQL. `deploy/SCALE.md` prescreve o alerta de orçamento como detector precoce.
+**O que mitiga.** Cada integração é opcional: remover uma variável de ambiente desactiva a peça sem afectar o resto. Nenhum dado de negócio vive exclusivamente num serviço de observabilidade — a fonte de verdade é o PostgreSQL. `docs/SCALE.md` prescreve o alerta de orçamento como detector precoce.
 
 **O que faria mudar.** Esgotar quotas, ou uma mudança de condições que torne um serviço inviável. A resposta seria migrar essa peça, não a arquitectura.
 
@@ -8524,7 +8524,7 @@ Esta secção existe porque um relatório técnico que só descreve o que funcio
 
 **O que mitiga.** Ficheiro de swap de 2 gigabytes criado pelo `deploy_vm.py`; Redis sem persistência; cache de 30 segundos na contagem de pendentes; prazos curtos em todas as chamadas externas; envio de logs em lote; alerta de latência a 2 segundos como sinal precoce; `load_test.py` para medir antes de doer.
 
-**O que faria mudar.** Um percentil 95 consistentemente acima do limiar de latência, ou alertas de latência frequentes. `deploy/SCALE.md` tem o caminho.
+**O que faria mudar.** Um percentil 95 consistentemente acima do limiar de latência, ou alertas de latência frequentes. `docs/SCALE.md` tem o caminho.
 
 ## XI.6 Segundo factor implementado e desligado
 
@@ -8599,7 +8599,7 @@ diomika/
 
 A tentação natural é abrir ficheiros ao acaso. Não funciona bem neste código, porque a lógica interessante está nas camadas transversais e não nas rotas. A ordem abaixo constrói entendimento em camadas.
 
-**Nível 1 — Orientação (30 minutos).** `README.md` na raiz, `deploy/APRESENTACAO_CLIENTE.md` (a visão de negócio), `deploy/FREE_STACK.md` (a topologia num diagrama), e `deploy/RELATORIO_TECNICO.md` (o mapa completo). Nada de código ainda.
+**Nível 1 — Orientação (30 minutos).** `README.md` na raiz, `docs/APRESENTACAO_CLIENTE.md` (a visão de negócio), `docs/FREE_STACK.md` (a topologia num diagrama), e `docs/RELATORIO_TECNICO.md` (o mapa completo). Nada de código ainda.
 
 **Nível 2 — O ponto de entrada (1 hora).** `backend-api/main.py`, do princípio ao fim. É o índice de toda a API: a configuração de logging, o arranque do rastreio de erros, a ordem dos middlewares com o comentário sobre a inversão do Starlette, os routers incluídos, o manipulador global de excepções, e as três rotas de saúde. Depois `backend-api/core/config.py`, para ver como a configuração é lida e validada no arranque.
 
@@ -8619,7 +8619,7 @@ A tentação natural é abrir ficheiros ao acaso. Não funciona bem neste códig
 
 **Nível 6 — O fluxo público (1 hora).** `routes/contact.py` como caso completo: bandeira de funcionalidade, limitação de taxa, idempotência, favo de mel, Turnstile, saga. Depois `frontend-web/src/components/CookieBanner.vue` e `frontend-web/functions/_middleware.js`.
 
-**Nível 7 — Operações (1 a 2 horas).** `deploy/deploy_vm.py`, `deploy/docker-compose.free.yml`, `deploy/deploy_beta.py`, `deploy/verify_bundle_secrets.py`, `.github/workflows/ci.yml`, `.github/workflows/backoffice-release.yml`.
+**Nível 7 — Operações (1 a 2 horas).** `deploy/deploy_vm.py`, `deploy/docker-compose.free.yml`, `deploy/deploy_pages.py`, `deploy/verify_bundle_secrets.py`, `.github/workflows/ci.yml`, `.github/workflows/backoffice-release.yml`.
 
 **Nível 8 — Os testes.** Deixados para o fim de propósito, e é a melhor parte. `backend-api/tests/` lê-se como uma **especificação executável** do modelo de segurança: cada teste é uma afirmação sobre o que o sistema deve recusar. `test_observability_flags.py` é um bom ponto de partida pela sua brevidade. `frontend-web/e2e/critical.spec.js` tem quatro testes que resumem o que significa "o sistema está bem".
 
@@ -8901,7 +8901,7 @@ A tentação natural é abrir ficheiros ao acaso. Não funciona bem neste códig
 | Ficheiro | Responsabilidade |
 |---|---|
 | `deploy_vm.py` | Publicar a API: swap, Docker, tar, SCP, `.env`, túnel, compose, verificação |
-| `deploy_beta.py` | Construir e publicar a loja no Pages |
+| `deploy_pages.py` | Construir e publicar a loja no Pages |
 | `docker-compose.free.yml` | Redis, API e cloudflared, todos ligados a loopback |
 | `verify_production.py` | Comando único: uptime, fumo, segurança, carga, ponta a ponta |
 | `verify_bundle_secrets.py` | Analisa a construção da loja à procura de segredos |
@@ -9013,7 +9013,7 @@ Porque o armazenamento é privado e os endereços são temporários. Cada endere
 
 **20. Como é que se publica uma alteração?**
 
-Depende do que mudou. Para a API: `python deploy/deploy_vm.py`, que envia o código, actualiza a configuração e reinicia os contentores. Para a loja: `python deploy/deploy_beta.py --pages-deploy --api-url https://api.diomika.com`, que constrói e publica. Para o backoffice: criar uma etiqueta no repositório com o formato `backoffice-v...`, e a automação do GitHub produz os três instaladores em paralelo. Depois de qualquer um destes, `python deploy/verify_production.py` confirma que o sistema está saudável.
+Depende do que mudou. Para a API: `python deploy/deploy_vm.py`, que envia o código, actualiza a configuração e reinicia os contentores. Para a loja: `python deploy/deploy_pages.py --pages-deploy --api-url https://api.diomika.com`, que constrói e publica. Para o backoffice: criar uma etiqueta no repositório com o formato `backoffice-v...`, e a automação do GitHub produz os três instaladores em paralelo. Depois de qualquer um destes, `python deploy/verify_production.py` confirma que o sistema está saudável.
 
 **21. O que é "integração contínua" e porque é que interessa?**
 
@@ -9033,11 +9033,11 @@ Zero euros por mês de infra-estrutura recorrente. O único custo é o domínio 
 
 **25. O que acontece se um destes serviços gratuitos desaparecer ou passar a ser pago?**
 
-Depende de qual. Para as cinco ferramentas de monitorização, o impacto é limitado por desenho: cada uma está ligada a uma variável de ambiente e, se essa variável desaparecer, a integração desliga-se sozinha e o sistema continua a funcionar exactamente igual, apenas mais cego. Nenhum dado de negócio vive num serviço de observabilidade — a fonte de verdade é a base de dados. Para o Cloudflare ou o Supabase, o impacto seria estrutural e exigiria migração planeada. `deploy/SCALE.md` prescreve, como primeiro sinal de alerta, um limite de orçamento na Google Cloud entre 1 e 5 dólares — para detectar crescimento de custo antes de ele surpreender.
+Depende de qual. Para as cinco ferramentas de monitorização, o impacto é limitado por desenho: cada uma está ligada a uma variável de ambiente e, se essa variável desaparecer, a integração desliga-se sozinha e o sistema continua a funcionar exactamente igual, apenas mais cego. Nenhum dado de negócio vive num serviço de observabilidade — a fonte de verdade é a base de dados. Para o Cloudflare ou o Supabase, o impacto seria estrutural e exigiria migração planeada. `docs/SCALE.md` prescreve, como primeiro sinal de alerta, um limite de orçamento na Google Cloud entre 1 e 5 dólares — para detectar crescimento de custo antes de ele surpreender.
 
 **26. O sistema aguenta muito tráfego?**
 
-Tem um tecto conhecido e reconhecido. A máquina virtual é da categoria mais pequena disponível, e partilha recursos entre a API, o Redis e os trabalhadores de fundo. Há várias medidas para esticar essa capacidade: um ficheiro de troca de 2 gigabytes para a memória não esgotar durante construções, cache nas contagens mais caras, prazos curtos em todas as chamadas externas, envio de logs em lote, Redis sem escrita em disco, e um alerta que avisa quando um pedido demora mais de 2 segundos. Existe também um programa (`load_test.py`) que mede a latência sob carga e falha se mais de 5% dos pedidos falharem — para se saber o número antes de haver um problema. O caminho de crescimento está escrito em `deploy/SCALE.md`.
+Tem um tecto conhecido e reconhecido. A máquina virtual é da categoria mais pequena disponível, e partilha recursos entre a API, o Redis e os trabalhadores de fundo. Há várias medidas para esticar essa capacidade: um ficheiro de troca de 2 gigabytes para a memória não esgotar durante construções, cache nas contagens mais caras, prazos curtos em todas as chamadas externas, envio de logs em lote, Redis sem escrita em disco, e um alerta que avisa quando um pedido demora mais de 2 segundos. Existe também um programa (`load_test.py`) que mede a latência sob carga e falha se mais de 5% dos pedidos falharem — para se saber o número antes de haver um problema. O caminho de crescimento está escrito em `docs/SCALE.md`.
 
 **27. Onde estão as passwords guardadas?**
 
@@ -9057,7 +9057,7 @@ Três formas, de diferentes profundidades. A mais rápida: abrir `https://api.di
 
 **31. Se eu quiser entender o código, por onde começo?**
 
-A Parte XII tem uma ordem de leitura em oito níveis, mas o resumo é: começar pelos documentos (`README.md` e `deploy/APRESENTACAO_CLIENTE.md`), depois `backend-api/main.py`, que é o índice de toda a API, e depois os ficheiros de segurança pela ordem indicada — `local_only.py`, `path_guard.py`, `middleware.py`, `auth.py`. Duas notas úteis: os ficheiros mais curtos são os mais importantes (`local_only.py` tem 55 linhas e é o pilar de todo o modelo de acesso), e vale a pena ler os comentários, porque vários documentam avarias reais e a razão de decisões que parecem estranhas à primeira vista.
+A Parte XII tem uma ordem de leitura em oito níveis, mas o resumo é: começar pelos documentos (`README.md` e `docs/APRESENTACAO_CLIENTE.md`), depois `backend-api/main.py`, que é o índice de toda a API, e depois os ficheiros de segurança pela ordem indicada — `local_only.py`, `path_guard.py`, `middleware.py`, `auth.py`. Duas notas úteis: os ficheiros mais curtos são os mais importantes (`local_only.py` tem 55 linhas e é o pilar de todo o modelo de acesso), e vale a pena ler os comentários, porque vários documentam avarias reais e a razão de decisões que parecem estranhas à primeira vista.
 
 
 ---

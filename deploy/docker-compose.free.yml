@@ -4,7 +4,7 @@
 # Uso:
 #   docker compose -f deploy/docker-compose.free.yml up -d --build
 #   docker compose -f deploy/docker-compose.free.yml --profile tunnel up -d --build
-# Guia: deploy/FREE_STACK.md
+# Guia: docs/FREE_STACK.md
 
 services:
   redis:
