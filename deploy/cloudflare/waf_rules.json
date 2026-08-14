@@ -1,5 +1,5 @@
 {
-  "description": "Diomika — regras WAF/edge (aplicar com deploy/apply_waf.py)",
+  "description": "Diomika — regras WAF/edge",
   "zone_settings": {
     "ssl": "strict",
     "always_use_https": "on",
@@ -7,22 +7,6 @@
     "security_level": "high",
     "browser_check": "on"
   },
-  "rate_limits": [
-    {
-      "name": "diomika-api-write",
-      "match": "*(/contacto|/orcamentos)*",
-      "threshold": 30,
-      "period": 60,
-      "action": "block"
-    },
-    {
-      "name": "diomika-api-global",
-      "match": "*",
-      "threshold": 300,
-      "period": 60,
-      "action": "challenge"
-    }
-  ],
   "firewall_rules": [
     {
       "name": "block-empty-ua",
@@ -31,10 +15,10 @@
       "description": "Bloquear pedidos sem User-Agent"
     },
     {
-      "name": "challenge-admin-paths",
-      "expression": "(http.request.uri.path contains \"/admin\" or http.request.uri.path contains \"/system\")",
+      "name": "block-admin-system-except-desktop",
+      "expression": "(http.request.uri.path contains \"/admin\" or http.request.uri.path contains \"/system\") and not any(http.request.headers[\"x-diomika-desktop\"][*] eq \"REPLACE_WITH_DIOMIKA_DESKTOP_GATE\")",
       "action": "block",
-      "description": "Admin/system nunca devem chegar via edge público"
+      "description": "Admin/system só via backoffice (header X-Diomika-Desktop)"
     }
   ]
 }

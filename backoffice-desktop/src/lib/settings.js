@@ -1,4 +1,4 @@
-/** Backoffice local — sessão utilizador (Bearer) + fallback API key máquina. */
+/** Backoffice — sessão + proxy same-origin /api → API cloud (Electron). */
 const STORAGE_KEY = 'diomika-backoffice-settings'
 const SESSION_TOKEN_KEY = 'diomika-backoffice-session-token'
 const SESSION_USER_KEY = 'diomika-backoffice-session-user'
@@ -7,7 +7,6 @@ const LEGACY_API_KEY = 'diomika-backoffice-session'
 const DEV_API_KEY =
   typeof __DIOMIKA_DEV_API_KEY__ !== 'undefined' ? __DIOMIKA_DEV_API_KEY__ : ''
 
-/** Sempre o proxy same-origin do Electron/Vite — nunca a API pública da loja. */
 const LOCAL_API_BASE = '/api'
 
 function readStorage() {
@@ -82,7 +81,6 @@ export function loadSettings() {
     const defaults = defaultSettings()
     const token = readSessionToken()
     const legacyKey = readLegacyApiKey()
-    // Ignora apiBaseUrl gravado antigo (ex.: https://api.diomika.com ou :8000)
     return {
       ...defaults,
       ...saved,
@@ -134,7 +132,6 @@ export function isAuthenticated() {
   return Boolean(s.accessToken?.trim() || s.apiKey?.trim())
 }
 
-/** Sempre configurado em local — proxy /api. Auth é sessão ou API key. */
 export function isConfigured() {
   return true
 }
@@ -147,16 +144,16 @@ export function mapApiError(message) {
   const msg = String(message || '')
   if (status401(msg)) return 'Sessão expirada ou credenciais inválidas. Volte a iniciar sessão.'
   if (/403|localhost na produção|Admin\/system/i.test(msg)) {
-    return 'Acesso admin bloqueado. Use o Backoffice local (EXE/atalho) com a API em 127.0.0.1:8001 — não pela internet.'
+    return 'Acesso admin recusado pelo servidor. Contacte o suporte Diomika.'
   }
-  if (/502|inacessível|API local/i.test(msg)) {
-    return 'API local offline. Feche e abra de novo pelo atalho Diomika Backoffice (arranca a API automaticamente).'
+  if (/502|inacessível/i.test(msg)) {
+    return 'API inacessível. Verifique a internet (a API está na cloud).'
   }
-  if (/abort|timeout/i.test(msg)) return 'API inacessível. Confirme que está a correr em http://127.0.0.1:8001'
+  if (/abort|timeout/i.test(msg)) return 'Timeout ao contactar a API. Verifique a internet.'
   if (/fetch|network|failed/i.test(msg)) {
-    return 'Não foi possível contactar a API local. Abra pelo atalho Diomika Backoffice (não pelo EXE isolado sem API).'
+    return 'Sem rede. Confirme a ligação à internet e tente de novo.'
   }
-  if (/500|internal|Erro HTTP 500/i.test(msg)) return 'Erro no servidor. Verifique os logs da API ou tente Schema & Sync.'
+  if (/500|internal|Erro HTTP 500/i.test(msg)) return 'Erro no servidor. Tente mais tarde ou Schema & Sync.'
   return msg || 'Erro de ligação.'
 }
 

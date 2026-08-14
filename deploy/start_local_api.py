@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Arranca só a API local em 127.0.0.1:8001 (para o Backoffice / Tunnel).
+"""Arranca API local em 127.0.0.1:8001 (só developers / tunnel beta).
 
-Uso:
-  python deploy/start_local_api.py
+O backoffice do cliente usa a API cloud — não precisa deste script.
 """
 from __future__ import annotations
 

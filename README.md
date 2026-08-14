@@ -1,52 +1,45 @@
 # Diomika
 
-Catálogo B2B: loja Vue + API FastAPI + backoffice Electron (só local) + Supabase.
+Catálogo B2B: loja Vue + API FastAPI + backoffice Electron + Supabase.
+
+## Backoffice (PC do cliente — um clique)
+
+A API já está online em `https://api.diomika.com`. O cliente **não** instala Python nem Node.
+
+| SO | Ficheiro (só isto) |
+|----|---------------------|
+| Windows | `Diomika-Backoffice-*-win-portable.exe` |
+| macOS | `Diomika-Backoffice-*-mac.dmg` |
+| Linux | `Diomika-Backoffice-*-linux.AppImage` |
+
+Duplo-clique → login. Build: Actions → *Backoffice release*, ou neste PC:
+
+```powershell
+cd backoffice-desktop
+npm ci
+npm run dist:win
+```
+
+Artefactos em `backoffice-desktop/release/`.
 
 ## Produção (€0 excepto domínio)
 
 | Peça | Onde |
 |------|------|
 | Loja | Cloudflare Pages → `www.diomika.com` |
-| API | GCP e2-micro + Tunnel → `api.diomika.com` |
+| API | GCP + Tunnel → `api.diomika.com` (24/7) |
 | Dados | Supabase Free |
-| Admin | `backoffice-desktop` neste PC |
+| Admin | EXE/DMG/AppImage acima |
+| Monitorização | Sentry + Axiom + PostHog + UptimeRobot |
 
 ```powershell
-python deploy/create_gcp_vm.py
 python deploy/deploy_vm.py
 python deploy/deploy_beta.py --pages-deploy --api-url https://api.diomika.com
-python deploy/smoke_test.py --api https://api.diomika.com --site https://www.diomika.com
-python deploy/security_test.py --url https://api.diomika.com
+python deploy/verify_production.py
 ```
 
-Ops / IR / RGPD: `deploy/OPS.md`  
-Stack €0: `deploy/FREE_STACK.md`
+**Cliente:** [`deploy/APRESENTACAO_CLIENTE.md`](deploy/APRESENTACAO_CLIENTE.md) · Ops: `deploy/OPS.md`
 
-## Backoffice (PC)
+## Config (servidor / developers)
 
-```powershell
-.\ABRIR_BACKOFFICE.bat
-# API local opcional: python deploy/start_local_api.py
-```
-
-## Pastas
-
-| Pasta | Função |
-|-------|--------|
-| `frontend-web/` | Loja (Pages) |
-| `backend-api/` | API FastAPI |
-| `backoffice-desktop/` | Admin Electron |
-| `deploy/` | VM, Docker, gates CI, smoke/security |
-
-## Config
-
-Copia `deploy/env.free.example` → `.env` na raiz (local/VM). **Nunca commits `.env`** — o repo está preparado para ser público.
-
-Antes de tornar o GitHub público: roda no dashboard as chaves que já estiveram no histórico antigo (`SUPABASE_KEY`, Turnstile, Cloudflare token, mail app password). As chaves de API/admin locais já foram regeneradas.
-
-## Testes
-
-```powershell
-python -m pytest backend-api/tests -q
-python deploy/security_gate.py
-```
+Copia `deploy/env.free.example` → `.env`. **Nunca commits `.env`.**

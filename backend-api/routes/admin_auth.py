@@ -58,7 +58,8 @@ def auth_status():
     return {
         "login_required": has_users(),
         "session_ttl_seconds": SESSION_TTL_SECONDS,
-        "admin_local_only": True,
+        "admin_local_only": False,
+        "desktop_gate_required": True,
         "mfa_required": mfa_required_globally(),
     }
 
@@ -87,6 +88,7 @@ def login(body: LoginBody, request: Request):
             "detail": "ADMIN_MFA_REQUIRED=1 — configure MFA via POST /admin/auth/mfa/setup",
         }
     if err or not user:
+        # Resposta genérica ao cliente — sem enumeração (lockout/disabled/tentativas).
         log_admin_action(
             action="login_failed",
             resource="auth",
@@ -107,7 +109,7 @@ def login(body: LoginBody, request: Request):
             note_login_failure(body.username[:64], ip)
         except Exception:
             pass
-        raise HTTPException(status_code=401, detail=err or "Credenciais inválidas")
+        raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
     token, ttl = issue_session(username=user["username"], role=user["role"])
     log_admin_action(

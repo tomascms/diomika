@@ -1,7 +1,7 @@
 """
 API FastAPI da Diomika (catálogo, orçamentos, contacto, admin local-only).
 
-Arranque local: porta 8001 (INICIAR_DIOMIKA / Backoffice / Tunnel). Docker compose usa :8000.
+Arranque local (dev): porta 8001. Docker compose / VM: :8000. Backoffice cliente → https://api.diomika.com.
 Produção: GCP e2-micro + Cloudflare Tunnel → api.diomika.com
 """
 import logging
@@ -26,6 +26,7 @@ from core.middleware import (
     GlobalRateLimitMiddleware,
     CatalogCacheHeadersMiddleware,
     BodySizeLimitMiddleware,
+    LatencyAlertMiddleware,
     ALLOWED_CORS_HEADERS,
 )
 from core.path_guard import PrivilegedPathMiddleware
@@ -43,13 +44,23 @@ from routes import (
     privacy,
 )
 
-logging.basicConfig(level=logging.INFO)
-
 from core.log_safe import install_log_redaction
+from core.structured_logging import configure_structured_logging
+from core.error_tracking import init_error_tracking, capture_exception
+
+# Produção: JSON on por default. Dev: texto, a menos que LOG_FORMAT=json.
+if not (os.getenv("LOG_FORMAT") or "").strip():
+    if (os.getenv("DIOMIKA_ENV") or "").strip().lower() == "production":
+        os.environ["LOG_FORMAT"] = "json"
+configure_structured_logging()
+if not logging.getLogger().handlers:
+    logging.basicConfig(level=logging.INFO)
 
 install_log_redaction()
+_error_mode = init_error_tracking()
 
 logger = logging.getLogger("diomika-api")
+logger.info("Error tracking mode=%s", _error_mode)
 
 settings = get_settings()
 settings.validate_startup()
@@ -82,6 +93,7 @@ app = FastAPI(
 # Ordem: path guard primeiro (outermost = last add) — Starlette inverte
 app.add_middleware(GlobalRateLimitMiddleware)
 app.add_middleware(BodySizeLimitMiddleware)
+app.add_middleware(LatencyAlertMiddleware)
 app.add_middleware(CatalogCacheHeadersMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestIdMiddleware)
@@ -139,6 +151,14 @@ async def _unhandled_exception(request, exc):  # type: ignore[no-untyped-def]
     if isinstance(exc, HTTPException):
         raise exc
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    try:
+        capture_exception(
+            exc,
+            path=str(request.url.path),
+            request_id=getattr(request.state, "request_id", None),
+        )
+    except Exception:
+        pass
     if settings.is_production:
         return JSONResponse(status_code=500, content={"detail": "Erro interno"})
     return JSONResponse(status_code=500, content={"detail": str(exc)})

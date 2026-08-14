@@ -1,24 +1,56 @@
 /**
- * Diomika Backoffice — Electron shell.
- * Em produção serve a UI em http://127.0.0.1:<porta> e faz proxy /api → API local,
- * evitando CORS/CORP do file:// contra a API de produção.
+ * Diomika Backoffice — Electron (Win/Mac/Linux).
+ * Proxy /api → API cloud com header de gate (WAF + API).
  */
 const { app, BrowserWindow, shell, dialog } = require('electron')
 const http = require('http')
+const https = require('https')
 const fs = require('fs')
 const path = require('path')
 const { URL } = require('url')
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL)
-const API_ORIGIN = (process.env.DIOMIKA_API_ORIGIN || 'http://127.0.0.1:8001').replace(/\/+$/, '')
+const API_ORIGIN = (
+  process.env.DIOMIKA_API_ORIGIN ||
+  require('./api-origin.cjs') ||
+  'https://api.diomika.com'
+).replace(/\/+$/, '')
+
+function loadDesktopGate() {
+  try {
+    const g = require('./desktop-gate.cjs')
+    if (typeof g === 'string' && g.trim()) return g.trim()
+  } catch {
+    /* missing in dev without script */
+  }
+  return (process.env.DIOMIKA_DESKTOP_GATE || '').trim()
+}
+
+const DESKTOP_GATE = loadDesktopGate()
 const DIST_DIR = path.join(__dirname, '../dist')
+
+function transportFor(url) {
+  return url.protocol === 'https:' ? https : http
+}
 
 function apiHealthOk() {
   return new Promise((resolve) => {
-    const req = http.get(`${API_ORIGIN}/health`, { timeout: 2500 }, (res) => {
-      res.resume()
-      resolve(res.statusCode >= 200 && res.statusCode < 500)
-    })
+    const target = new URL(`${API_ORIGIN}/health`)
+    const lib = transportFor(target)
+    const req = lib.get(
+      {
+        protocol: target.protocol,
+        hostname: target.hostname,
+        port: target.port || (target.protocol === 'https:' ? 443 : 80),
+        path: target.pathname + target.search,
+        timeout: 8000,
+        headers: { 'User-Agent': 'DiomikaBackoffice/1.0' },
+      },
+      (res) => {
+        res.resume()
+        resolve(res.statusCode >= 200 && res.statusCode < 500)
+      },
+    )
     req.on('error', () => resolve(false))
     req.on('timeout', () => {
       req.destroy()
@@ -26,6 +58,7 @@ function apiHealthOk() {
     })
   })
 }
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -56,24 +89,26 @@ function proxyToApi(req, res) {
   const incoming = new URL(req.url || '/', 'http://127.0.0.1')
   const targetPath = (incoming.pathname.replace(/^\/api/, '') || '/') + incoming.search
   const target = new URL(targetPath, API_ORIGIN + '/')
+  const lib = transportFor(target)
 
   const headers = { ...req.headers, host: target.host }
   delete headers.origin
   delete headers.referer
   delete headers['accept-encoding']
+  headers['user-agent'] = 'DiomikaBackoffice/1.0'
+  if (DESKTOP_GATE) headers['x-diomika-desktop'] = DESKTOP_GATE
 
-  const upstream = http.request(
+  const upstream = lib.request(
     {
       protocol: target.protocol,
       hostname: target.hostname,
-      port: target.port || 80,
+      port: target.port || (target.protocol === 'https:' ? 443 : 80),
       method: req.method,
       path: target.pathname + target.search,
       headers,
     },
     (upRes) => {
       const outHeaders = { ...upRes.headers }
-      // Resposta same-origin no proxy — não herdar CORP restritivo da API
       delete outHeaders['cross-origin-resource-policy']
       delete outHeaders['cross-origin-opener-policy']
       res.writeHead(upRes.statusCode || 502, outHeaders)
@@ -83,7 +118,7 @@ function proxyToApi(req, res) {
 
   upstream.on('error', (err) => {
     const msg = JSON.stringify({
-      detail: `API local inacessível em ${API_ORIGIN}. Arranque: python INICIAR_DIOMIKA.py (${err.message})`,
+      detail: `API inacessível (${API_ORIGIN}). Verifique a internet. (${err.message})`,
     })
     res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' })
     res.end(msg)
@@ -105,7 +140,7 @@ function serveStatic(req, res) {
   }
   if (!fs.existsSync(filePath)) {
     res.writeHead(404)
-    res.end('UI em falta — corra npm run dist')
+    res.end('UI em falta')
     return
   }
   const ext = path.extname(filePath).toLowerCase()
@@ -178,12 +213,18 @@ async function createWindow() {
 let localServer = null
 
 app.whenReady().then(async () => {
+  if (!isDev && !DESKTOP_GATE) {
+    dialog.showErrorBox(
+      'Build incompleto',
+      'Falta DIOMIKA_DESKTOP_GATE neste instalador. Peça um build novo à Diomika.',
+    )
+  }
   if (!isDev) {
-    const healthy = await apiHealthOk()
-    if (!healthy) {
+    const ok = await apiHealthOk()
+    if (!ok) {
       dialog.showErrorBox(
-        'API local offline',
-        `Não há API em ${API_ORIGIN}/health.\n\nFeche esta janela e abra pelo atalho "Diomika Backoffice" (ABRIR_BACKOFFICE.bat), que arranca a API automaticamente.\n\nOu corra: python deploy/start_local_api.py`,
+        'Sem ligação à API',
+        `Não foi possível contactar ${API_ORIGIN}.\nConfirme a internet e tente de novo.`,
       )
     }
   }

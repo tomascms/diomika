@@ -2,7 +2,8 @@
   "name": "backoffice-desktop",
   "version": "1.0.0",
   "private": true,
-  "description": "Diomika Backoffice — app local Vue + Electron (não deployar na internet)",
+  "description": "Diomika Backoffice — app de secretária (Windows / macOS / Linux)",
+  "author": "Diomika",
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
@@ -11,27 +12,48 @@
     "dev:browser": "vite --open",
     "build": "vite build",
     "start": "electron .",
-    "dist": "vite build && electron-builder --win portable"
+    "dist": "npm run dist:win",
+    "dist:win": "node scripts/write-gate.cjs && vite build && electron-builder --win portable --x64",
+    "dist:mac": "node scripts/write-gate.cjs && vite build && electron-builder --mac dmg --universal",
+    "dist:linux": "node scripts/write-gate.cjs && vite build && electron-builder --linux AppImage --x64",
+    "dist:dir": "node scripts/write-gate.cjs && vite build && electron-builder --dir"
   },
   "build": {
     "appId": "pt.diomika.backoffice",
     "productName": "Diomika Backoffice",
+    "copyright": "Copyright © Diomika",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "dist/**/*",
       "electron/**/*",
       "package.json"
     ],
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
     "win": {
-      "target": [
-        "portable"
-      ],
-      "signAndEditExecutable": false
+      "target": ["portable"],
+      "signAndEditExecutable": false,
+      "artifactName": "Diomika-Backoffice-${version}-windows.exe"
     },
     "portable": {
-      "artifactName": "Diomika-Backoffice.exe"
+      "artifactName": "Diomika-Backoffice-${version}-windows.exe"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.business",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null,
+      "artifactName": "Diomika-Backoffice-${version}-mac.dmg"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Office",
+      "artifactName": "Diomika-Backoffice-${version}-linux.AppImage"
     }
   },
   "dependencies": {

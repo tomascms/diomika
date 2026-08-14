@@ -18,8 +18,8 @@ temp/
 *.png
 
 # Logs & runtime state
-logs/
 backend-api/logs/
+*.jsonl
 backend-api/data/admin_users.json
 backend-api/data/admin_users.tmp
 *.log
@@ -61,6 +61,8 @@ Thumbs.db
 
 # Build
 backoffice-desktop/release/
+backoffice-desktop/electron/desktop-gate.cjs
+cliente-backoffice/
 *.timestamp-*-*.mjs
 .eslintcache
 
