@@ -27,3 +27,11 @@ def model_detail_for_tipo(tipo: str, id_modelo: str) -> dict | None:
     if not is_valid_tipo(tipo):
         raise HTTPException(status_code=404, detail=f"Tipo de catálogo «{tipo}» desconhecido.")
     return model_detail_for_tipo_query(tipo, id_modelo)
+
+
+def model_detail_for_slugs(tipo: str, category_slug: str, model_slug: str) -> dict | None:
+    from core.catalog_storefront import model_detail_for_slugs_query
+
+    if not is_valid_tipo(tipo):
+        raise HTTPException(status_code=404, detail=f"Tipo de catálogo «{tipo}» desconhecido.")
+    return model_detail_for_slugs_query(tipo, category_slug, model_slug)

@@ -1,11 +1,12 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
-import { supabase, supabaseConfigured } from '@/lib/supabase'
+import { supabase, supabaseConfigured, subscribeRealtime } from '@/lib/supabase'
 import AppErrorBoundary from '@/components/AppErrorBoundary.vue'
 import { useCart } from '@/composables/useCart'
 import { useCategories } from '@/composables/useCategories'
 import CookieBanner from '@/components/CookieBanner.vue'
+import { categoryProductsRoute } from '@/lib/catalogRoutes'
 
 const isMenuOpen = ref(false)
 const { categories, load: loadCategories } = useCategories()
@@ -43,12 +44,12 @@ onMounted(async () => {
   window.addEventListener('keydown', onEscape)
 
   if (supabaseConfigured) {
-    categoriesSubscription = supabase
+    const channel = supabase
       .channel('categories_channel')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
         loadCategories(true)
       })
-      .subscribe()
+    categoriesSubscription = subscribeRealtime(channel)
   }
 })
 
@@ -131,13 +132,24 @@ onUnmounted(() => {
           <h3 class="footer-title">Categorias</h3>
           <ul class="footer-links">
             <li v-for="cat in categories" :key="cat.id">
-              <RouterLink :to="{ name: 'products', params: { categoryId: cat.id } }">
+              <RouterLink :to="categoryProductsRoute(cat)">
                 {{ pretty(cat.nome) }}
               </RouterLink>
             </li>
             <li v-if="!categories.length">
               <RouterLink to="/categorias">Ver categorias</RouterLink>
             </li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 class="footer-title">Contacto</h3>
+          <ul class="footer-links footer-contact">
+            <li>
+              <a href="tel:+351935745663">935 745 663</a>
+            </li>
+            <li>Rua da Quintã, n.º 89<br />4805-116 Caldas das Taipas</li>
+            <li>NIF 508 651 557</li>
           </ul>
         </div>
 
@@ -276,10 +288,11 @@ onUnmounted(() => {
 
 .footer-grid {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1.15fr;
-  gap: 2rem 1.75rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1.5rem 1rem;
   padding-top: 0;
   padding-bottom: 2.25rem;
+  max-width: 1320px;
 }
 
 .footer-brand img {
@@ -322,6 +335,10 @@ onUnmounted(() => {
 
 .footer-links a:hover { color: #fff; }
 
+.footer-contact li {
+  line-height: 1.55;
+}
+
 .footer-cta {
   display: inline-flex;
   margin-top: 1rem;
@@ -350,9 +367,15 @@ onUnmounted(() => {
 
 .footer-bottom p { margin: 0; }
 
-@media (max-width: 960px) {
+@media (max-width: 992px) {
   .footer-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .footer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

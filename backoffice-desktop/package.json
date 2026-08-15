@@ -16,6 +16,7 @@
     "dist:win": "node scripts/write-gate.cjs && vite build && electron-builder --win portable --x64",
     "dist:mac": "node scripts/write-gate.cjs && vite build && electron-builder --mac dmg --universal",
     "dist:linux": "node scripts/write-gate.cjs && vite build && electron-builder --linux AppImage --x64",
+    "dist:cliente": "npm run dist:win && node scripts/copy-cliente-pack.cjs",
     "dist:dir": "node scripts/write-gate.cjs && vite build && electron-builder --dir"
   },
   "build": {

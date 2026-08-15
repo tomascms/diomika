@@ -1,6 +1,7 @@
 <script setup>
 import { RouterLink } from 'vue-router'
 import { useCategories } from '@/composables/useCategories'
+import { categoryProductsRoute } from '@/lib/catalogRoutes'
 import Breadcrumbs from '@/components/Breadcrumbs.vue'
 import LoadingState from '@/components/LoadingState.vue'
 
@@ -41,7 +42,7 @@ const breadcrumbItems = [
         <RouterLink
           v-for="cat in categories"
           :key="cat.id"
-          :to="{ name: 'products', params: { categoryId: cat.id } }"
+          :to="categoryProductsRoute(cat)"
           class="cat-card"
         >
           <div class="cat-media">

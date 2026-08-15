@@ -4,7 +4,7 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; script-src-elem 'self' https://challenges.cloudflare.com; connect-src 'self' https://*.supabase.co https://challenges.cloudflare.com https://api.diomika.com https://*.i.posthog.com https://eu.i.posthog.com; img-src 'self' data: blob: https://*.supabase.co https://*.r2.dev; style-src 'self'; frame-src https://challenges.cloudflare.com; font-src 'self' data:; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; script-src-elem 'self' https://challenges.cloudflare.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com https://api.diomika.com https://*.i.posthog.com https://eu.i.posthog.com; img-src 'self' data: blob: https://*.supabase.co https://*.r2.dev; style-src 'self'; frame-src https://challenges.cloudflare.com; font-src 'self' data:; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests
 */
 
 /index.html

@@ -5,7 +5,7 @@ from fastapi import HTTPException
 
 from core.cqrs.queries.assentos_catalog import assento_model_detail
 from core.database import get_db
-from models.catalog_registry import CATALOG_TYPES, storefront_mode_for_tipo
+from models.catalog_registry import CATALOG_TYPES, colors_table_for_tipo, storefront_mode_for_tipo
 
 
 def _load_products_by_ean(eans: list[str]) -> tuple[dict[str, dict], dict[str, str]]:
@@ -18,10 +18,13 @@ def _load_products_by_ean(eans: list[str]) -> tuple[dict[str, dict], dict[str, s
         ptable = cfg["product_table"]
         mtable = cfg["model_table"]
         try:
+            fields = "ean, id_modelo"
+            if ptable == "assento":
+                fields += ", altura"
             res = (
                 db.table(ptable)
                 .select(
-                    f"ean, id_modelo, {mtable}(id_categoria, categories(carrinho_step, carrinho_min))"
+                    f"{fields}, {mtable}(id_categoria, categories(carrinho_step, carrinho_min))"
                 )
                 .in_("ean", eans)
                 .execute()
@@ -44,12 +47,15 @@ def _load_products_by_ean(eans: list[str]) -> tuple[dict[str, dict], dict[str, s
     return by_ean, product_tipo
 
 
-def _valid_model_colors(model_ids: list[str]) -> set[tuple[str, int]]:
+def _valid_model_colors(model_ids: list[str], tipo: str) -> set[tuple[str, int]]:
     if not model_ids:
+        return set()
+    colors_table = colors_table_for_tipo(tipo)
+    if not colors_table:
         return set()
     res = (
         get_db()
-        .table("modelo_cores")
+        .table(colors_table)
         .select("id_modelo, numero")
         .in_("id_modelo", model_ids)
         .execute()
@@ -63,9 +69,9 @@ def validate_order_lines(linhas) -> None:
     by_ean, product_tipo = _load_products_by_ean(eans)
 
     alm_model_ids = list(
-        {str(r["id_modelo"]) for e, r in by_ean.items() if product_tipo.get(e) != "assento" and r.get("id_modelo")}
+        {str(r["id_modelo"]) for e, r in by_ean.items() if product_tipo.get(e) == "almofada" and r.get("id_modelo")}
     )
-    valid_alm_cors = _valid_model_colors(alm_model_ids)
+    valid_alm_cors = _valid_model_colors(alm_model_ids, "almofada")
 
     assento_details: dict[str, dict] = {}
     for ean, row in by_ean.items():
@@ -109,12 +115,20 @@ def validate_order_lines(linhas) -> None:
                     detail=f"Indique a altura para o assento {linha.ean}.",
                 )
             detail = assento_details.get(id_modelo) or {}
-            alturas = detail.get("alturas") or []
-            if altura not in alturas:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Altura «{altura}» inválida para este modelo.",
-                )
+            product_altura = (row.get("altura") or "").strip()
+            if product_altura:
+                if altura != product_altura:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Altura «{altura}» não corresponde ao EAN {linha.ean}.",
+                    )
+            else:
+                alturas = detail.get("alturas") or []
+                if altura not in alturas:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Altura «{altura}» inválida para este modelo.",
+                    )
             valid_cors = {
                 int(c.get("numero", 0))
                 for c in (detail.get("modelo_cores") or [])

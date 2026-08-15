@@ -48,5 +48,5 @@ export function storefrontContextForModel(model, tipoConfig) {
 }
 
 export function isSingleProductMode(ctx) {
-  return ctx?.picker?.source === 'model' || ctx?.mode === 'assento'
+  return ctx?.picker?.source === 'model'
 }

@@ -5,6 +5,7 @@ import {
   catalogueModelsForTipo,
   getCatalogMeta,
   modelDetailAuto,
+  modelDetailForSlugs,
   modelDetailForTipo,
 } from '@/lib/catalogSupabase'
 import { supabaseConfigured } from '@/lib/supabase'
@@ -98,12 +99,17 @@ export function useCatalog() {
 
 
 
-  const fetchModelDetail = async (modelId, tipo = null) => {
+  const fetchModelDetail = async ({ categorySlug = null, modelSlug = null, modelId = null, tipo = null } = {}) => {
 
     if (supabaseConfigured) {
-      const data = tipo
-        ? await modelDetailForTipo(tipo, modelId)
-        : await modelDetailAuto(modelId)
+      let data = null
+      if (categorySlug && modelSlug) {
+        data = await modelDetailForSlugs(categorySlug, modelSlug, tipo)
+      } else if (modelId) {
+        data = tipo
+          ? await modelDetailForTipo(tipo, modelId)
+          : await modelDetailAuto(modelId)
+      }
       if (!data) throw new Error('Modelo não encontrado.')
       return {
         ...data,
@@ -112,7 +118,19 @@ export function useCatalog() {
       }
     }
 
-    if (tipo) {
+    if (categorySlug && modelSlug) {
+      const resolvedTipo = tipo || (await apiGet(`/categorias/slug/${encodeURIComponent(categorySlug)}`)).tipo_catalogo
+      const data = await apiGet(
+        `/catalogo/${encodeURIComponent(resolvedTipo)}/modelo-detalhe/slug/${encodeURIComponent(categorySlug)}/${encodeURIComponent(modelSlug)}`,
+      )
+      return {
+        ...data,
+        _tipo_catalogo: resolvedTipo,
+        _storefront_mode: data._storefront_mode || storefrontMode(resolvedTipo),
+      }
+    }
+
+    if (tipo && modelId) {
 
       const data = await apiGet(`/catalogo/${encodeURIComponent(tipo)}/modelo-detalhe/${modelId}`)
 
@@ -128,7 +146,11 @@ export function useCatalog() {
 
     }
 
-    return apiGet(`/catalogo/modelo-detalhe/${modelId}`)
+    if (modelId) {
+      return apiGet(`/catalogo/modelo-detalhe/${modelId}`)
+    }
+
+    throw new Error('Modelo não encontrado.')
 
   }
 
@@ -244,9 +266,11 @@ export function useCatalog() {
 
   const realtimeTables = () => {
 
-    const tables = new Set(['modelo_cores'])
+    const tables = new Set()
 
     for (const t of metaCache.value?.catalog_types || []) {
+
+      if (t.colors_table) tables.add(t.colors_table)
 
       if (t.model_table) tables.add(t.model_table)
 

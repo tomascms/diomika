@@ -36,6 +36,31 @@ def product_table_for_tipo(tipo: str | None) -> str | None:
     return CATALOG_TYPES[tipo]["product_table"]
 
 
+def colors_table_for_tipo(tipo: str | None) -> str | None:
+    if not is_valid_tipo(tipo):
+        return None
+    return CATALOG_TYPES[tipo].get("colors_table")
+
+
+def colors_schema_for_tipo(tipo: str | None) -> Type[BaseModel] | None:
+    if not is_valid_tipo(tipo):
+        return None
+    return CATALOG_TYPES[tipo].get("colors_schema")
+
+
+def all_colors_tables() -> list[str]:
+    return [cfg["colors_table"] for cfg in CATALOG_TYPES.values() if cfg.get("colors_table")]
+
+
+def colors_table_for_model_table(model_table: str | None) -> str | None:
+    if not model_table:
+        return None
+    for cfg in CATALOG_TYPES.values():
+        if cfg["model_table"] == model_table:
+            return cfg.get("colors_table")
+    return None
+
+
 def model_schema_for_tipo(tipo: str | None) -> Type[BaseModel] | None:
     if not is_valid_tipo(tipo):
         return None
@@ -52,7 +77,8 @@ def tipo_for_table(ptable: str | None) -> str | None:
     if not ptable:
         return None
     for tipo, cfg in CATALOG_TYPES.items():
-        if ptable in (cfg["model_table"], cfg["product_table"]):
+        tables = (cfg["model_table"], cfg["product_table"], cfg.get("colors_table"))
+        if ptable in tables:
             return tipo
     return None
 
@@ -70,6 +96,8 @@ def all_catalog_tables() -> list[str]:
     for cfg in CATALOG_TYPES.values():
         out.append(cfg["model_table"])
         out.append(cfg["product_table"])
+        if cfg.get("colors_table"):
+            out.append(cfg["colors_table"])
     return out
 
 
@@ -117,7 +145,8 @@ def list_select_query(table: str) -> str:
         disc = cfg.get("model_discriminator_field")
         if disc:
             model_fields.append(disc)
-        return f"*, {mt}({', '.join(model_fields)}), categories(nome)"
+        # Categoria via modelo — produtos não têm FK directo para categories
+        return f"*, {mt}({', '.join(model_fields)}, categories(nome))"
     if table == mt:
         return "*, categories(nome)"
     return "*"
@@ -172,6 +201,7 @@ def catalog_metadata() -> dict:
                 "label": cfg.get("label") or key,
                 "model_table": cfg["model_table"],
                 "product_table": cfg["product_table"],
+                "colors_table": cfg.get("colors_table"),
                 "storefront_mode": ctx["mode"],
                 "storefront_filters": storefront_filters_for_model_tipo(key),
                 "storefront_picker": ctx["picker"],

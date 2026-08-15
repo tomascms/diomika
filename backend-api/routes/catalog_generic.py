@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from core.auth import require_catalog_role
 from core.local_only import admin_must_be_local
 from core.cache import catalog_cache_ttl, get_or_set
-from core.catalog_service import catalogue_for_category, model_detail_for_tipo
+from core.catalog_service import catalogue_for_category, model_detail_for_slugs, model_detail_for_tipo
 from core.database import get_db
 from models.catalog_registry import (
     CATALOG_TYPES,
@@ -85,6 +85,27 @@ async def list_storefront_catalog(tipo: str, id_categoria: str, filter_tipo: str
     except Exception as exc:
         logger.error("Catálogo %s/%s: %s", tipo, id_categoria, exc)
         raise HTTPException(status_code=500, detail="Erro ao carregar catálogo") from exc
+
+
+@router.get("/{tipo}/modelo-detalhe/slug/{category_slug}/{model_slug}")
+async def get_storefront_model_detail_by_slug(tipo: str, category_slug: str, model_slug: str):
+    _require_tipo(tipo)
+    ttl = catalog_cache_ttl()
+    cache_key = f"catalog:modelo-slug:{tipo}:{category_slug}:{model_slug}"
+
+    def load():
+        data = model_detail_for_slugs(tipo, category_slug, model_slug)
+        if not data:
+            raise HTTPException(status_code=404, detail="Modelo não encontrado")
+        return data
+
+    try:
+        return await asyncio.to_thread(get_or_set, cache_key, float(ttl), load)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Detalhe modelo slug %s/%s/%s: %s", tipo, category_slug, model_slug, exc)
+        raise HTTPException(status_code=500, detail="Erro ao carregar modelo") from exc
 
 
 @router.get("/{tipo}/modelo-detalhe/{id_modelo}")

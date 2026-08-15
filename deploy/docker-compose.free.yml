@@ -27,6 +27,9 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"
+    volumes:
+      # Persiste admin_users.json entre rebuilds/restarts do contentor
+      - ../backend-api/data:/app/backend-api/data
     env_file:
       - ../.env
     environment:

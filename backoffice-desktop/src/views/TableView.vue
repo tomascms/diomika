@@ -44,7 +44,12 @@ const recordLabel = (row) => {
   return row.nome || row.ean || String(row.id).slice(0, 8)
 }
 
-const categoryLabel = (row) => row._categoria_label || row.categories?.nome || '—'
+const categoryLabel = (row) => {
+  if (row._categoria_label) return row._categoria_label
+  if (row.categories?.nome) return row.categories.nome
+  const model = row.modelos_almofadas || row.modelos_assentos
+  return model?.categories?.nome || '—'
+}
 
 const columns = computed(() => {
   if (isMerged.value) {

@@ -11,7 +11,8 @@ GENERATED_PATH = Path(__file__).resolve().parents[2] / "deploy" / "generated_cat
 SHARED_CATALOG_TABLES = frozenset(
     {
         "categories",
-        "modelo_cores",
+        "modelo_almofada_cores",
+        "modelo_assento_cores",
     }
 )
 
@@ -48,9 +49,21 @@ def generate_catalog_infra_sql() -> str:
                     f'CREATE POLICY "{tbl}_deny_anon_delete" ON {tbl} FOR DELETE TO anon USING (false);',
                 ]
             )
-            # Categoria vive no modelo; produtos filtram por id_modelo
             if tbl == mt:
                 lines.append(f"CREATE INDEX IF NOT EXISTS idx_{tbl}_categoria ON {tbl} (id_categoria);")
+
+        ct = cfg.get("colors_table")
+        if ct and ct not in SHARED_CATALOG_TABLES:
+            trigger_tables.append(ct)
+            lines.extend(
+                [
+                    f"ALTER TABLE IF EXISTS {ct} ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();",
+                    f"ALTER TABLE {ct} ENABLE ROW LEVEL SECURITY;",
+                    f'DROP POLICY IF EXISTS "{ct}_public_read" ON {ct};',
+                    f'CREATE POLICY "{ct}_public_read" ON {ct} FOR SELECT TO anon USING (visibilidade = true);',
+                    f"CREATE INDEX IF NOT EXISTS idx_{ct}_modelo ON {ct} (id_modelo);",
+                ]
+            )
 
         lines.extend(
             [

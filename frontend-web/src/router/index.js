@@ -17,24 +17,36 @@ const router = createRouter({
   },
   routes: [
     {
-      path: '/', // Rota para a página inicial
+      path: '/',
       name: 'home',
-      component: HomeView
+      component: HomeView,
     },
     {
       path: '/categorias',
       name: 'categories',
-      component: () => import('@/views/CategoriesView.vue')
+      component: () => import('@/views/CategoriesView.vue'),
     },
     {
-      path: '/produtos/:categoryId?',
+      path: '/categoria/:categorySlug',
       name: 'products',
-      component: ProductsView
+      component: ProductsView,
     },
     {
-      path: '/produto/:id',
+      path: '/categoria/:categorySlug/:modelSlug',
       name: 'product-detail',
-      component: () => import('@/views/ProductDetailView.vue')
+      component: () => import('@/views/ProductDetailView.vue'),
+    },
+    {
+      path: '/produtos/:categorySlug',
+      redirect: (to) => ({
+        name: 'products',
+        params: { categorySlug: to.params.categorySlug },
+      }),
+    },
+    {
+      path: '/produto/:legacyModelId',
+      name: 'product-detail-legacy',
+      component: () => import('@/views/ProductDetailView.vue'),
     },
     {
       path: '/carrinho',
@@ -50,20 +62,19 @@ const router = createRouter({
     {
       path: '/sobre',
       name: 'about',
-      component: () => import('@/views/AboutView.vue')
+      component: () => import('@/views/AboutView.vue'),
     },
     {
       path: '/privacidade',
       name: 'privacy',
-      component: () => import('@/views/PrivacyView.vue')
+      component: () => import('@/views/PrivacyView.vue'),
     },
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
-      component: () => import('@/views/NotFoundView.vue')
-    }
+      component: () => import('@/views/NotFoundView.vue'),
+    },
   ],
 })
-
 
 export default router

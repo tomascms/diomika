@@ -61,7 +61,7 @@ class Categoria(BaseModel):
     nome: str = Field(..., min_length=2)
     slug: str = Field(default="", json_schema_extra={"ui_readonly": True})
     imagem: str = Field(..., description="URL da imagem")
-    visibilidade: bool = Field(default=True)
+    visibilidade: bool = Field(default=False)
     carrinho_step: Optional[int] = Field(
         default=None,
         description="Passo quantidade (ex: 6 ou 12). Predefinido pelo tipo.",
@@ -118,7 +118,7 @@ class ModeloAlmofada(BaseModel):
         description="Composição (%) — igual para todas as cores",
         json_schema_extra={"ui_widget": "composition"},
     )
-    visibilidade: bool = Field(default=True)
+    visibilidade: bool = Field(default=False)
 
     @model_validator(mode="after")
     def set_slug(self) -> "ModeloAlmofada":
@@ -134,18 +134,32 @@ class ModeloAlmofada(BaseModel):
         return v
 
 
-class ModeloCor(BaseModel):
-    """Cor de um modelo (almofada ou assento). Sem paletas partilhadas."""
+class ModeloAlmofadaCor(BaseModel):
+    """Cor de um modelo de almofada."""
     id: UUID = Field(default_factory=uuid4, json_schema_extra={"ui_hidden": True})
     id_modelo: UUID = Field(
         ...,
-        description="Modelo dono (almofada ou assento)",
-        json_schema_extra={"ui_relation": "modelos_almofadas"},
+        description="Modelo dono",
+        json_schema_extra={"ui_hidden": True},
     )
     numero: int = Field(..., ge=1, description="Número da cor")
     nome: str = Field(default="", description="Nome da cor (opcional)")
     imagem: str = Field(..., description="URL da imagem desta cor")
-    visibilidade: bool = Field(default=True)
+    visibilidade: bool = Field(default=False)
+
+
+class ModeloAssentoCor(BaseModel):
+    """Cor de um modelo de assento."""
+    id: UUID = Field(default_factory=uuid4, json_schema_extra={"ui_hidden": True})
+    id_modelo: UUID = Field(
+        ...,
+        description="Modelo dono",
+        json_schema_extra={"ui_hidden": True},
+    )
+    numero: int = Field(..., ge=1, description="Número da cor")
+    nome: str = Field(default="", description="Nome da cor (opcional)")
+    imagem: str = Field(..., description="URL da imagem desta cor")
+    visibilidade: bool = Field(default=False)
 
 
 class Almofada(BaseModel):
@@ -155,7 +169,7 @@ class Almofada(BaseModel):
     ean: str = Field(..., pattern=r"^\d{13}$", description="EAN-13")
     barcode_url: Optional[str] = Field(None, json_schema_extra={"ui_readonly": True})
     dimensoes: str = Field(..., pattern=r"^\d+x\d+$", description="Medidas (LxA cm)")
-    visibilidade: bool = Field(default=True)
+    visibilidade: bool = Field(default=False)
 
     @field_validator("ean")
     @classmethod
@@ -255,7 +269,7 @@ class ModeloAssento(BaseModel):
         description="Alturas disponíveis (ex: 32mm, 45mm)",
         json_schema_extra={"ui_widget": "string_list", "ui_label": "Alturas"},
     )
-    visibilidade: bool = Field(default=True)
+    visibilidade: bool = Field(default=False)
 
     @model_validator(mode="after")
     def set_slug(self) -> "ModeloAssento":
@@ -273,12 +287,23 @@ class ModeloAssento(BaseModel):
 
 
 class Assento(BaseModel):
-    """Um EAN/código de barras por modelo — cor e altura escolhidas no pedido. Categoria via modelo."""
+    """Um EAN/código de barras por altura do modelo."""
     id: UUID = Field(default_factory=uuid4, json_schema_extra={"ui_hidden": True})
     id_modelo: UUID = Field(..., description="Modelo", json_schema_extra={"ui_relation": "modelos_assentos"})
+    altura: str = Field(
+        ...,
+        min_length=1,
+        max_length=32,
+        description="Altura desta variante (ex: 32mm)",
+        json_schema_extra={
+            "ui_widget": "altura_modelo",
+            "ui_label": "Altura",
+            "ui_lock_on_edit": True,
+        },
+    )
     ean: str = Field(..., pattern=r"^\d{13}$", description="EAN-13")
     barcode_url: Optional[str] = Field(None, json_schema_extra={"ui_readonly": True})
-    visibilidade: bool = Field(default=True)
+    visibilidade: bool = Field(default=False)
 
     @field_validator("ean")
     @classmethod
@@ -305,6 +330,8 @@ def _register_catalog_types() -> None:
                 "label": "Almofadas",
                 "model_table": "modelos_almofadas",
                 "product_table": "almofada",
+                "colors_table": "modelo_almofada_cores",
+                "colors_schema": ModeloAlmofadaCor,
                 "model_schema": ModeloAlmofada,
                 "product_schema": Almofada,
                 "model_discriminator_field": None,
@@ -316,12 +343,20 @@ def _register_catalog_types() -> None:
                 "label": "Assentos",
                 "model_table": "modelos_assentos",
                 "product_table": "assento",
+                "colors_table": "modelo_assento_cores",
+                "colors_schema": ModeloAssentoCor,
                 "model_schema": ModeloAssento,
                 "product_schema": Assento,
                 "model_discriminator_field": "alturas",
                 "product_readonly_on_edit": True,
                 "apply_barcode_on_save": True,
                 "storefront_mode": "assento",
+                "storefront_picker": {
+                    "source": "products",
+                    "field": "altura",
+                    "label": "Altura",
+                    "format": "plain",
+                },
             },
         }
     )
@@ -338,7 +373,6 @@ def _rebuild_table_map() -> None:
     global TABLE_MAP
     ops = build_operations_table_map(
         categoria_schema=Categoria,
-        modelo_cor_schema=ModeloCor,
         pedido_schema=PedidoOrcamento,
         encomenda_schema=EncomendaInterna,
         contact_schema=ContactMessage,

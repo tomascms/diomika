@@ -134,6 +134,9 @@ def main() -> int:
             "--exclude=.venv",
             "--exclude=*.pyc",
             "--exclude=.env",
+            "--exclude=backend-api/data/admin_users.json",
+            "--exclude=backend-api/data/admin_users.json.bak",
+            "--exclude=backend-api/data/admin_users.tmp",
         ]
         tar_cmd = ["tar", "-cf", tar_path, *excludes, "-C", str(ROOT), "."]
         if subprocess.run(tar_cmd, cwd=ROOT).returncode != 0:

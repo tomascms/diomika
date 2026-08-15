@@ -23,7 +23,8 @@ router = APIRouter(
 
 CATALOG_EXPORTABLE = {
     "categories",
-    "modelo_cores",
+    "modelo_almofada_cores",
+    "modelo_assento_cores",
     "pedidos_orcamento",
     "encomendas_internas",
     "contact_messages",

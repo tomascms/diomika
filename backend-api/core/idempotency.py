@@ -10,6 +10,55 @@ from core.resilience import log_idempotency
 
 logger = logging.getLogger("diomika-api")
 
+_STALE_PROCESSING_SECONDS = 30
+
+
+def _parse_ts(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        text = str(value).replace("Z", "+00:00")
+        dt = datetime.fromisoformat(text)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        return None
+
+
+def _fetch_idempotency_row(key: str, operation: str) -> dict | None:
+    db = get_db()
+    res = (
+        db.table("idempotency_keys")
+        .select("response, created_at")
+        .eq("key", key)
+        .eq("operation", operation)
+        .limit(1)
+        .execute()
+    )
+    data = getattr(res, "data", None) or []
+    if not data:
+        return None
+    row = data[0] if isinstance(data, list) else data
+    return row if isinstance(row, dict) else None
+
+
+def _clear_stale_processing(key: str, operation: str) -> bool:
+    row = _fetch_idempotency_row(key, operation)
+    if not row:
+        return False
+    response = row.get("response") or {}
+    if not isinstance(response, dict) or not response.get("_processing"):
+        return False
+    created = _parse_ts(row.get("created_at"))
+    if created:
+        age = (datetime.now(timezone.utc) - created).total_seconds()
+        if age < _STALE_PROCESSING_SECONDS:
+            return False
+    abort_idempotent_request(key, operation)
+    logger.info("idempotency stale lock cleared key=%s op=%s", key, operation)
+    return True
+
 ProcessingState = Literal["proceed", "cached", "in_progress", "unavailable"]
 
 _PROCESSING = {"_processing": True}
@@ -104,6 +153,8 @@ def begin_idempotent_request(key: str, operation: str) -> ProcessingState:
         )
         response = _row_response(res) or {}
         if response.get("_processing"):
+            if _clear_stale_processing(key, operation):
+                return "proceed"
             return "in_progress"
         if response:
             log_idempotency(operation, key)
