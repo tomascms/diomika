@@ -47,6 +47,11 @@ deploy/cloudflared-*.log
 deploy/beta-api.log
 deploy/extreme_test.log
 deploy/generated_catalog_infra.sql
+deploy/_infra_only.sql
+deploy/_pending_catalog.sql
+deploy/_rls_compact.sql
+deploy/_rls_new_only.sql
+deploy/_schema_only.sql
 
 # Node
 node_modules/
@@ -68,6 +73,7 @@ Thumbs.db
 
 # Build
 backoffice-desktop/release/
+backoffice-desktop/release-fresh/
 backoffice-desktop/electron/desktop-gate.cjs
 cliente-backoffice/
 *.timestamp-*-*.mjs

@@ -1,35 +1,54 @@
-/** Copia instaladores de release/ para ../cliente-backoffice (nomes fixos). */
+/** Copia instaladores de release/ para pastas cliente-backoffice. */
 const fs = require('fs')
 const path = require('path')
 
 const root = path.join(__dirname, '..')
 const release = path.join(root, 'release')
-const dest = path.join(root, '..', 'cliente-backoffice')
+const releaseFresh = path.join(root, 'release-fresh')
+const version = require('../package.json').version
 
-const map = [
-  ['Diomika-Backoffice-1.0.0-windows.exe', 'Diomika-Backoffice-1.0.0-windows.exe'],
-  ['Diomika-Backoffice-1.0.0-mac.dmg', 'Diomika-Backoffice-1.0.0-mac.dmg'],
-  ['Diomika-Backoffice-1.0.0-linux.AppImage', 'Diomika-Backoffice-1.0.0-linux.AppImage'],
+const artifacts = [
+  `Diomika-Backoffice-${version}-windows.exe`,
+  `Diomika-Backoffice-${version}-mac.dmg`,
+  `Diomika-Backoffice-${version}-linux.AppImage`,
 ]
 
-if (!fs.existsSync(dest)) {
-  fs.mkdirSync(dest, { recursive: true })
+const destDirs = [
+  path.join(root, '..', 'cliente-backoffice'),
+  path.join(root, '..', '..', 'cliente-backoffice'),
+]
+
+for (const dest of destDirs) {
+  if (!fs.existsSync(dest)) {
+    fs.mkdirSync(dest, { recursive: true })
+  }
 }
 
 let copied = 0
-for (const [srcName, dstName] of map) {
-  const src = path.join(release, srcName)
+const missing = []
+
+for (const name of artifacts) {
+  let src = path.join(release, name)
   if (!fs.existsSync(src)) {
-    console.warn(`AVISO: em falta em release/ — ${srcName}`)
+    src = path.join(releaseFresh, name)
+  }
+  if (!fs.existsSync(src)) {
+    missing.push(name)
     continue
   }
-  const dst = path.join(dest, dstName)
-  fs.copyFileSync(src, dst)
-  console.log(`OK — ${dstName}`)
-  copied += 1
+  for (const dest of destDirs) {
+    const dst = path.join(dest, name)
+    fs.copyFileSync(src, dst)
+    console.log(`OK — ${path.relative(root, dst) || dst}`)
+    copied += 1
+  }
+}
+
+if (missing.length) {
+  console.warn(`AVISO: em falta em release/ — ${missing.join(', ')}`)
 }
 
 if (!copied) {
-  console.error('ERRO: nenhum ficheiro copiado. Corra npm run dist:win (e mac/linux na CI).')
+  console.error('ERRO: nenhum ficheiro copiado.')
   process.exit(1)
 }
