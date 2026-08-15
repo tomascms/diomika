@@ -16,6 +16,47 @@ SHARED_CATALOG_TABLES = frozenset(
     }
 )
 
+# FKs já aplicados manualmente nas famílias originais.
+_EXISTING_FKS = frozenset(
+    {
+        ("modelos_almofadas", "categories"),
+        ("almofada", "modelos_almofadas"),
+        ("modelo_almofada_cores", "modelos_almofadas"),
+        ("modelos_assentos", "categories"),
+        ("assento", "modelos_assentos"),
+        ("modelo_assento_cores", "modelos_assentos"),
+    }
+)
+
+
+def generate_catalog_fks_sql() -> str:
+    """Foreign keys para joins PostgREST (modelos → categories, produtos/cores → modelos)."""
+    lines = ["-- === Foreign keys (PostgREST embeds) ===", ""]
+    for _tipo, cfg in sorted(CATALOG_TYPES.items()):
+        mt = cfg["model_table"]
+        pt = cfg["product_table"]
+        ct = cfg.get("colors_table")
+        pairs: list[tuple[str, str, str, str, str]] = [
+            (mt, "id_categoria", "categories", "id", f"fk_{mt}_categoria"),
+            (pt, "id_modelo", mt, "id", f"fk_{pt}_modelo"),
+        ]
+        if ct:
+            pairs.append((ct, "id_modelo", mt, "id", f"fk_{ct}_modelo"))
+        for table, col, ref_table, ref_col, cname in pairs:
+            if (table, ref_table) in _EXISTING_FKS:
+                continue
+            lines.extend(
+                [
+                    f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {cname};",
+                    (
+                        f"ALTER TABLE {table} ADD CONSTRAINT {cname} "
+                        f"FOREIGN KEY ({col}) REFERENCES {ref_table}({ref_col}) ON DELETE CASCADE;"
+                    ),
+                    "",
+                ]
+            )
+    return "\n".join(lines)
+
 
 def generate_catalog_infra_sql() -> str:
     lines = [
@@ -98,9 +139,11 @@ def generate_catalog_infra_sql() -> str:
                 "    );",
                 "  END LOOP;",
                 "END $$;",
+                "",
             ]
         )
 
+    lines.extend(["", generate_catalog_fks_sql()])
     return "\n".join(lines) + "\n"
 
 

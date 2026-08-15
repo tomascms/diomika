@@ -36,7 +36,7 @@ const error = ref(null)
 
 const categoryData = ref(null)
 
-const selectedTipo = ref('')
+const selectedFilters = ref({})
 
 const route = useRoute()
 
@@ -48,9 +48,9 @@ const breadcrumbItems = ref([{ label: 'Início', to: { name: 'home' } }])
 
 const catalogTipo = computed(() => categoryData.value?.tipo_catalogo || '')
 
-const showTipoFilter = computed(() => catalog.storefrontMode(catalogTipo.value) === 'variantes')
+const filterDefs = computed(() => catalog.filterDefinitionsForTipo(catalogTipo.value))
 
-const tipoOptions = computed(() => catalog.filterOptionsForTipo(catalogTipo.value))
+const showFilters = computed(() => filterDefs.value.length > 0)
 
 
 
@@ -175,13 +175,9 @@ const fetchProducts = async () => {
 
 
     const models = await catalog.fetchCategoryModels(
-
       tipo,
-
       categoryData.value.id,
-
-      showTipoFilter.value ? selectedTipo.value : null,
-
+      showFilters.value ? selectedFilters.value : null,
     )
 
 
@@ -216,7 +212,7 @@ const fetchProducts = async () => {
 
           ...m,
 
-          _tipo_catalogo: tipo,
+          _tipo_catalogo: m._tipo_catalogo || tipo,
 
           imagem_capa: await resolveImageUrl(firstCor.imagem, ''),
 
@@ -284,9 +280,15 @@ let productsSubscription = null
 
 
 
-watch(() => route.params.categorySlug, fetchProducts)
+watch(
+  () => route.params.categorySlug,
+  () => {
+    selectedFilters.value = {}
+    fetchProducts()
+  },
+)
 
-watch(selectedTipo, fetchProducts)
+watch(selectedFilters, fetchProducts, { deep: true })
 
 
 
@@ -374,24 +376,21 @@ onUnmounted(() => {
 
 
 
-    <div v-if="categoryData && showTipoFilter" class="filters-bar">
-
-      <div class="page-shell page-shell--bar filters-inner">
-
-        <label for="tipo-filter" class="field-label">Filtrar por tipo</label>
-
-        <select id="tipo-filter" v-model="selectedTipo" class="field-select filter-select">
-
-          <option v-for="opt in tipoOptions" :key="opt.value" :value="opt.value">
-
-            {{ opt.label }}
-
-          </option>
-
-        </select>
-
+    <div v-if="categoryData && showFilters" class="filters-bar">
+      <div class="page-shell page-shell--bar filters-inner filters-inner--multi">
+        <div v-for="filterDef in filterDefs" :key="filterDef.field" class="filter-field">
+          <label :for="`filter-${filterDef.field}`" class="field-label">{{ filterDef.label }}</label>
+          <select
+            :id="`filter-${filterDef.field}`"
+            v-model="selectedFilters[filterDef.field]"
+            class="field-select filter-select"
+          >
+            <option v-for="opt in catalog.filterOptionsForField(filterDef)" :key="opt.value || 'all'" :value="opt.value">
+              {{ opt.label }}
+            </option>
+          </select>
+        </div>
       </div>
-
     </div>
 
 

@@ -48,5 +48,6 @@ export function storefrontContextForModel(model, tipoConfig) {
 }
 
 export function isSingleProductMode(ctx) {
+  if (ctx?.mode === 'unico') return true
   return ctx?.picker?.source === 'model'
 }

@@ -417,6 +417,30 @@ defineExpose({ validate })
 
       <select
 
+        v-else-if="field.widget === 'dimensao_modelo'"
+
+        :id="field.name"
+
+        v-model="local[field.name]"
+
+        class="input"
+
+        :disabled="isLocked(field)"
+
+        @change="sync"
+
+      >
+
+        <option value="">— Selecionar dimensão —</option>
+
+        <option v-for="opt in (fieldOptions.dimensoes_modelo || [])" :key="opt" :value="opt">{{ opt }}</option>
+
+      </select>
+
+
+
+      <select
+
         v-else-if="field.widget === 'enum'"
 
         :id="field.name"

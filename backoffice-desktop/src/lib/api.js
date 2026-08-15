@@ -2,6 +2,7 @@ import { loadSettings } from './settings'
 
 const TIMEOUT_MS = 30000
 const WRITE_TIMEOUT_MS = 90000
+const schemaCache = new Map()
 
 function timeoutFor(method) {
   return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? WRITE_TIMEOUT_MS : TIMEOUT_MS
@@ -101,7 +102,15 @@ export const api = {
   logout: () => request('POST', '/admin/auth/logout'),
   me: () => request('GET', '/admin/auth/me'),
   workspace: () => request('GET', '/system/workspace'),
-  formSchema: (table) => request('GET', `/system/schema/form/${table}`),
+  formSchema: (table) => {
+    if (schemaCache.has(table)) return schemaCache.get(table)
+    const pending = request('GET', `/system/schema/form/${table}`).then((data) => {
+      schemaCache.set(table, Promise.resolve(data))
+      return data
+    })
+    schemaCache.set(table, pending)
+    return pending
+  },
   listRecords: async (table, params) => {
     const data = await request('GET', `/admin/crud/${table}`, { params })
     return Array.isArray(data) ? data : data?.items || []
@@ -134,9 +143,9 @@ export const api = {
     request('DELETE', `/admin/crud/${table}/${id}`, { params: { hard: String(hard) } }),
   uploadImage: (table, field, file) => uploadFile(table, field, file),
   createCategory: (body) => request('POST', '/system/categories/create', { body }),
-  mergedList: async (viewKey) => {
+  mergedList: async (viewKey, params = {}) => {
     const data = await request('GET', `/catalogo/admin/merged/${viewKey}`, {
-      params: { limit: '500', offset: '0' },
+      params: { limit: '500', offset: '0', ...params },
     })
     return Array.isArray(data) ? data : data?.items || []
   },

@@ -109,8 +109,10 @@ def test_role_acl_tables():
         assert_table_action("outbox_events", "read", "admin")
     assert exc.value.status_code == 403
 
+    assert_table_action("categories", "hard_delete", "catalog")
+
     with pytest.raises(HTTPException):
-        assert_table_action("categories", "hard_delete", "catalog")
+        assert_table_action("categories", "hard_delete", "mensagens")
 
 
 def test_assert_dedicated_mensagens():

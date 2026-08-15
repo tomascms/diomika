@@ -28,10 +28,12 @@ from models.catalog_registry import (
     CATALOG_TYPES,
     all_colors_tables,
     all_model_tables,
+    all_product_tables,
     apply_barcode_on_save,
     colors_table_for_model_table,
     colors_table_for_tipo,
     list_select_query,
+    tipo_for_table,
 )
 from models.schemas import TABLE_MAP
 from models.ui_schema import get_form_fields
@@ -143,68 +145,166 @@ def _tipo_for_model_id(model_id: str | None) -> str:
     raise ValueError("Modelo não encontrado.")
 
 
-def _model_alturas(model_id: str) -> list[str]:
+def _model_discriminator_values(model_id: str, model_table: str, field: str) -> list[str]:
     db = get_db()
-    res = db.table("modelos_assentos").select("alturas").eq("id", model_id).limit(1).execute()
+    res = db.table(model_table).select(field).eq("id", model_id).limit(1).execute()
     row = (res.data or [None])[0]
     if not row:
-        raise ValueError("Modelo de assento não encontrado.")
-    alturas = row.get("alturas") or []
-    if isinstance(alturas, str):
+        raise ValueError("Modelo não encontrado.")
+    values = row.get(field) or []
+    if isinstance(values, str):
         try:
-            alturas = json.loads(alturas)
+            values = json.loads(values)
         except json.JSONDecodeError:
-            alturas = []
-    return [str(a).strip() for a in alturas if a and str(a).strip()]
+            values = [values]
+    return [str(a).strip() for a in values if a and str(a).strip()]
 
 
-def _validate_assento_altura(payload: dict, record_id: str | None = None) -> None:
-    altura = (payload.get("altura") or "").strip()
-    if not altura:
-        raise ValueError("Selecione a altura desta variante.")
+def _validate_model_discriminator(table_name: str, payload: dict, record_id: str | None = None) -> None:
+    tipo = tipo_for_table(table_name)
+    if not tipo:
+        return
+    cfg = CATALOG_TYPES.get(tipo) or {}
+    model_field = cfg.get("model_discriminator_field")
+    if not model_field:
+        return
+
+    product_field = "altura" if table_name == "assento" else model_field
+    value = (payload.get(product_field) or "").strip()
+    if not value:
+        raise ValueError(f"Selecione {product_field.replace('_', ' ')} desta variante.")
+
     id_modelo = payload.get("id_modelo")
     if not id_modelo:
         return
-    allowed = _model_alturas(str(id_modelo))
-    if altura not in allowed:
-        raise ValueError(f"Altura «{altura}» não está definida no modelo.")
+
+    mt = cfg["model_table"]
+    allowed = _model_discriminator_values(str(id_modelo), mt, model_field)
+    if value not in allowed:
+        raise ValueError(f"«{value}» não está definido no modelo.")
+
     db = get_db()
-    q = db.table("assento").select("id").eq("id_modelo", str(id_modelo)).eq("altura", altura)
+    pt = cfg["product_table"]
+    q = db.table(pt).select("id").eq("id_modelo", str(id_modelo)).eq(product_field, value)
     if record_id:
         q = q.neq("id", record_id)
     if (q.limit(1).execute().data or []):
-        raise ValueError(f"Já existe um assento com altura «{altura}» neste modelo.")
+        raise ValueError(f"Já existe variante «{value}» neste modelo.")
+
+
+def _validate_assento_altura(payload: dict, record_id: str | None = None) -> None:
+    _validate_model_discriminator("assento", payload, record_id)
+
+
+def _validate_oculo(payload: dict, record_id: str | None = None) -> None:
+    id_modelo = payload.get("id_modelo")
+    if not id_modelo:
+        return
+    db = get_db()
+    model = (
+        db.table("modelos_oculos")
+        .select("tipo_oculo")
+        .eq("id", str(id_modelo))
+        .limit(1)
+        .execute()
+        .data
+        or [None]
+    )[0]
+    if not model:
+        raise ValueError("Modelo de óculos não encontrado.")
+    tipo_oculo = model.get("tipo_oculo")
+    segmento = payload.get("segmento")
+    if tipo_oculo == "leitura":
+        if segmento:
+            raise ValueError("Óculos de leitura não têm segmento — use produto sortido.")
+        q = db.table("oculo").select("id").eq("id_modelo", str(id_modelo))
+        if record_id:
+            q = q.neq("id", record_id)
+        if (q.limit(1).execute().data or []):
+            raise ValueError("Este modelo de leitura já tem produto sortido.")
+        return
+    if not segmento:
+        raise ValueError("Selecione segmento (homem, mulher ou criança).")
+    q = db.table("oculo").select("id").eq("id_modelo", str(id_modelo)).eq("segmento", segmento)
+    if record_id:
+        q = q.neq("id", record_id)
+    if (q.limit(1).execute().data or []):
+        raise ValueError(f"Já existe produto para segmento «{segmento}» neste modelo.")
+
+
+def _validate_regional_product(payload: dict, record_id: str | None = None) -> None:
+    id_modelo = payload.get("id_modelo")
+    if not id_modelo:
+        return
+    db = get_db()
+    model = (
+        db.table("modelos_regionais")
+        .select("subtipo, dimensoes")
+        .eq("id", str(id_modelo))
+        .limit(1)
+        .execute()
+        .data
+        or [None]
+    )[0]
+    if not model:
+        raise ValueError("Modelo regional não encontrado.")
+    subtipo = model.get("subtipo")
+    needs_dim = subtipo in ("pano_cozinha", "toalha", "protetor")
+    dim = (payload.get("dimensoes") or "").strip()
+    if needs_dim:
+        if not dim:
+            raise ValueError("Selecione dimensão desta variante.")
+        allowed = _model_discriminator_values(str(id_modelo), "modelos_regionais", "dimensoes")
+        if dim not in allowed:
+            raise ValueError(f"Dimensão «{dim}» não está definida no modelo.")
+        q = db.table("regional").select("id").eq("id_modelo", str(id_modelo)).eq("dimensoes", dim)
+        if record_id:
+            q = q.neq("id", record_id)
+        if (q.limit(1).execute().data or []):
+            raise ValueError(f"Já existe variante «{dim}» neste modelo.")
+    elif dim:
+        raise ValueError("Este subtipo não usa dimensão no produto.")
+
+
+def _product_validation_table(table_name: str) -> bool:
+    return table_name in all_product_tables()
+
+
+def _validate_product_payload(table_name: str, payload: dict, record_id: str | None = None) -> None:
+    if table_name == "assento":
+        _validate_assento_altura(payload, record_id)
+    elif table_name == "oculo":
+        _validate_oculo(payload, record_id)
+    elif table_name == "regional":
+        _validate_regional_product(payload, record_id)
+    elif _product_validation_table(table_name):
+        _validate_model_discriminator(table_name, payload, record_id)
 
 
 def _publish_catalog_children(table_name: str, record_id: str, *, tipo: str | None = None) -> None:
     """Torna visíveis cores e produtos filhos quando o modelo é publicado."""
     db = get_db()
-    if table_name in ("modelos_almofadas", "modelos_assentos") and tipo:
-        cfg = CATALOG_TYPES.get(tipo) or {}
+    if table_name in all_model_tables():
+        cfg = CATALOG_TYPES.get(tipo or tipo_for_table(table_name) or "") or {}
         pt = cfg.get("product_table")
         ct = cfg.get("colors_table")
         if pt:
             db.table(pt).update({"visibilidade": True}).eq("id_modelo", record_id).execute()
         if ct:
             db.table(ct).update({"visibilidade": True}).eq("id_modelo", record_id).execute()
-    elif table_name in all_model_tables():
-        ct = colors_table_for_model_table(table_name)
-        if ct:
-            db.table(ct).update({"visibilidade": True}).eq("id_modelo", record_id).execute()
 
 
 def _enrich_create_payload(table_name: str, payload: dict) -> dict:
     out = dict(payload)
-    if table_name == "assento":
-        _validate_assento_altura(out)
+    _validate_product_payload(table_name, out)
     return out
 
 
 def _enrich_update_payload(table_name: str, payload: dict, record_id: str) -> dict:
     out = dict(payload)
     db = get_db()
-    if table_name == "assento":
-        if not out.get("altura") or not out.get("id_modelo"):
+    if _product_validation_table(table_name) or table_name in ("assento", "oculo", "regional"):
+        if table_name == "assento" and (not out.get("altura") or not out.get("id_modelo")):
             row = (
                 db.table("assento")
                 .select("altura, id_modelo")
@@ -216,7 +316,7 @@ def _enrich_update_payload(table_name: str, payload: dict, record_id: str) -> di
             if row:
                 out.setdefault("altura", row[0].get("altura"))
                 out.setdefault("id_modelo", row[0].get("id_modelo"))
-        _validate_assento_altura(out, record_id)
+        _validate_product_payload(table_name, out, record_id)
     return out
 
 

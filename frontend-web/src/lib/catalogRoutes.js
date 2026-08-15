@@ -43,8 +43,13 @@ export function modelDetailRoute(category, model) {
   const catSlug = categorySlug(category)
   const modSlug = modelSlug(model)
   if (!catSlug || !modSlug) return { name: 'categories' }
+  const query = {}
+  if (category?.tipo_catalogo === 'material_cozinha' && model?._tipo_catalogo) {
+    query.tipo = model._tipo_catalogo
+  }
   return {
     name: 'product-detail',
     params: { categorySlug: catSlug, modelSlug: modSlug },
+    ...(Object.keys(query).length ? { query } : {}),
   }
 }

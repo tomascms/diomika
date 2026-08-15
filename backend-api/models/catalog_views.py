@@ -7,7 +7,7 @@ from models.catalog_registry import (
     product_table_for_tipo,
     tipo_label,
 )
-from models.schemas import TABLE_MAP
+from models.schemas import TABLE_MAP, is_registered_tipo
 
 CATALOG_VIEWS = {
     "modelos": {
@@ -86,4 +86,4 @@ def category_tipo_label(tipo: str | None) -> str:
 def category_requires_tipo(category_meta: dict | None) -> bool:
     if not category_meta:
         return True
-    return not is_valid_tipo(category_meta.get("tipo_catalogo"))
+    return not is_registered_tipo(category_meta.get("tipo_catalogo"))

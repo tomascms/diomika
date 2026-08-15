@@ -38,6 +38,12 @@ function attachStorefrontFields(data, cfg) {
   if (picker?.source === 'model' && picker.field && picker.field in data) {
     data[picker.field] = normalizeStringList(data[picker.field])
   }
+  if ('dimensoes' in data) {
+    data.dimensoes = normalizeStringList(data.dimensoes)
+  }
+  if ('alturas' in data) {
+    data.alturas = normalizeStringList(data.alturas)
+  }
   return data
 }
 
@@ -90,13 +96,18 @@ function finalizeModelRow(row, cfg) {
   const mode = cfg.storefront_mode || 'variantes'
   const products = visibleProducts(row[pt])
 
-  if (mode === 'assento') {
+  if (mode === 'unico') {
+    if (!products.length) return null
+    row[pt] = products.length === 1 ? products[0] : products
+  } else if (mode === 'assento') {
     if (!products.length) return null
     products.sort((a, b) => String(a.altura || '').localeCompare(String(b.altura || '')))
     row[pt] = products
   } else {
     if (!products.length) return null
-    products.sort((a, b) => String(a.dimensoes || '').localeCompare(String(b.dimensoes || '')))
+    products.sort((a, b) =>
+      String(a.dimensoes || a.segmento || '').localeCompare(String(b.dimensoes || b.segmento || '')),
+    )
     row[pt] = products
   }
 
@@ -185,16 +196,19 @@ async function requirePublicCategory(categoryId) {
   return isVisible(data)
 }
 
-export async function catalogueModelsForTipo(tipo, categoryId, { filterField = null, filterValue = null } = {}) {
+export async function catalogueModelsForTipo(tipo, categoryId, { filters = {}, filterField = null, filterValue = null } = {}) {
   if (!supabaseConfigured) throw new Error('Supabase não configurado.')
 
   const cfg = getTipoConfig(tipo)
-  if (!cfg) return []
+  if (!cfg?.model_table) return []
   if (!(await requirePublicCategory(categoryId))) return []
 
   const mt = cfg.model_table
   const pt = cfg.product_table
   const productFields = cfg.product_select || 'id, ean, barcode_url, visibilidade'
+
+  const activeFilters = { ...filters }
+  if (filterField && filterValue) activeFilters[filterField] = filterValue
 
   let query = supabase
     .from(mt)
@@ -202,8 +216,8 @@ export async function catalogueModelsForTipo(tipo, categoryId, { filterField = n
     .eq('id_categoria', categoryId)
     .eq('visibilidade', true)
 
-  if (filterField && filterValue) {
-    query = query.eq(filterField, filterValue)
+  for (const [field, value] of Object.entries(activeFilters)) {
+    if (field && value) query = query.eq(field, value)
   }
 
   const { data, error } = await query.order('nome')
@@ -219,6 +233,33 @@ export async function catalogueModelsForTipo(tipo, categoryId, { filterField = n
     if (finalized) out.push(finalized)
   }
   return out
+}
+
+export async function catalogueModelsForCategory(tipo, categoryId, { filters = {} } = {}) {
+  const cfg = getTipoConfig(tipo)
+  if (!cfg) return []
+
+  if (cfg.aggregated_tipos?.length) {
+    const family = filters._tipo_catalogo
+    const dbFilters = Object.fromEntries(
+      Object.entries(filters).filter(([key]) => !key.startsWith('_')),
+    )
+    const out = []
+    for (const physical of cfg.aggregated_tipos) {
+      if (family && physical !== family) continue
+      const rows = await catalogueModelsForTipo(physical, categoryId, { filters: dbFilters })
+      for (const row of rows) {
+        row._tipo_catalogo = physical
+        row._category_tipo = tipo
+        row._familia_label = getTipoConfig(physical)?.label || physical
+        out.push(row)
+      }
+    }
+    out.sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || '')))
+    return out
+  }
+
+  return catalogueModelsForTipo(tipo, categoryId, { filters })
 }
 
 export async function modelDetailForTipo(tipo, modelId) {
@@ -248,31 +289,50 @@ export async function modelDetailForSlugs(categorySlug, modelSlug, tipo = null) 
   const cfg = getTipoConfig(resolvedTipo)
   if (!cfg) return null
 
-  const mt = cfg.model_table
-  const pt = cfg.product_table
   const modKey = String(modelSlug || '').trim()
   if (!modKey) return null
 
-  const isUuidKey = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(modKey)
-  let data = null
-  let error = null
-
-  const baseSelect = `*, categories(${CATEGORY_EMBED},visibilidade), ${pt}(*)`
-  const baseFilters = (q) =>
-    q.eq('id_categoria', category.id).eq('visibilidade', true)
-
-  if (isUuidKey) {
-    ;({ data, error } = await baseFilters(supabase.from(mt).select(baseSelect)).eq('id', modKey).maybeSingle())
-  } else {
-    const { data: rows, error: rowsError } = await baseFilters(supabase.from(mt).select(baseSelect)).or(
-      `slug.eq.${modKey},nome.ilike.${modKey}`,
-    ).limit(1)
-    error = rowsError
-    data = rows?.[0] || null
+  if (cfg.aggregated_tipos?.length) {
+    const tipos = tipo ? [tipo] : cfg.aggregated_tipos
+    for (const physical of tipos) {
+      const physicalCfg = getTipoConfig(physical)
+      if (!physicalCfg?.model_table) continue
+      const data = await _lookupModelInTable(physicalCfg, category.id, modKey)
+      if (data) {
+        const row = await finalizeModelDetailRow(data, physicalCfg)
+        if (row) {
+          row._tipo_catalogo = physical
+          row._category_tipo = resolvedTipo
+          row._familia_label = physicalCfg.label || physical
+        }
+        return row
+      }
+    }
+    return null
   }
 
-  if (error) throw new Error(error.message)
+  const data = await _lookupModelInTable(cfg, category.id, modKey)
   return await finalizeModelDetailRow(data, cfg)
+}
+
+async function _lookupModelInTable(cfg, categoryId, modKey) {
+  const mt = cfg.model_table
+  const pt = cfg.product_table
+  const isUuidKey = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(modKey)
+  const baseSelect = `*, categories(${CATEGORY_EMBED},visibilidade), ${pt}(*)`
+  const baseFilters = (q) => q.eq('id_categoria', categoryId).eq('visibilidade', true)
+
+  if (isUuidKey) {
+    const { data, error } = await baseFilters(supabase.from(mt).select(baseSelect)).eq('id', modKey).maybeSingle()
+    if (error) throw new Error(error.message)
+    return data
+  }
+
+  const { data: rows, error } = await baseFilters(supabase.from(mt).select(baseSelect))
+    .or(`slug.eq.${modKey},nome.ilike.${modKey}`)
+    .limit(1)
+  if (error) throw new Error(error.message)
+  return rows?.[0] || null
 }
 
 async function finalizeModelDetailRow(data, cfg) {
@@ -292,6 +352,7 @@ async function finalizeModelDetailRow(data, cfg) {
 
 export async function modelDetailAuto(modelId) {
   for (const cfg of CATALOG_META.catalog_types) {
+    if (!cfg.model_table) continue
     const data = await modelDetailForTipo(cfg.tipo, modelId)
     if (data) return data
   }

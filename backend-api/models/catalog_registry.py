@@ -9,13 +9,22 @@ from typing import Type
 
 from pydantic import BaseModel
 
-from models.schemas import CATALOG_TYPES, TIPO_CATALOGO_LABELS
+from models.schemas import (
+    CATALOG_TYPES,
+    TIPO_CATALOGO_LABELS,
+    aggregated_tipos_for_tipo,
+    is_registered_tipo,
+)
 
 CATALOGO_TIPOS = CATALOG_TYPES
 
 
 def is_valid_tipo(tipo: str | None) -> bool:
     return bool(tipo and tipo in CATALOG_TYPES)
+
+
+def is_valid_storefront_tipo(tipo: str | None) -> bool:
+    return is_registered_tipo(tipo)
 
 
 def tipo_label(tipo: str | None) -> str:
@@ -146,7 +155,7 @@ def list_select_query(table: str) -> str:
         if disc:
             model_fields.append(disc)
         # Categoria via modelo — produtos não têm FK directo para categories
-        return f"*, {mt}({', '.join(model_fields)}, categories(nome))"
+        return f"*, {mt}({', '.join(model_fields)})"
     if table == mt:
         return "*, categories(nome)"
     return "*"
@@ -176,6 +185,22 @@ def embedded_model_keys(item: dict) -> list[str]:
     return [cfg["model_table"] for cfg in CATALOG_TYPES.values() if item.get(cfg["model_table"]) is not None]
 
 
+def aggregated_family_filter(tipo: str | None) -> dict | None:
+    tipos = aggregated_tipos_for_tipo(tipo)
+    if not tipos:
+        return None
+    return {
+        "field": "_tipo_catalogo",
+        "label": "Família",
+        "options": tipos,
+        "labels": {
+            t: CATALOG_TYPES[t]["label"]
+            for t in tipos
+            if t in CATALOG_TYPES
+        },
+    }
+
+
 def storefront_filters_for_model_tipo(tipo: str | None) -> list[dict]:
     if not is_valid_tipo(tipo):
         return []
@@ -185,6 +210,13 @@ def storefront_filters_for_model_tipo(tipo: str | None) -> list[dict]:
     from models.storefront_meta import storefront_filters_for_model
 
     return storefront_filters_for_model(cfg["model_schema"])
+
+
+def storefront_filters_for_category_tipo(tipo: str | None) -> list[dict]:
+    agg = aggregated_family_filter(tipo)
+    if agg:
+        return [agg]
+    return storefront_filters_for_model_tipo(tipo)
 
 
 def catalog_metadata() -> dict:
@@ -211,7 +243,23 @@ def catalog_metadata() -> dict:
             }
         )
 
+    aggregated = []
+    for _slug, definition in CATEGORY_DEFINITIONS.items():
+        virtual = definition.get("tipo_catalogo")
+        if virtual and aggregated_tipos_for_tipo(virtual):
+            fam = aggregated_family_filter(virtual)
+            aggregated.append(
+                {
+                    "tipo": virtual,
+                    "label": definition.get("nome") or virtual,
+                    "aggregated_tipos": list(definition["aggregated_tipos"]),
+                    "storefront_mode": "aggregado",
+                    "storefront_filters": [fam] if fam else [],
+                }
+            )
+
     return {
         "catalog_types": tipos,
+        "aggregated_categories": aggregated,
         "category_definitions": CATEGORY_DEFINITIONS,
     }

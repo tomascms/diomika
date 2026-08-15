@@ -39,15 +39,12 @@ def _modelo_cores(data: dict) -> list[dict]:
 
 
 def _product_select_fields(product_schema) -> str:
-
     fields = ["id", "ean", "barcode_url", "visibilidade"]
-
-    for fname in ("dimensoes", "altura"):
-
-        if fname in product_schema.model_fields and fname not in fields:
-
+    for fname in product_schema.model_fields:
+        if fname in fields or fname in ("id", "id_modelo", "barcode_url", "visibilidade"):
+            continue
+        if fname in ("dimensoes", "altura", "segmento"):
             fields.append(fname)
-
     return ", ".join(fields)
 
 
@@ -232,7 +229,38 @@ def _require_public_category(id_categoria: str) -> bool:
 
 
 
-def catalogue_models_for_tipo(tipo: str, id_categoria: str, *, filter_field: str | None = None, filter_value: str | None = None) -> list[dict]:
+def _finalize_model_products(row: dict, cfg: dict, pt: str, mode: str) -> bool:
+    """Ordena variantes visíveis; devolve False se não houver produto publicável."""
+    products = _visible_products(row.get(pt) if isinstance(row.get(pt), list) else [row.get(pt)] if row.get(pt) else [])
+
+    if mode == "unico":
+        if not products:
+            return False
+        row[pt] = products[0] if len(products) == 1 else products
+        return True
+
+    if mode == "assento":
+        if not products:
+            return False
+        products.sort(key=lambda p: str(p.get("altura") or ""))
+        row[pt] = products
+        return True
+
+    if not products:
+        return False
+    products.sort(key=lambda p: str(p.get("dimensoes") or p.get("segmento") or ""))
+    row[pt] = products
+    return True
+
+
+def catalogue_models_for_tipo(
+    tipo: str,
+    id_categoria: str,
+    *,
+    filters: dict[str, str] | None = None,
+    filter_field: str | None = None,
+    filter_value: str | None = None,
+) -> list[dict]:
 
     if not is_valid_tipo(tipo):
 
@@ -256,78 +284,67 @@ def catalogue_models_for_tipo(tipo: str, id_categoria: str, *, filter_field: str
 
 
 
+    active_filters = dict(filters or {})
+    if filter_field and filter_value:
+        active_filters[filter_field] = filter_value
+
     query = (
-
         get_db()
-
         .table(mt)
-
         .select(f"*, categories({_category_select()}), {pt}({product_fields})")
-
         .eq("id_categoria", id_categoria)
-
         .eq("visibilidade", True)
-
     )
 
-
-
-    if filter_field and filter_value:
-
-        query = query.eq(filter_field, filter_value)
-
-
+    for field, value in active_filters.items():
+        if field and value:
+            query = query.eq(field, value)
 
     rows = query.order("nome").execute().data or []
-
     _attach_modelo_cores(rows, tipo=tipo)
-
     out: list[dict] = []
 
-
-
     for row in rows:
-
         row = attach_storefront_fields(dict(row), cfg)
-
         row["modelo_cores"] = _modelo_cores(row)
-
-        products = _visible_products(row.get(pt) if isinstance(row.get(pt), list) else [row.get(pt)] if row.get(pt) else [])
-
-
-
-        if mode == "assento":
-
-            if not products:
-
-                continue
-
-            products.sort(key=lambda p: str(p.get("altura") or ""))
-
-            row[pt] = products
-
-        else:
-
-            if not products:
-
-                continue
-
-            products.sort(key=lambda p: str(p.get("dimensoes") or ""))
-
-            row[pt] = products
-
-
+        if not _finalize_model_products(row, cfg, pt, mode):
+            continue
 
         row["_tipo_catalogo"] = tipo
-
         row["_storefront"] = storefront_context_for_tipo(cfg)
-
         row["_storefront_mode"] = mode
-
         out.append(row)
 
+    return out
 
 
+def catalogue_models_aggregated(
+    virtual_tipo: str,
+    id_categoria: str,
+    *,
+    filters: dict[str, str] | None = None,
+) -> list[dict]:
+    from models.schemas import aggregated_tipos_for_tipo
+
+    if not _require_public_category(id_categoria):
+        return []
+
+    tipos = aggregated_tipos_for_tipo(virtual_tipo) or []
+    family = (filters or {}).get("_tipo_catalogo")
+    db_filters = {k: v for k, v in (filters or {}).items() if not k.startswith("_")}
+    out: list[dict] = []
+
+    for physical in tipos:
+        if family and physical != family:
+            continue
+        rows = catalogue_models_for_tipo(physical, id_categoria, filters=db_filters)
+        for row in rows:
+            row["_tipo_catalogo"] = physical
+            row["_category_tipo"] = virtual_tipo
+            row["_familia_label"] = CATALOG_TYPES[physical]["label"]
+            out.append(row)
+
+    out.sort(key=lambda r: str(r.get("nome") or ""))
     return out
 
 
@@ -415,37 +432,17 @@ def model_detail_for_tipo_query(tipo: str, id_modelo: str) -> dict | None:
 
 
     raw_products = data.get(pt)
-
     if isinstance(raw_products, dict):
-
         raw_products = [raw_products]
-
     products = _visible_products(raw_products)
 
-
-
-    if mode == "assento":
-
-        products.sort(key=lambda p: str(p.get("altura") or ""))
-
-        data[pt] = products
-
-    else:
-
-        products.sort(key=lambda p: str(p.get("dimensoes") or ""))
-
-        data[pt] = products
-
-
+    if not _finalize_model_products(data, cfg, pt, mode):
+        return None
 
     ctx = storefront_context_for_tipo(cfg)
-
     data["_tipo_catalogo"] = tipo
-
     data["_storefront"] = ctx
-
     data["_storefront_mode"] = mode
-
     return data
 
 
@@ -466,6 +463,52 @@ def _resolve_public_category_id(category_slug: str) -> str | None:
 
 
 def model_detail_for_slugs_query(tipo: str, category_slug: str, model_slug: str) -> dict | None:
+    from models.schemas import aggregated_tipos_for_tipo
+
+    if aggregated_tipos_for_tipo(tipo):
+        category_id = _resolve_public_category_id(category_slug)
+        if not category_id:
+            return None
+        model_key = (model_slug or "").strip()
+        if not model_key:
+            return None
+        for physical in aggregated_tipos_for_tipo(tipo) or []:
+            cfg = CATALOG_TYPES[physical]
+            mt = cfg["model_table"]
+            query = (
+                get_db()
+                .table(mt)
+                .select("id")
+                .eq("id_categoria", category_id)
+                .eq("visibilidade", True)
+            )
+            if len(model_key) == 36 and model_key.count("-") == 4:
+                query = query.eq("id", model_key)
+            else:
+                query = query.eq("slug", model_key)
+            res = query.limit(1).execute()
+            row = (res.data or [None])[0]
+            if not row and not (len(model_key) == 36 and model_key.count("-") == 4):
+                res = (
+                    get_db()
+                    .table(mt)
+                    .select("id")
+                    .eq("id_categoria", category_id)
+                    .eq("visibilidade", True)
+                    .ilike("nome", model_key)
+                    .limit(1)
+                    .execute()
+                )
+                row = (res.data or [None])[0]
+            if row:
+                data = model_detail_for_tipo_query(physical, str(row["id"]))
+                if data:
+                    data["_tipo_catalogo"] = physical
+                    data["_category_tipo"] = tipo
+                    data["_familia_label"] = cfg["label"]
+                    return data
+        return None
+
     if not is_valid_tipo(tipo):
         return None
     category_id = _resolve_public_category_id(category_slug)
