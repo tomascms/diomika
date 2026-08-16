@@ -38,7 +38,7 @@ python deploy/deploy_pages.py --pages-deploy --api-url https://api.diomika.com
 python deploy/verify_production.py
 ```
 
-Docs: [`docs/`](docs/) · Ops: [`deploy/README.md`](deploy/README.md) · BD: [`docs/BD_COMERCIAL.md`](docs/BD_COMERCIAL.md)
+Docs: [`docs/INSTRUCOES.md`](docs/INSTRUCOES.md) (operar) · [`docs/RELATORIO_TECNICO.md`](docs/RELATORIO_TECNICO.md) (manual completo) · Scripts: [`deploy/README.md`](deploy/README.md)
 
 ## Config (servidor / developers)
 

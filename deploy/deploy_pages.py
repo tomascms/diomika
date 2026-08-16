@@ -315,7 +315,7 @@ def deploy_full(env: dict[str, str], pages_project: str, *, detach: bool = False
     API_BASE_URL={api_public}
 
   Nota: URLs trycloudflare/pages.dev — não partilhar publicamente.
-  Endgame produção: docs/FREE_STACK.md
+  Endgame produção: docs/INSTRUCOES.md
 
   Tunnels activos — mantém este terminal/processo. Ctrl+C para parar.
 """

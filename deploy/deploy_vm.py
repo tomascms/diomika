@@ -81,7 +81,7 @@ def main() -> int:
     ssh = (env.get("REMOTE_VM_SSH") or "").strip()
     if not ssh:
         print("ERRO: define REMOTE_VM_SSH no .env (ex: tomas@34.x.x.x)")
-        print("  GCP Always Free: e2-micro em us-central1 — docs/FREE_STACK.md")
+        print("  GCP Always Free: e2-micro em us-central1 — docs/INSTRUCOES.md")
         return 1
 
     if not (env.get("CLOUDFLARE_TUNNEL_TOKEN") or "").strip():
