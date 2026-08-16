@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Estado & Alertas</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    body { overflow: auto; background: #0f1419; color: #e2e8f0; padding: 1rem 1.25rem 2rem; }
+    h2 { margin: 1.25rem 0 .5rem; font-size: 1rem; color: #94a3b8; text-transform: uppercase; letter-spacing: .06em; }
+    .grid { display: grid; gap: .6rem; }
+    .card { background: #1a2332; border: 1px solid #243044; border-radius: 8px; padding: .85rem 1rem; display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
+    .pill { font-size: .75rem; font-weight: 700; padding: .2rem .5rem; border-radius: 999px; }
+    .ok { background: rgba(61,214,140,.15); color: #3dd68c; }
+    .bad { background: rgba(248,113,113,.15); color: #f87171; }
+    .wait { background: rgba(148,163,184,.15); color: #94a3b8; }
+    .muted { color: #94a3b8; font-size: .85rem; }
+    #alerts { list-style: none; padding: 0; margin: 0; display: grid; gap: .5rem; }
+    #alerts li { background: #1a2332; border-left: 3px solid #f59e0b; padding: .65rem .8rem; border-radius: 4px; font-size: .85rem; }
+    #alerts li.critical { border-color: #f87171; }
+    .hint { margin-top: 1rem; font-size: .8rem; color: #64748b; }
+    code { background: #243044; padding: .1rem .35rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1 style="margin:0 0 .25rem;font-size:1.35rem">Estado & Alertas Diomika</h1>
+  <p class="muted">Painel integrado no Monitor Hub — actualiza a cada 60s.</p>
+
+  <h2>Serviços</h2>
+  <div class="grid" id="services"></div>
+
+  <h2>Alertas recentes</h2>
+  <ul id="alerts"><li class="muted">A carregar…</li></ul>
+  <p class="hint">Configura o tópico ntfy em <code>monitor-hub/config.local.json</code> (copia de <code>config.local.example.json</code>).</p>
+
+  <script>
+    const servicesEl = document.getElementById('services')
+    const alertsEl = document.getElementById('alerts')
+
+    async function loadConfig() {
+      return window.monitorHub.getHubConfig?.() || {}
+    }
+
+    async function probe(name, url, okFn) {
+      const card = document.createElement('div')
+      card.className = 'card'
+      card.innerHTML = `<div><strong>${name}</strong><div class="muted">…</div></div><span class="pill wait">…</span>`
+      servicesEl.appendChild(card)
+      const detail = card.querySelector('.muted')
+      const pill = card.querySelector('.pill')
+      try {
+        const t0 = performance.now()
+        const r = await fetch(url, { cache: 'no-store' })
+        const text = await r.text()
+        const good = okFn(r, text)
+        detail.textContent = `${Math.round(performance.now() - t0)} ms`
+        pill.className = 'pill ' + (good ? 'ok' : 'bad')
+        pill.textContent = good ? 'OK' : 'Falha'
+      } catch (e) {
+        detail.textContent = 'Indisponível'
+        pill.className = 'pill bad'
+        pill.textContent = 'Falha'
+      }
+    }
+
+    async function refreshServices(cfg) {
+      servicesEl.innerHTML = ''
+      const api = cfg.apiUrl || 'https://api.diomika.com'
+      const site = cfg.siteUrl || 'https://www.diomika.com'
+      await probe('API', `${api}/health`, (r, t) => r.ok && t.includes('online'))
+      await probe('API + BD', `${api}/health/ready`, (r) => r.ok)
+      await probe('Loja', `${site}/`, (r) => r.ok)
+    }
+
+    function renderAlerts(items) {
+      alertsEl.innerHTML = ''
+      if (!items?.length) {
+        alertsEl.innerHTML = '<li class="muted">Sem alertas recentes.</li>'
+        return
+      }
+      for (const item of items.slice().reverse()) {
+        const li = document.createElement('li')
+        if (item.severity === 'critical') li.classList.add('critical')
+        const when = item.ts ? new Date(item.ts).toLocaleString('pt-PT') : ''
+        li.textContent = `[${item.severity || 'info'}] ${item.title || item.text || ''} — ${when}`
+        alertsEl.appendChild(li)
+      }
+    }
+
+    async function refreshAlerts(cfg) {
+      const local = await window.monitorHub.getRecentAlerts?.(30)
+      const merged = [...(local || [])]
+      const ntfyUrl = cfg.ntfyTopicJsonUrl
+      if (ntfyUrl) {
+        try {
+          const r = await fetch(ntfyUrl, { cache: 'no-store' })
+          const rows = await r.json()
+          for (const row of rows.slice(-10)) {
+            merged.push({ severity: 'warning', title: row.title || row.message, ts: row.time ? row.time * 1000 : null })
+          }
+        } catch (_) { /* ntfy opcional */ }
+      }
+      renderAlerts(merged.slice(-30))
+    }
+
+    async function tick() {
+      const cfg = await loadConfig()
+      await refreshServices(cfg)
+      await refreshAlerts(cfg)
+    }
+
+    tick()
+    setInterval(tick, 60000)
+  </script>
+</body>
+</html>

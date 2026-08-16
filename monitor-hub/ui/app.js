@@ -51,7 +51,7 @@ function openTab(tab) {
   activeTabId = tab.id
   renderTabs()
   reportMetrics()
-  window.monitorHub.openTab(project.id, tab.id, tab.url)
+  window.monitorHub.openTab(project.id, tab.id, tab.url, tab.local || null)
 }
 
 function selectProject(projectId) {

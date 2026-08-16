@@ -1,12 +1,25 @@
 # Monitorização — hub único Diomika
 
-**App local (recomendado):** `monitor-hub/` — Electron com sidebar de projectos + abas (Cloudflare, Sentry, Axiom, …). Sessão de login por projecto; podes acrescentar outros clientes em `projects.json`.
+**App local (recomendado):** `monitor-hub/` — Electron com sidebar + abas.
 
 ```bash
 cd monitor-hub && npm install && npm start
 ```
 
-Abaixo fica a lista de referência dos mesmos painéis (links). Não guarda passwords nem tokens.
+### Configurar alertas ntfy no hub
+
+```bash
+cp monitor-hub/config.local.example.json monitor-hub/config.local.json
+# Edita ntfyTopicJsonUrl com o teu tópico (mesmo do ALERT_WEBHOOK_URL)
+```
+
+A aba **Estado & Alertas** mostra:
+- API `/health` e `/health/ready`
+- Loja `www.diomika.com`
+- Últimos alertas de `deploy/alerts.log`
+- Stream ntfy (se configurado)
+
+Página pública de estado: https://www.diomika.com/status.html
 
 ---
 
@@ -14,10 +27,12 @@ Abaixo fica a lista de referência dos mesmos painéis (links). Não guarda pass
 
 | Serviço | O que faz | Abrir |
 |---------|-----------|--------|
-| **UptimeRobot** | HTTP checks `api.diomika.com` + `www.diomika.com` (5 min) | https://dashboard.uptimerobot.com/monitors |
-| **GitHub Actions — uptime** | Check periódico via workflow | https://github.com/tomascms/diomika/actions/workflows/uptime.yml |
+| **Monitor Hub — Estado & Alertas** | Painel local integrado | `npm start` em `monitor-hub/` |
+| **Estado público** | Página auto-refresh 60s | https://www.diomika.com/status.html |
+| **UptimeRobot** | HTTP checks api + www (5 min) | https://dashboard.uptimerobot.com/monitors |
+| **GitHub Actions — uptime** | Check 5 min + alerta ntfy | https://github.com/tomascms/diomika/actions/workflows/uptime.yml |
 
-Alerta rápido no telemóvel (sem login SaaS extra): tópico **ntfy** configurado em `ALERT_WEBHOOK_URL` no `.env` (não partilhar o URL).
+Alertas no telemóvel: `ALERT_WEBHOOK_URL` no `.env` (ntfy) — **não partilhar o URL**.
 
 ---
 
@@ -42,8 +57,8 @@ Alerta rápido no telemóvel (sem login SaaS extra): tópico **ntfy** configurad
 
 | Serviço | O que faz | Abrir |
 |---------|-----------|--------|
-| **Cloudflare** (Pages, DNS, Tunnel, WAF, Turnstile) | Loja + TLS + túnel API + anti-bot | https://dash.cloudflare.com/ |
-| **Google Cloud** (VM e2-micro) | Máquina da API | https://console.cloud.google.com/ |
+| **Cloudflare** | Loja + TLS + túnel API + WAF + Turnstile | https://dash.cloudflare.com/ |
+| **Google Cloud** | VM e2-micro da API | https://console.cloud.google.com/ |
 | **Supabase** | Postgres + Storage + RLS | https://supabase.com/dashboard |
 
 ---
@@ -52,38 +67,20 @@ Alerta rápido no telemóvel (sem login SaaS extra): tópico **ntfy** configurad
 
 | Serviço | O que faz | Abrir |
 |---------|-----------|--------|
-| **GitHub** (repo + CI + releases backoffice) | Código, Actions, instaladores | https://github.com/tomascms/diomika |
-| **GitHub Actions — CI** | Testes / security gate | https://github.com/tomascms/diomika/actions/workflows/ci.yml |
-| **GitHub Actions — backoffice** | Builds Win/Mac/Linux | https://github.com/tomascms/diomika/actions/workflows/backoffice-release.yml |
-
----
-
-## 6. Email (contacto / respostas)
-
-| Serviço | O que faz | Onde |
-|---------|-----------|------|
-| **Caixa IMAP/SMTP** (Gmail ou o que estiver no `.env`) | Notificações de contacto + worker email | Conta definida em `MAIL_*` / `IMAP_*` |
+| **GitHub** | Repo + CI + releases backoffice | https://github.com/tomascms/diomika/actions |
+| **CI** | Testes + security gate + e2e | workflows/ci.yml |
+| **Backoffice release** | Win/Mac/Linux → GitHub Release | workflows/backoffice-release.yml |
 
 ---
 
 ## Checklist matinal (2 minutos)
 
-1. UptimeRobot → os 2 monitores **Up**
-2. Sentry → sem erro novo crítico
-3. Axiom → há ingest recente (API viva)
-4. Cloudflare / GCP → sem alerta óbvio
+1. Monitor Hub → aba **Estado & Alertas** → tudo OK
+2. UptimeRobot → monitores Up
+3. Sentry → sem erro crítico novo
+4. Axiom → ingest recente
 5. Se houve deploy: `python deploy/verify_production.py`
 
 ---
 
-## O que **não** é monitorização (mas tens login)
-
-| Item | Nota |
-|------|------|
-| Backoffice Electron | App local; login `admin` contra a API |
-| Pasta `cliente-backoffice/` | Entrega ao cliente — não é dashboard |
-| ntfy (app/web) | Só se quiseres ler o tópico de alertas |
-
----
-
-*Actualiza este ficheiro se mudares de org/project IDs. Mantém-o em `docs/MONITORIZACAO.md` — é o teu hub.*
+*Actualiza `projects.json` se mudares org/project IDs. Hub ops: `docs/MONITORIZACAO.md`.*

@@ -5,9 +5,11 @@ contextBridge.exposeInMainWorld('monitorHub', {
   onConfig: (cb) => {
     ipcRenderer.on('config', (_e, data) => cb(data))
   },
-  openTab: (projectId, tabId, url) => {
-    ipcRenderer.send('open-tab', { projectId, tabId, url })
+  openTab: (projectId, tabId, url, local) => {
+    ipcRenderer.send('open-tab', { projectId, tabId, url, local })
   },
+  getHubConfig: () => ipcRenderer.invoke('get-hub-config'),
+  getRecentAlerts: (limit) => ipcRenderer.invoke('get-recent-alerts', limit),
   setChromeMetrics: (metrics) => {
     ipcRenderer.send('chrome-metrics', metrics)
   },

@@ -4,6 +4,8 @@
       "id": "diomika",
       "name": "Diomika",
       "tabs": [
+        { "id": "status", "label": "Estado & Alertas", "local": "panel-status.html" },
+        { "id": "status-public", "label": "Estado público", "url": "https://www.diomika.com/status.html" },
         { "id": "cloudflare", "label": "Cloudflare", "url": "https://dash.cloudflare.com/" },
         { "id": "sentry", "label": "Sentry", "url": "https://diomika.sentry.io/" },
         { "id": "axiom", "label": "Axiom", "url": "https://app.axiom.co/diomika-5pui/datasets/diomika" },
@@ -11,7 +13,7 @@
         { "id": "uptime", "label": "UptimeRobot", "url": "https://dashboard.uptimerobot.com/monitors" },
         { "id": "gcp", "label": "GCP", "url": "https://console.cloud.google.com/" },
         { "id": "supabase", "label": "Supabase", "url": "https://supabase.com/dashboard" },
-        { "id": "github", "label": "GitHub", "url": "https://github.com/tomascms/diomika" }
+        { "id": "github", "label": "GitHub", "url": "https://github.com/tomascms/diomika/actions" }
       ]
     }
   ]

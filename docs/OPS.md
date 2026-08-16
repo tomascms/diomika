@@ -30,6 +30,21 @@ R2_ACCOUNT_ID=              # opcional; se preenchido + keys → imagens em R2
 4. Privacy erase se PII  
 5. Sentry + Axiom + webhook para evidência  
 
-## Backup
+## Backup Supabase
 
-Supabase Free backups + drill documentado. Último check: 2026-08-10.
+**Política:** backups automáticos diários (plano Free Supabase) + restore manual documentado.
+
+**Frequência recomendada:**
+- Verificar backups no dashboard Supabase — mensal
+- **Restore drill** — trimestral (calendário: Jan, Abr, Jul, Out)
+
+**Procedimento restore drill (resumo):**
+1. Supabase Dashboard → Project → Database → Backups
+2. Criar branch de teste ou project staging (nunca restore directo em prod sem janela)
+3. Restaurar snapshot num branch
+4. Validar: `categories` visíveis, RLS activo, login admin funciona
+5. Apagar branch de teste
+
+**Último check documentado:** 2026-08-10 · **Próximo drill:** 2026-11-01
+
+**Dados críticos:** catálogo, pedidos orçamento, mensagens contacto — retenção automática em `core/retention.py`.

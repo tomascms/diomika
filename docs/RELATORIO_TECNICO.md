@@ -25,6 +25,8 @@
 
 **Como ler:** podes saltar para a parte que precisas; se encontrares uma sigla desconhecida, volta ao glossário (Parte I.13).
 
+**Estado operacional (resumo):** ver [`relatorio.md`](relatorio.md) — verificação, cabeçalhos HTTP, monitor hub e melhorias implementadas.
+
 **Fontes:** ficheiros em deploy/relatorio_parts/ concatenados neste volume único.
 
 ---

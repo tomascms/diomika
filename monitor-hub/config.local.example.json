@@ -1,0 +1,5 @@
+{
+  "apiUrl": "https://api.diomika.com",
+  "siteUrl": "https://www.diomika.com",
+  "ntfyTopicJsonUrl": "https://ntfy.sh/SEU_TOPICO_AQUI/json?poll=1"
+}

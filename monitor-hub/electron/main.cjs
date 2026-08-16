@@ -3,10 +3,37 @@ const path = require('path')
 const fs = require('fs')
 
 const CONFIG_PATH = path.join(__dirname, '..', 'projects.json')
+const LOCAL_CONFIG_PATH = path.join(__dirname, '..', 'config.local.json')
 
 function loadConfig() {
   const raw = fs.readFileSync(CONFIG_PATH, 'utf8')
-  return JSON.parse(raw)
+  const base = JSON.parse(raw)
+  if (fs.existsSync(LOCAL_CONFIG_PATH)) {
+    try {
+      const local = JSON.parse(fs.readFileSync(LOCAL_CONFIG_PATH, 'utf8'))
+      base.hub = { ...(base.hub || {}), ...local }
+    } catch {
+      /* ignore invalid local config */
+    }
+  }
+  return base
+}
+
+function readRecentAlerts(limit = 30) {
+  const logPath = path.join(__dirname, '..', '..', 'deploy', 'alerts.log')
+  if (!fs.existsSync(logPath)) return []
+  try {
+    const lines = fs.readFileSync(logPath, 'utf8').trim().split('\n').filter(Boolean)
+    return lines.slice(-limit).map((line) => {
+      try {
+        return JSON.parse(line)
+      } catch {
+        return { text: line }
+      }
+    })
+  } catch {
+    return []
+  }
 }
 
 /** @type {BrowserWindow | null} */
@@ -45,20 +72,21 @@ function hideAllViews() {
   }
 }
 
-function showView(projectId, tabId, url) {
+function showView(projectId, tabId, url, localFile) {
   if (!mainWindow) return
   const key = viewKey(projectId, tabId)
   hideAllViews()
 
   let view = views.get(key)
   if (!view) {
-    const partition = `persist:monitor-${projectId}`
+    const partition = localFile ? 'persist:monitor-local' : `persist:monitor-${projectId}`
     view = new WebContentsView({
       webPreferences: {
         partition,
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
+        preload: path.join(__dirname, 'preload.cjs'),
       },
     })
     views.set(key, view)
@@ -66,7 +94,11 @@ function showView(projectId, tabId, url) {
       view.webContents.loadURL(openUrl)
       return { action: 'deny' }
     })
-    view.webContents.loadURL(url)
+    if (localFile) {
+      view.webContents.loadFile(path.join(__dirname, '..', 'ui', localFile))
+    } else {
+      view.webContents.loadURL(url)
+    }
   }
 
   mainWindow.contentView.addChildView(view)
@@ -101,14 +133,21 @@ function createWindow() {
 
 ipcMain.handle('get-config', () => loadConfig())
 
+ipcMain.handle('get-hub-config', () => {
+  const cfg = loadConfig()
+  return cfg.hub || {}
+})
+
+ipcMain.handle('get-recent-alerts', (_e, limit) => readRecentAlerts(limit || 30))
+
 ipcMain.on('chrome-metrics', (_e, metrics) => {
   if (metrics?.chromeHeight) chromeHeight = Math.round(metrics.chromeHeight)
   if (metrics?.sidebarWidth) sidebarWidth = Math.round(metrics.sidebarWidth)
   layoutActiveView()
 })
 
-ipcMain.on('open-tab', (_e, { projectId, tabId, url }) => {
-  showView(projectId, tabId, url)
+ipcMain.on('open-tab', (_e, { projectId, tabId, url, local }) => {
+  showView(projectId, tabId, url, local || null)
 })
 
 ipcMain.on('reload-active', () => {
