@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
 
 from core.audit import log_admin_action
-from core.auth import Role, assert_table_action, require_admin
+from core.auth import Role, SENSITIVE_BUSINESS_TABLES, assert_table_action, require_admin
 from core.cache import invalidate_prefix
 from core.cqrs.commands.catalog import soft_delete
 from core.database import get_db
@@ -579,6 +579,8 @@ def patch_lida(request: Request, table_name: str, record_id: str, body: dict):
 @router.delete("/{table_name}/{record_id}")
 def delete_record(request: Request, table_name: str, record_id: str, hard: bool = False):
     _schema_for(table_name)
+    if hard and table_name in SENSITIVE_BUSINESS_TABLES:
+        hard = False
     action = "hard_delete" if hard else "delete"
     assert_table_action(table_name, action, _role(request))
     try:

@@ -1,14 +1,46 @@
 {
   "name": "diomika-monitor-hub",
-  "version": "1.0.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Hub local de monitorização multi-projecto (abas por serviço)",
+  "author": "Diomika",
   "main": "electron/main.cjs",
   "scripts": {
     "start": "electron .",
-    "dev": "electron ."
+    "dev": "electron .",
+    "dist": "npm run dist:win",
+    "dist:win": "electron-builder --win portable --x64 && node scripts/copy-portable.cjs"
+  },
+  "build": {
+    "appId": "pt.diomika.monitor-hub",
+    "productName": "Diomika Command Center",
+    "copyright": "Copyright © Diomika",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "ui/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "config.local.example.json",
+        "to": "hub/config.local.example.json"
+      }
+    ],
+    "win": {
+      "target": ["portable"],
+      "signAndEditExecutable": false,
+      "artifactName": "Diomika-Command-Center-${version}-windows.exe"
+    },
+    "portable": {
+      "artifactName": "Diomika-Command-Center-${version}-windows.exe"
+    }
   },
   "devDependencies": {
-    "electron": "^35.0.0"
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
   }
 }

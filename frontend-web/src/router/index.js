@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { capturePageview, isPosthogReady } from '@/lib/posthog'
 import HomeView from '@/views/HomeView.vue'
 import ProductsView from '@/views/ProductsView.vue'
 
@@ -75,6 +76,10 @@ const router = createRouter({
       component: () => import('@/views/NotFoundView.vue'),
     },
   ],
+})
+
+router.afterEach(() => {
+  if (isPosthogReady()) capturePageview()
 })
 
 export default router

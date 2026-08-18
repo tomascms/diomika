@@ -85,4 +85,6 @@ dump.rdb
 .env.env.bak_clean
 deploy/.cf_token_tmp
 monitor-hub/config.local.json
+monitor-hub/release/
+monitor-hub/Diomika-Command-Center-*.exe
 .local-previews/

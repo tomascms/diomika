@@ -44,6 +44,7 @@ from routes import (
     admin_crud,
     admin_auth,
     privacy,
+    ops_analytics,
 )
 
 from core.log_safe import install_log_redaction
@@ -143,6 +144,7 @@ app.include_router(orcamentos.router)
 app.include_router(encomendas.router)
 app.include_router(admin_crud.router)
 app.include_router(admin.router)
+app.include_router(ops_analytics.router)
 
 
 @app.exception_handler(Exception)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -55,6 +56,18 @@ def check_site(site: str, timeout: float) -> tuple[bool, str]:
     return status == 200, f"{url} -> {status}"
 
 
+def check_with_retries(fn, *, retries: int = 3, delay: float = 2.0) -> tuple[bool, str]:
+    last_msg = ""
+    for attempt in range(retries):
+        ok, msg = fn()
+        last_msg = msg
+        if ok:
+            return True, msg
+        if attempt < retries - 1:
+            time.sleep(delay)
+    return False, last_msg
+
+
 def send_failure_alert(failures: list[str]) -> None:
     from core.alerts import send_alert
 
@@ -70,24 +83,32 @@ def main() -> int:
     parser.add_argument("--api", default=os.getenv("API_HEALTH_URL") or "https://api.diomika.com")
     parser.add_argument("--site", default=os.getenv("SITE_URL") or "https://www.diomika.com")
     parser.add_argument("--ready", action="store_true", help="Também /health/ready")
+    parser.add_argument(
+        "--ready-optional",
+        action="store_true",
+        help="/health/ready informativo — não falha o job se só isto falhar",
+    )
     parser.add_argument("--alert", action="store_true", help="Enviar webhook se falhar")
     parser.add_argument("--timeout", type=float, default=15.0)
+    parser.add_argument("--retries", type=int, default=3, help="Tentativas por check crítico")
     args = parser.parse_args()
 
     failures: list[str] = []
-    for ok, msg in (
-        check_health(args.api, args.timeout),
-        check_site(args.site, args.timeout),
+    for label, fn in (
+        ("API", lambda: check_health(args.api, args.timeout)),
+        ("Site", lambda: check_site(args.site, args.timeout)),
     ):
+        ok, msg = check_with_retries(fn, retries=args.retries)
         print("OK" if ok else "FAIL", msg)
         if not ok:
-            failures.append(msg)
+            failures.append(f"{label}: {msg}")
 
     if args.ready:
-        ok, msg = check_ready(args.api, args.timeout)
-        print("OK" if ok else "FAIL", msg)
-        if not ok:
-            failures.append(msg)
+        ok, msg = check_with_retries(lambda: check_ready(args.api, args.timeout), retries=2)
+        level = "OK" if ok else ("WARN" if args.ready_optional else "FAIL")
+        print(level, msg)
+        if not ok and not args.ready_optional:
+            failures.append(f"Ready: {msg}")
 
     if failures:
         if args.alert:

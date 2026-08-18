@@ -2,18 +2,26 @@ name: Uptime
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch:
+
+concurrency:
+  group: uptime-monitor
+  cancel-in-progress: false
 
 jobs:
   health:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Install monitor dependencies
+        run: pip install python-dotenv certifi
 
       - name: Monitor API + loja (+ alerta ntfy)
         env:
@@ -23,5 +31,4 @@ jobs:
         run: |
           API="${API_HEALTH_URL:-https://api.diomika.com}"
           SITE="${SITE_URL:-https://www.diomika.com}"
-          pip install certifi
-          python deploy/monitor_check.py --api "$API" --site "$SITE" --ready --alert
+          python deploy/monitor_check.py --api "$API" --site "$SITE" --ready --ready-optional --alert --timeout 30 --retries 3
