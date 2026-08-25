@@ -55,12 +55,23 @@ def _redis():
     try:
         from core.rate_limit import _get_redis
 
-        client = _get_redis()
+        return _get_redis()
     except Exception:
-        client = None
-    if client is None and _redis_required():
-        raise RuntimeError("REDIS_URL obrigatório para sessões admin em produção final")
-    return client
+        return None
+
+
+def _ensure_redis_for_issue() -> None:
+    """Login em produção final exige Redis; devolve 503 em vez de 500/Sentry noise."""
+    if not _redis_required():
+        return
+    if _redis() is not None:
+        return
+    from fastapi import HTTPException
+
+    raise HTTPException(
+        status_code=503,
+        detail="Sessões admin indisponíveis — Redis em falta (REDIS_URL / contentor redis).",
+    )
 
 
 def _redis_set_active(username: str, jti: str, ttl: int) -> None:
@@ -144,6 +155,9 @@ def _redis_session_ok(username: str, jti: str, *, touch: bool) -> bool | None:
 
 def issue_session(*, username: str, role: str) -> tuple[str, int]:
     """Emite token e invalida sessões anteriores do mesmo utilizador."""
+    # Validar secret antes de Redis — testes e erros de config mais claros
+    _secret()
+    _ensure_redis_for_issue()
     now = int(time.time())
     jti = secrets.token_hex(8)
     payload = {
@@ -224,6 +238,10 @@ def parse_session(
     username = str(payload.get("u") or "").strip()
     role = str(payload.get("r") or "").strip()
     if not username or not role:
+        return None
+
+    # Produção final sem Redis: fail-closed (sessão inválida), sem RuntimeError.
+    if _redis_required() and _redis() is None:
         return None
 
     redis_ok = _redis_session_ok(username, jti, touch=touch)

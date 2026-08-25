@@ -14,7 +14,8 @@ logger = logging.getLogger("diomika-api")
 _hits: dict[str, list[float]] = defaultdict(list)
 _last_cleanup = 0.0
 _redis = None
-_redis_tried = False
+_redis_next_try = 0.0
+_REDIS_RETRY_SEC = 20.0
 
 MAX_PUBLIC_BODY_LINES = 50
 MAX_LINE_QUANTITY = 50_000
@@ -99,13 +100,20 @@ def _window_seconds() -> int:
 
 
 def _get_redis():
-    """Cliente Redis lazy — opcional (REDIS_URL)."""
-    global _redis, _redis_tried
-    if _redis_tried:
+    """Cliente Redis lazy — opcional (REDIS_URL).
+
+    Se a 1.ª ligação falhar (Redis ainda a arrancar), volta a tentar após
+    `_REDIS_RETRY_SEC` em vez de ficar permanentemente em memória.
+    """
+    global _redis, _redis_next_try
+    if _redis is not None:
         return _redis
-    _redis_tried = True
+    now = time.time()
+    if now < _redis_next_try:
+        return None
     url = (os.getenv("REDIS_URL") or "").strip()
     if not url:
+        _redis_next_try = now + _REDIS_RETRY_SEC
         return None
     try:
         import redis  # type: ignore
@@ -113,11 +121,20 @@ def _get_redis():
         client = redis.Redis.from_url(url, decode_responses=True, socket_connect_timeout=1.5)
         client.ping()
         _redis = client
+        _redis_next_try = 0.0
         logger.info("Rate limit: Redis activo")
     except Exception as exc:
-        logger.warning("Rate limit: Redis indisponível (%s) — fallback in-memory", exc)
+        logger.warning("Rate limit: Redis indisponível (%s) — fallback in-memory; retry em %.0fs", exc, _REDIS_RETRY_SEC)
         _redis = None
+        _redis_next_try = now + _REDIS_RETRY_SEC
     return _redis
+
+
+def reset_redis_client() -> None:
+    """Força nova tentativa de ligação (testes / recuperação)."""
+    global _redis, _redis_next_try
+    _redis = None
+    _redis_next_try = 0.0
 
 
 def _maybe_cleanup(now: float) -> None:

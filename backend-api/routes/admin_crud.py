@@ -86,11 +86,19 @@ def _client_error(exc: Exception) -> str:
     if "duplicate key" in text.lower() or "23505" in text:
         if "assento_id_modelo_key" in text or "assento_modelo_altura" in text:
             return "Já existe um assento com esta altura neste modelo."
+        if "modelo_cores_model_numero" in text or "modelo_cores" in text.lower():
+            return "Já existe esta cor (número) neste modelo."
         if "ean" in text.lower():
             return "Este EAN já existe noutro produto."
+        return "Registo duplicado — já existe um com a mesma chave única."
     if text and text not in ("", "None"):
         return text[:240]
     return "Dados inválidos ou em conflito."
+
+
+def _is_expected_client_conflict(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "duplicate key" in text or "23505" in text or "violates unique" in text
 
 
 def _schema_for(table: str):
@@ -488,8 +496,12 @@ def create_record(
     except Exception as exc:
         if key:
             abort_idempotent_request(key, op)
+        detail = _client_error(exc)
+        if _is_expected_client_conflict(exc):
+            logger.warning("Create %s: %s", table_name, detail)
+            raise HTTPException(status_code=409, detail=detail) from exc
         logger.error("Create %s: %s", table_name, exc)
-        raise HTTPException(status_code=400, detail=_client_error(exc)) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
 
 
 @router.put("/{table_name}/{record_id}")
@@ -513,8 +525,12 @@ def update_record(request: Request, table_name: str, record_id: str, body: dict)
             _publish_catalog_children(table_name, record_id, tipo=cfg.get("ui_catalog_tipo"))
         return (res.data or [{}])[0] if res.data else {"id": record_id, **payload}
     except Exception as exc:
+        detail = _client_error(exc)
+        if _is_expected_client_conflict(exc):
+            logger.warning("Update %s/%s: %s", table_name, record_id, detail)
+            raise HTTPException(status_code=409, detail=detail) from exc
         logger.error("Update %s/%s: %s", table_name, record_id, exc)
-        raise HTTPException(status_code=400, detail=_client_error(exc)) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
 
 
 @router.patch("/{table_name}/{record_id}/visibility")

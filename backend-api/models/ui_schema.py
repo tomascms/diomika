@@ -11,8 +11,11 @@ from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
 
-def field_extra(field: FieldInfo) -> dict:
-    return field.json_schema_extra or {}
+def field_extra(field: FieldInfo | None) -> dict:
+    if field is None:
+        return {}
+    extra = field.json_schema_extra
+    return extra if isinstance(extra, dict) else {}
 
 
 def is_field_required(field: FieldInfo) -> bool:
@@ -38,7 +41,11 @@ def is_field_readonly(field: FieldInfo) -> bool:
     return bool(field_extra(field).get("ui_readonly"))
 
 
-def field_widget(field: FieldInfo, field_name: str) -> str:
+def field_widget(field: FieldInfo | None, field_name: str) -> str:
+    if field is None:
+        if field_name == "dimensoes":
+            return "dimensions"
+        return "text"
     extra = field_extra(field)
     if extra.get("ui_widget"):
         return extra["ui_widget"]

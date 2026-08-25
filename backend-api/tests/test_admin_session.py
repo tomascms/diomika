@@ -152,8 +152,8 @@ def test_idle_timeout_expires_session(monkeypatch):
     import time
 
     importlib.reload(rate_limit)
-    rate_limit._redis = None
-    rate_limit._redis_tried = True  # skip redis
+    rate_limit.reset_redis_client()
+    rate_limit._redis_next_try = time.time() + 3600  # skip redis during teste
     importlib.reload(session_tokens)
     token, _ = session_tokens.issue_session(username="erin", role="ops")
     assert session_tokens.parse_session(token)

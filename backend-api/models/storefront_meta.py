@@ -59,7 +59,8 @@ def storefront_picker_for_type(cfg: dict) -> dict | None:
         }
     field = _variant_picker_field(product_schema)
     fdef = product_schema.model_fields.get(field)
-    fmt = "dimensions" if field == "dimensoes" or field_widget(fdef, field) == "dimensions" else "plain"
+    is_dim = field == "dimensoes" or (fdef is not None and field_widget(fdef, field) == "dimensions")
+    fmt = "dimensions" if is_dim else "plain"
     return {
         "source": "products",
         "field": field,

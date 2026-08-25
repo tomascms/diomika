@@ -65,15 +65,20 @@ def test_mfa_optional_via_env(monkeypatch):
     assert mfa_required_globally() is False
     monkeypatch.setenv("ADMIN_MFA_REQUIRED", "1")
     assert mfa_required_globally() is True
+    monkeypatch.setenv("DIOMIKA_ENV", "development")
     get_settings.cache_clear()
 
 
 def test_session_secret_only_api_secret_key(monkeypatch):
+    monkeypatch.setenv("DIOMIKA_ENV", "development")
     monkeypatch.delenv("API_SECRET_KEY", raising=False)
     monkeypatch.setenv("ADMIN_SESSION_SECRET", "x" * 40)
+    from core.config import get_settings
     from core import session_tokens
     import importlib
 
+    get_settings.cache_clear()
     importlib.reload(session_tokens)
     with pytest.raises(RuntimeError, match="API_SECRET_KEY"):
         session_tokens.issue_session(username="x", role="admin")
+    get_settings.cache_clear()

@@ -293,10 +293,14 @@ def process_inbox():
 
         if total:
             logger.info("%d mensagem(ns) nova(s) registada(s)", total)
-    except (imaplib.IMAP4.abort, ConnectionResetError, OSError, TimeoutError) as e:
+    except (imaplib.IMAP4.abort, imaplib.IMAP4.error, ConnectionResetError, OSError, TimeoutError) as e:
         logger.warning("IMAP ligação perdida (reconecta no próximo ciclo): %s", e)
     except Exception as e:
-        logger.error("Erro ao processar email: %s", e)
+        msg = str(e).lower()
+        if "socket error" in msg or "eof" in msg or "broken pipe" in msg:
+            logger.warning("IMAP ligação perdida (reconecta no próximo ciclo): %s", e)
+        else:
+            logger.error("Erro ao processar email: %s", e)
     finally:
         if mail is not None:
             try:
