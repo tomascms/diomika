@@ -279,7 +279,16 @@ def main() -> int:
     check_files()
     check_gitignore()
     check_env(args.production, codebase_only=args.codebase)
-    check_supabase()
+    # --codebase / CI: não exige rede real (SUPABASE_URL de exemplo falha DNS)
+    if args.codebase:
+        check(
+            "Supabase ligação",
+            True,
+            "omitido em --codebase (validar com --production ou local com .env)",
+            critical=False,
+        )
+    else:
+        check_supabase()
     check_api_health()
     if args.build:
         check_frontend_build()
