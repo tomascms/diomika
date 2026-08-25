@@ -17,8 +17,9 @@ from typing import Any
 
 logger = logging.getLogger("diomika-api")
 
-SESSION_TTL_SECONDS = int(os.getenv("ADMIN_SESSION_TTL_MINUTES") or "15") * 60
-SESSION_IDLE_SECONDS = int(os.getenv("ADMIN_SESSION_IDLE_MINUTES") or "10") * 60
+SESSION_TTL_SECONDS = int(os.getenv("ADMIN_SESSION_TTL_MINUTES") or "43200") * 60
+_idle_raw = (os.getenv("ADMIN_SESSION_IDLE_MINUTES") or "").strip()
+SESSION_IDLE_SECONDS = int(_idle_raw) * 60 if _idle_raw else 0
 _PREFIX = "dms1."
 _revoked: set[str] = set()
 _active_jti: dict[str, str] = {}
@@ -130,7 +131,7 @@ def _redis_session_ok(username: str, jti: str, *, touch: bool) -> bool | None:
                 last = int(seen_raw)
             except ValueError:
                 last = now
-            if now - last > SESSION_IDLE_SECONDS:
+            if SESSION_IDLE_SECONDS > 0 and now - last > SESSION_IDLE_SECONDS:
                 _redis_revoke(username, jti)
                 return False
         if touch:
@@ -238,7 +239,7 @@ def parse_session(
                 return None
             now = int(time.time())
             last = _last_seen.get(jti, now)
-            if now - last > SESSION_IDLE_SECONDS:
+            if SESSION_IDLE_SECONDS > 0 and now - last > SESSION_IDLE_SECONDS:
                 _revoked.add(jti)
                 _active_jti.pop(key, None)
                 _last_seen.pop(jti, None)

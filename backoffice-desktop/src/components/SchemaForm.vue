@@ -16,6 +16,8 @@ const props = defineProps({
 
   relations: { type: Object, default: () => ({}) },
 
+  fieldOptions: { type: Object, default: () => ({}) },
+
   readonly: { type: Boolean, default: false },
 
   editing: { type: Boolean, default: false },
@@ -39,12 +41,6 @@ const stringListRows = ref({})
 const dimParts = ref({})
 
 const fieldErrors = ref({})
-
-
-
-watch(() => props.modelValue, (v) => { local.value = { ...v } }, { deep: true })
-
-
 
 const sync = () => emit('update:modelValue', { ...local.value })
 
@@ -71,11 +67,23 @@ const isLocked = (field) => {
 
 
 const initStringList = (name, val) => {
-
-  const vals = Array.isArray(val) ? val : val ? [String(val)] : ['']
-
+  let parsed = val
+  if (typeof val === 'string') {
+    const trimmed = val.trim()
+    if (trimmed.startsWith('[')) {
+      try {
+        parsed = JSON.parse(trimmed)
+      } catch {
+        parsed = val
+      }
+    }
+  }
+  const vals = Array.isArray(parsed)
+    ? parsed.map((item) => String(item).trim()).filter(Boolean)
+    : parsed
+      ? [String(parsed).trim()].filter(Boolean)
+      : []
   stringListRows.value[name] = vals.length ? [...vals] : ['']
-
 }
 
 
@@ -98,29 +106,24 @@ const initDimensions = (name, val) => {
 
 
 
+const initWidgetFields = (source = local.value) => {
+  for (const f of props.fields) {
+    const val = source?.[f.name]
+    if (f.widget === 'string_list') initStringList(f.name, val)
+    if (f.widget === 'dimensions') initDimensions(f.name, val)
+  }
+}
+
 watch(
-
-  () => props.fields,
-
-  (fields) => {
-
-    for (const f of fields) {
-
-      const key = f.name
-
-      const val = local.value[key]
-
-      if (f.widget === 'string_list') initStringList(key, val)
-
-      if (f.widget === 'dimensions') initDimensions(key, val)
-
-    }
-
+  () => props.modelValue,
+  (v) => {
+    local.value = { ...v }
+    initWidgetFields(v)
   },
-
-  { immediate: true },
-
+  { deep: true },
 )
+
+watch(() => props.fields, () => initWidgetFields(), { immediate: true })
 
 
 
@@ -383,6 +386,54 @@ defineExpose({ validate })
         <option value="">— Selecionar —</option>
 
         <option v-for="opt in relationOptions(field)" :key="opt.id" :value="opt.id">{{ opt.label }}</option>
+
+      </select>
+
+
+
+      <select
+
+        v-else-if="field.widget === 'altura_modelo'"
+
+        :id="field.name"
+
+        v-model="local[field.name]"
+
+        class="input"
+
+        :disabled="isLocked(field)"
+
+        @change="sync"
+
+      >
+
+        <option value="">— Selecionar altura —</option>
+
+        <option v-for="opt in (fieldOptions.altura_modelo || [])" :key="opt" :value="opt">{{ opt }}</option>
+
+      </select>
+
+
+
+      <select
+
+        v-else-if="field.widget === 'dimensao_modelo'"
+
+        :id="field.name"
+
+        v-model="local[field.name]"
+
+        class="input"
+
+        :disabled="isLocked(field)"
+
+        @change="sync"
+
+      >
+
+        <option value="">— Selecionar dimensão —</option>
+
+        <option v-for="opt in (fieldOptions.dimensoes_modelo || [])" :key="opt" :value="opt">{{ opt }}</option>
 
       </select>
 

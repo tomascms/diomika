@@ -42,7 +42,6 @@ const router = createRouter({
           name: 'record-edit',
           component: () => import('@/views/RecordFormView.vue'),
         },
-        { path: 'schema', name: 'schema', component: () => import('@/views/SchemaSyncView.vue') },
       ],
     },
   ],
@@ -74,9 +73,7 @@ router.beforeEach(async (to) => {
     }
   }
 
-  if (to.name !== 'schema') {
-    await loadWorkspace().catch(() => {})
-  }
+  await loadWorkspace().catch(() => {})
 })
 
 export default router

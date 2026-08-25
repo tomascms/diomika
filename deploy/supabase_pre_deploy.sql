@@ -214,7 +214,7 @@ CREATE TABLE IF NOT EXISTS modelos_assentos (
 
 CREATE TABLE IF NOT EXISTS assento (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    id_modelo uuid NOT NULL UNIQUE REFERENCES modelos_assentos(id) ON DELETE CASCADE,
+    id_modelo uuid NOT NULL REFERENCES modelos_assentos(id) ON DELETE CASCADE,
     ean text NOT NULL UNIQUE,
     barcode_url text,
     visibilidade boolean DEFAULT true,
@@ -343,3 +343,121 @@ CREATE INDEX IF NOT EXISTS idx_admin_audit_actor ON admin_audit_log (actor, crea
 ALTER TABLE admin_audit_log ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "admin_audit_deny_anon" ON admin_audit_log;
 CREATE POLICY "admin_audit_deny_anon" ON admin_audit_log FOR ALL TO anon USING (false);
+
+-- === Realtime (postgres_changes na loja) ===
+DO $$
+DECLARE
+  tbl text;
+BEGIN
+  FOREACH tbl IN ARRAY ARRAY[
+    'categories',
+    'modelos_almofadas',
+    'almofada',
+    'modelos_assentos',
+    'assento',
+    'modelo_cores'
+  ]
+  LOOP
+    IF to_regclass('public.' || tbl) IS NOT NULL AND NOT EXISTS (
+      SELECT 1
+      FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime'
+        AND schemaname = 'public'
+        AND tablename = tbl
+    ) THEN
+      EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', tbl);
+    END IF;
+  END LOOP;
+END $$;
+
+-- === Assento por altura + tipo_catalogo em modelo_cores ===
+ALTER TABLE assento ADD COLUMN IF NOT EXISTS altura text;
+ALTER TABLE modelo_cores ADD COLUMN IF NOT EXISTS tipo_catalogo text;
+
+UPDATE modelo_cores mc
+SET tipo_catalogo = 'almofada'
+FROM modelos_almofadas m
+WHERE mc.id_modelo = m.id
+  AND (mc.tipo_catalogo IS NULL OR mc.tipo_catalogo = '');
+
+UPDATE modelo_cores mc
+SET tipo_catalogo = 'assento'
+FROM modelos_assentos m
+WHERE mc.id_modelo = m.id
+  AND (mc.tipo_catalogo IS NULL OR mc.tipo_catalogo = '');
+
+DO $$
+DECLARE
+  r record;
+  first_alt text;
+BEGIN
+  FOR r IN
+    SELECT a.id, m.alturas
+    FROM assento a
+    JOIN modelos_assentos m ON m.id = a.id_modelo
+    WHERE a.altura IS NULL OR trim(a.altura) = ''
+  LOOP
+    first_alt := NULL;
+    IF jsonb_typeof(r.alturas) = 'array' AND jsonb_array_length(r.alturas) > 0 THEN
+      first_alt := trim(both '"' from (r.alturas->>0));
+    END IF;
+    IF first_alt IS NOT NULL AND first_alt <> '' THEN
+      UPDATE assento SET altura = first_alt WHERE id = r.id;
+    END IF;
+  END LOOP;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS assento_modelo_altura_idx
+  ON assento (id_modelo, altura)
+  WHERE altura IS NOT NULL AND altura <> '';
+
+ALTER TABLE assento DROP CONSTRAINT IF EXISTS assento_id_modelo_key;
+
+CREATE INDEX IF NOT EXISTS idx_modelo_cores_tipo_modelo
+  ON modelo_cores (tipo_catalogo, id_modelo);
+
+-- === Assento por altura + tipo_catalogo em modelo_cores ===
+ALTER TABLE assento ADD COLUMN IF NOT EXISTS altura text;
+ALTER TABLE modelo_cores ADD COLUMN IF NOT EXISTS tipo_catalogo text;
+
+UPDATE modelo_cores mc
+SET tipo_catalogo = 'almofada'
+FROM modelos_almofadas m
+WHERE mc.id_modelo = m.id
+  AND (mc.tipo_catalogo IS NULL OR mc.tipo_catalogo = '');
+
+UPDATE modelo_cores mc
+SET tipo_catalogo = 'assento'
+FROM modelos_assentos m
+WHERE mc.id_modelo = m.id
+  AND (mc.tipo_catalogo IS NULL OR mc.tipo_catalogo = '');
+
+DO $$
+DECLARE
+  r record;
+  first_alt text;
+BEGIN
+  FOR r IN
+    SELECT a.id, m.alturas
+    FROM assento a
+    JOIN modelos_assentos m ON m.id = a.id_modelo
+    WHERE a.altura IS NULL OR trim(a.altura) = ''
+  LOOP
+    first_alt := NULL;
+    IF jsonb_typeof(r.alturas) = 'array' AND jsonb_array_length(r.alturas) > 0 THEN
+      first_alt := trim(both '"' from (r.alturas->>0));
+    END IF;
+    IF first_alt IS NOT NULL AND first_alt <> '' THEN
+      UPDATE assento SET altura = first_alt WHERE id = r.id;
+    END IF;
+  END LOOP;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS assento_modelo_altura_idx
+  ON assento (id_modelo, altura)
+  WHERE altura IS NOT NULL AND altura <> '';
+
+ALTER TABLE assento DROP CONSTRAINT IF EXISTS assento_id_modelo_key;
+
+CREATE INDEX IF NOT EXISTS idx_modelo_cores_tipo_modelo
+  ON modelo_cores (tipo_catalogo, id_modelo);

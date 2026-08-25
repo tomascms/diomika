@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/lib/api'
 import SchemaForm from '@/components/SchemaForm.vue'
@@ -14,18 +14,24 @@ const isNew = computed(() => !recordId.value)
 const isCategories = computed(() => table.value === 'categories')
 
 const schema = ref(null)
-const formData = ref({ visibilidade: true })
+const formData = ref({ visibilidade: false })
 const relations = ref({})
 const pendingFiles = ref({})
+const fieldOptions = ref({})
 const colorsPanel = ref(null)
 const schemaFormRef = ref(null)
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
 const message = ref('')
+const createIdempotencyKey = ref(null)
 
 const embedColors = computed(() => Boolean(schema.value?.config?.ui_embed_colors))
+const catalogTipo = computed(() => schema.value?.config?.ui_catalog_tipo || null)
+const colorsTable = computed(() => schema.value?.config?.ui_colors_table || null)
 const savedModelId = computed(() => (isNew.value ? null : String(recordId.value)))
+const isCatalogRecord = computed(() => Boolean(schema.value?.config?.ui_catalog_tipo || colorsTable.value))
+const isPublished = computed(() => formData.value.visibilidade === true)
 
 const title = computed(() =>
   isNew.value ? `Novo — ${schema.value?.label || table.value}` : `Editar — ${schema.value?.label || table.value}`,
@@ -33,17 +39,61 @@ const title = computed(() =>
 
 const loadRelations = async (fields) => {
   const relTables = [...new Set(fields.filter((f) => f.relation).map((f) => f.relation))]
-  const out = {}
-  for (const rt of relTables) {
-    try {
-      const data = await api.listRecords(rt, { visible_only: 'false', limit: '200' })
-      out[rt] = data.map((r) => ({ id: r.id, label: r.nome || r.ean || r.numero || String(r.id).slice(0, 8) }))
-    } catch {
-      out[rt] = []
-    }
-  }
-  relations.value = out
+  const entries = await Promise.all(
+    relTables.map(async (rt) => {
+      try {
+        const data = await api.listRecords(rt, { visible_only: 'false', limit: '200' })
+        return [
+          rt,
+          data.map((r) => ({ id: r.id, label: r.nome || r.ean || r.numero || String(r.id).slice(0, 8) })),
+        ]
+      } catch {
+        return [rt, []]
+      }
+    }),
+  )
+  relations.value = Object.fromEntries(entries)
 }
+
+const loadModelDiscriminatorOptions = async (modelId) => {
+  const field = (schema.value?.fields || []).find((f) =>
+    ['altura_modelo', 'dimensao_modelo'].includes(f.widget),
+  )
+  if (!field || !modelId) {
+    fieldOptions.value = { ...fieldOptions.value, altura_modelo: [], dimensoes_modelo: [] }
+    return
+  }
+  const relation = (schema.value?.fields || []).find((f) => f.name === 'id_modelo')?.relation
+  if (!relation) return
+  const modelField = field.widget === 'altura_modelo' ? 'alturas' : 'dimensoes'
+  const optionKey = field.widget === 'altura_modelo' ? 'altura_modelo' : 'dimensoes_modelo'
+  try {
+    const model = await api.getRecord(relation, modelId)
+    const raw = model?.[modelField]
+    const values = Array.isArray(raw)
+      ? raw.map((v) => String(v).trim()).filter(Boolean)
+      : typeof raw === 'string'
+        ? (() => {
+            try {
+              const parsed = JSON.parse(raw)
+              return Array.isArray(parsed) ? parsed.map((v) => String(v).trim()).filter(Boolean) : []
+            } catch {
+              return raw.trim() ? [raw.trim()] : []
+            }
+          })()
+        : []
+    fieldOptions.value = { ...fieldOptions.value, [optionKey]: values }
+  } catch {
+    fieldOptions.value = { ...fieldOptions.value, [optionKey]: [] }
+  }
+}
+
+watch(
+  () => formData.value.id_modelo,
+  (modelId) => {
+    loadModelDiscriminatorOptions(modelId)
+  },
+)
 
 const load = async () => {
   if (isNew.value && isCategories.value) {
@@ -58,12 +108,14 @@ const load = async () => {
     if (!isNew.value) {
       formData.value = { ...(await api.getRecord(table.value, recordId.value)) }
     } else {
-      formData.value = { visibilidade: true }
+      formData.value = { visibilidade: false }
+      createIdempotencyKey.value = null
       const hasCategoria = (schema.value?.fields || []).some((f) => f.name === 'id_categoria')
       if (hasCategoria && route.query.id_categoria) {
         formData.value.id_categoria = route.query.id_categoria
       }
     }
+    await loadModelDiscriminatorOptions(formData.value.id_modelo)
   } catch (e) {
     error.value = e.message
   } finally {
@@ -90,7 +142,8 @@ const resolvePendingImages = async (payload) => {
   return out
 }
 
-const save = async () => {
+const publish = async () => {
+  if (saving.value) return
   if (schemaFormRef.value && !schemaFormRef.value.validate()) {
     error.value = 'Preencha os campos obrigatórios.'
     return
@@ -98,8 +151,11 @@ const save = async () => {
   saving.value = true
   error.value = ''
   message.value = ''
+  if (isNew.value && !createIdempotencyKey.value) {
+    createIdempotencyKey.value = crypto.randomUUID()
+  }
   try {
-    let payload = { ...formData.value }
+    let payload = { ...formData.value, visibilidade: true }
     payload = await resolvePendingImages(payload)
     if (typeof payload.composicao === 'string') {
       try {
@@ -111,7 +167,7 @@ const save = async () => {
 
     let savedId = recordId.value
     if (isNew.value) {
-      const created = await api.createRecord(table.value, payload)
+      const created = await api.createRecord(table.value, payload, createIdempotencyKey.value)
       savedId = created.id
     } else {
       await api.updateRecord(table.value, recordId.value, payload)
@@ -119,19 +175,29 @@ const save = async () => {
 
     if (embedColors.value && colorsPanel.value) {
       try {
-        await colorsPanel.value.save(String(savedId))
+        await colorsPanel.value.save(String(savedId), { publish: true })
       } catch (e) {
-        message.value = `Modelo guardado, mas cores: ${e.message}`
+        message.value = `Registo publicado, mas cores: ${e.message}`
         saving.value = false
         return
       }
     }
 
-    message.value = 'Guardado.'
+    formData.value.visibilidade = true
+    message.value = 'Publicado na loja.'
     const backTable = route.params.physicalTable ? route.params.table : table.value
-    setTimeout(() => router.push({ name: 'workspace', params: { table: backTable } }), 700)
+    setTimeout(() => router.push({ name: 'workspace', params: { table: backTable } }), 900)
   } catch (e) {
-    error.value = e.message
+    const msg = e.message || ''
+    if (isNew.value && /502|504|timeout|abort|inacessível/i.test(msg)) {
+      error.value =
+        'A API não respondeu a tempo, mas o registo pode ter sido criado. Verifique a lista antes de publicar outra vez.'
+    } else if (isNew.value && /409|processamento/i.test(msg)) {
+      error.value =
+        'Pedido ainda em processamento. Aguarde alguns segundos e clique «Publicar alterações» outra vez (não crie duplicado).'
+    } else {
+      error.value = msg
+    }
   } finally {
     saving.value = false
   }
@@ -163,6 +229,8 @@ const hardDelete = async () => {
   }
 }
 
+watch(() => route.fullPath, load)
+
 onMounted(load)
 </script>
 
@@ -171,6 +239,18 @@ onMounted(load)
     <div class="form-header">
       <button class="btn btn-ghost" @click="router.back()">← Voltar</button>
       <h2>{{ title }}</h2>
+      <span v-if="isCatalogRecord && !isNew" class="vis-chip" :class="{ live: isPublished }">
+        {{ isPublished ? 'Visível na loja' : 'Oculto no site' }}
+      </span>
+      <button
+        v-if="!loading && schema"
+        class="btn btn-primary header-save"
+        type="button"
+        :disabled="saving"
+        @click="publish"
+      >
+        {{ saving ? 'A publicar…' : 'Publicar alterações' }}
+      </button>
     </div>
     <p v-if="loading">A carregar…</p>
     <p v-if="error" class="error">{{ error }}</p>
@@ -181,6 +261,7 @@ onMounted(load)
         v-model="formData"
         :fields="schema.fields"
         :relations="relations"
+        :field-options="fieldOptions"
         :editing="!isNew"
         :table-name="table"
         @pending-files="pendingFiles = $event"
@@ -189,9 +270,12 @@ onMounted(load)
         v-if="embedColors"
         ref="colorsPanel"
         :model-id="savedModelId"
+        :colors-table="colorsTable"
       />
-      <div class="actions">
-        <button class="btn btn-primary" :disabled="saving" @click="save">{{ saving ? 'A guardar…' : 'Guardar' }}</button>
+      <div class="actions actions-sticky">
+        <button class="btn btn-primary" type="button" :disabled="saving" @click="publish">
+          {{ saving ? 'A publicar…' : 'Publicar alterações' }}
+        </button>
         <template v-if="!isNew">
           <button class="btn btn-ghost" type="button" @click="hideRecord">Ocultar</button>
           <button class="btn btn-danger" type="button" @click="hardDelete">Apagar</button>
@@ -211,12 +295,27 @@ onMounted(load)
 }
 .form-header h2 {
   margin: 0;
+  flex: 1;
+  min-width: 160px;
   font-family: var(--font-display);
   font-size: 1.35rem;
   font-weight: 560;
   letter-spacing: -0.02em;
 }
-.form-card { padding: 1.35rem 1.4rem; max-width: 720px; }
+.header-save { margin-left: auto; }
+.vis-chip {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(120, 120, 120, 0.15);
+  color: var(--text-muted);
+}
+.vis-chip.live {
+  background: rgba(34, 120, 70, 0.12);
+  color: var(--success);
+}
+.form-card { padding: 1.35rem 1.4rem 5.5rem; max-width: 720px; }
 .actions {
   display: flex;
   gap: 0.55rem;
@@ -224,6 +323,14 @@ onMounted(load)
   padding-top: 1.1rem;
   border-top: 1px solid var(--border);
   flex-wrap: wrap;
+}
+.actions-sticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin-top: 1.5rem;
+  padding: 0.85rem 0 0.35rem;
+  background: linear-gradient(to top, var(--bg-panel) 78%, rgba(255, 255, 255, 0));
 }
 .error { color: var(--danger); font-weight: 600; }
 .ok { color: var(--success); font-weight: 600; }

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { resolveImageUrl, PLACEHOLDER } from '@/lib/images'
 import { watchDynamicTitle } from '@/composables/usePageMeta'
@@ -11,6 +11,7 @@ import LoadingState from '@/components/LoadingState.vue'
 import QtySelect from '@/components/QtySelect.vue'
 import ModelSpecs from '@/components/ModelSpecs.vue'
 import { useCatalog } from '@/composables/useCatalog'
+import { categoryProductsRoute, modelDetailRoute } from '@/lib/catalogRoutes'
 
 const route = useRoute()
 const router = useRouter()
@@ -65,7 +66,7 @@ const breadcrumbItems = computed(() => {
   if (category.value) {
     items.push({
       label: category.value.nome,
-      to: { name: 'products', params: { categoryId: category.value.id } },
+      to: categoryProductsRoute(category.value),
     })
   }
   if (model.value) {
@@ -84,13 +85,33 @@ const fetchProduct = async () => {
     storefrontCtx.value = null
 
     await catalog.loadMeta()
+
+    const legacyId = route.params.legacyModelId
+    const categorySlug = route.params.categorySlug
+    const modelSlug = route.params.modelSlug
     const tipoQuery = route.query.tipo || null
-    const modelData = await catalog.fetchModelDetail(route.params.id, tipoQuery)
+
+    let modelData
+    if (legacyId) {
+      modelData = await catalog.fetchModelDetail({ modelId: legacyId, tipo: tipoQuery })
+    } else {
+      modelData = await catalog.fetchModelDetail({ categorySlug, modelSlug, tipo: tipoQuery })
+    }
 
     const tipo = modelData._tipo_catalogo || tipoQuery
     storefrontCtx.value = catalog.storefrontContext(tipo, modelData)
     model.value = modelData
     category.value = modelData.categories
+
+    if (category.value && model.value) {
+      const canonical = modelDetailRoute(category.value, model.value)
+      const currentModelKey = String(route.params.modelSlug || route.params.legacyModelId || '').trim()
+      const canonicalModelKey = String(canonical.params?.modelSlug || '').trim()
+      if (legacyId || (currentModelKey && canonicalModelKey && currentModelKey !== canonicalModelKey)) {
+        await router.replace(canonical)
+        return
+      }
+    }
 
     const rawColors = (modelData.modelo_cores || [])
       .filter((c) => c.visibilidade !== false)
@@ -167,7 +188,7 @@ const addToCart = () => {
   cart.addItem({
     ean: product.ean,
     numero_cor: selectedColor.value.numero,
-    altura: singleProductMode.value ? selectedPicker.value.value : undefined,
+    altura: product.altura || (singleProductMode.value ? selectedPicker.value.value : undefined),
     quantidade: selectedQty.value,
     modeloNome: model.value.nome,
     dimensoes: dimLabel,
@@ -185,6 +206,7 @@ const addToCart = () => {
 const goToCart = () => router.push({ name: 'cart' })
 
 onMounted(fetchProduct)
+watch(() => route.fullPath, fetchProduct)
 </script>
 
 <template>
@@ -231,9 +253,9 @@ onMounted(fetchProduct)
       <section class="buy-column">
         <header class="product-header">
           <RouterLink
-            v-if="category?.id"
+            v-if="category"
             class="cat-link"
-            :to="{ name: 'products', params: { categoryId: category.id } }"
+            :to="categoryProductsRoute(category)"
           >
             {{ categoryName }}
           </RouterLink>

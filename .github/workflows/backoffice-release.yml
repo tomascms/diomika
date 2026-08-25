@@ -3,6 +3,10 @@ name: Backoffice release
 on:
   workflow_dispatch:
   push:
+    branches: [main]
+    paths:
+      - "backoffice-desktop/**"
+      - ".github/workflows/backoffice-release.yml"
     tags:
       - "backoffice-v*"
 
@@ -50,3 +54,34 @@ jobs:
             backoffice-desktop/release/*.AppImage
           if-no-files-found: error
           retention-days: 90
+
+  publish-cliente:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: diomika-backoffice-*
+          merge-multiple: true
+          path: artifacts
+
+      - name: Remove previous cliente release tag
+        run: |
+          gh release delete backoffice-cliente-latest --yes 2>/dev/null || true
+          git push --delete origin backoffice-cliente-latest 2>/dev/null || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Publish public cliente release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: backoffice-cliente-latest
+          name: Diomika Backoffice cliente (latest)
+          prerelease: true
+          make_latest: false
+          files: |
+            artifacts/**/*.exe
+            artifacts/**/*.dmg
+            artifacts/**/*.AppImage

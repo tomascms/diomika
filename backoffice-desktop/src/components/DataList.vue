@@ -43,7 +43,7 @@ const subtitle = (row, columns) => {
             v-else
             class="status-pill"
             :class="{ hidden: row.visibilidade === false }"
-          >{{ row.visibilidade === false ? 'Oculto' : 'Visível' }}</span>
+          >{{ row.visibilidade === false ? 'Rascunho' : 'Publicado' }}</span>
           <p class="title">{{ primary(row, columns) }}</p>
         </div>
         <p v-if="subtitle(row, columns)" class="sub">{{ subtitle(row, columns) }}</p>

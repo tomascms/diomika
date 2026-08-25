@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from core.env_loader import load_project_env
@@ -20,6 +21,7 @@ from core.auth import require_ops
 from core.local_only import admin_must_be_local
 from core.config import get_settings
 from core.health import build_health
+from core.public_meta import ROBOTS_TXT, STATUS_PAGE, security_txt_body
 from core.middleware import (
     RequestIdMiddleware,
     SecurityHeadersMiddleware,
@@ -42,6 +44,7 @@ from routes import (
     admin_crud,
     admin_auth,
     privacy,
+    ops_analytics,
 )
 
 from core.log_safe import install_log_redaction
@@ -141,6 +144,7 @@ app.include_router(orcamentos.router)
 app.include_router(encomendas.router)
 app.include_router(admin_crud.router)
 app.include_router(admin.router)
+app.include_router(ops_analytics.router)
 
 
 @app.exception_handler(Exception)
@@ -162,6 +166,21 @@ async def _unhandled_exception(request, exc):  # type: ignore[no-untyped-def]
     if settings.is_production:
         return JSONResponse(status_code=500, content={"detail": "Erro interno"})
     return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+
+@app.get("/")
+def api_root():
+    return {"service": "diomika-api", "health": "/health", "status": STATUS_PAGE}
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots_txt():
+    return PlainTextResponse(ROBOTS_TXT, media_type="text/plain; charset=utf-8")
+
+
+@app.get("/.well-known/security.txt", response_class=PlainTextResponse)
+def security_txt():
+    return PlainTextResponse(security_txt_body(), media_type="text/plain; charset=utf-8")
 
 
 @app.get("/health")

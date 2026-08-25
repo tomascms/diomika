@@ -1,32 +1,16 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { initPosthog } from '@/lib/posthog'
 
 const CONSENT_KEY = 'diomika_cookie_consent'
 const posthogKey = import.meta.env.VITE_POSTHOG_KEY || ''
-const posthogHost = import.meta.env.VITE_POSTHOG_HOST || 'https://eu.i.posthog.com'
 
 const visible = ref(false)
 
-const loadPosthog = async () => {
-  if (!posthogKey || window.__diomikaPosthog) return
-  try {
-    const { default: posthog } = await import('posthog-js')
-    posthog.init(posthogKey, {
-      api_host: posthogHost,
-      persistence: 'localStorage',
-      autocapture: true,
-      capture_pageview: true,
-    })
-    window.__diomikaPosthog = true
-  } catch {
-    /* ignore */
-  }
-}
-
-const accept = () => {
+const accept = async () => {
   localStorage.setItem(CONSENT_KEY, 'accepted')
   visible.value = false
-  loadPosthog()
+  await initPosthog()
 }
 
 const reject = () => {
@@ -34,14 +18,13 @@ const reject = () => {
   visible.value = false
 }
 
-onMounted(() => {
+onMounted(async () => {
   const saved = localStorage.getItem(CONSENT_KEY)
   if (saved === 'accepted') {
-    loadPosthog()
+    await initPosthog()
     return
   }
   if (saved === 'rejected') return
-  // Sem key PostHog: não mostrar banner (nada a consentir além do essencial)
   if (!posthogKey) return
   visible.value = true
 })

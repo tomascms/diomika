@@ -1,9 +1,13 @@
 # Diomika — Relatório técnico exaustivo
 
-**Versão:** 2.0 (manual pedagógico completo)  
+**Versão:** 2.1 (actualizado Agosto 2026)  
 **Audiência:** qualquer pessoa inteligente — **não** se assume conhecimento prévio de informática.  
 **Regra:** cada sigla é expandida e explicada na primeira aparição; o glossário da Parte I serve de dicionário permanente.  
 **Segurança:** este texto **não contém** passwords, tokens nem chaves. Esses vivem só em .env / pastas gitignored.
+
+**Instruções práticas (ligar, deploy, hub):** [`INSTRUCOES.md`](INSTRUCOES.md) — **usar este ficheiro no dia-a-dia.**
+
+**Nota sobre secções antigas:** partes redigidas antes de Agosto 2026 podem referir sessão admin de 15 minutos ou uptime CI de 15 min. O estado **actual** está no **Apêndice D** (prevalece sobre texto antigo).
 
 ## Índice das partes
 
@@ -21,11 +25,13 @@
 | X | Decisões e trade-offs |
 | XI | Limitações honestas |
 | XII | Como estudar o código |
-| Apêndices | Fluxos sequenciais, índice de ficheiros, FAQ |
+| Apêndices A–C | Fluxos sequenciais, índice de ficheiros, FAQ |
+| **Apêndice D** | **Registo de actualizações (Ago 2026) — estado actual** |
+| **Apêndice E** | **Diagrama BD comercial** |
 
-**Como ler:** podes saltar para a parte que precisas; se encontrares uma sigla desconhecida, volta ao glossário (Parte I.13).
+**Como ler:** podes saltar para a parte que precisas; se encontrares uma sigla desconhecida, volta ao glossário (Parte I.13). Para operar o sistema, usa [`INSTRUCOES.md`](INSTRUCOES.md).
 
-**Fontes:** ficheiros em deploy/relatorio_parts/ concatenados neste volume único.
+**Fontes:** volume único consolidado; partes I–XII redigidas em 2026; Apêndice D reflecte alterações até 16/08/2026.
 
 ---
 
@@ -1224,7 +1230,7 @@ Um *signed URL* é um endereço temporário que dá acesso a um ficheiro privado
 
 #### VM — Virtual Machine (máquina virtual)
 
-Uma **máquina virtual** é um computador simulado por software dentro de um computador físico. Tem o seu próprio sistema operativo, a sua própria memória atribuída, o seu próprio disco, e comporta-se como uma máquina independente — embora partilhe hardware com outras máquinas virtuais no mesmo anfitrião. É a tecnologia que sustenta praticamente toda a computação em nuvem: um fornecedor compra servidores grandes e aluga fatias deles. A Diomika usa uma máquina virtual pequena da camada sempre gratuita do fornecedor descrito na entrada sobre GCP, e é nela que corre o backend, junto com a cache e o programa do túnel, todos em contentores. A restrição de recursos dessa máquina é real e visível em decisões concretas: os trabalhadores de segundo plano correm **dentro** do processo da aplicação, controlado pela variável `RUN_EMBEDDED_WORKERS`, em vez de como serviços separados, precisamente para poupar memória. A criação está automatizada em `deploy/create_gcp_vm.py`, a publicação de versões em `deploy/deploy_vm.py`, e as considerações para o caso de o sistema crescer estão documentadas em `docs/SCALE.md`. Note-se a diferença face a um contentor: uma máquina virtual simula hardware e tem o seu próprio núcleo de sistema; um contentor partilha o núcleo do anfitrião e é muito mais leve. A Diomika usa as duas tecnologias em conjunto — contentores dentro de uma máquina virtual.
+Uma **máquina virtual** é um computador simulado por software dentro de um computador físico. Tem o seu próprio sistema operativo, a sua própria memória atribuída, o seu próprio disco, e comporta-se como uma máquina independente — embora partilhe hardware com outras máquinas virtuais no mesmo anfitrião. É a tecnologia que sustenta praticamente toda a computação em nuvem: um fornecedor compra servidores grandes e aluga fatias deles. A Diomika usa uma máquina virtual pequena da camada sempre gratuita do fornecedor descrito na entrada sobre GCP, e é nela que corre o backend, junto com a cache e o programa do túnel, todos em contentores. A restrição de recursos dessa máquina é real e visível em decisões concretas: os trabalhadores de segundo plano correm **dentro** do processo da aplicação, controlado pela variável `RUN_EMBEDDED_WORKERS`, em vez de como serviços separados, precisamente para poupar memória. A criação está automatizada em `deploy/create_gcp_vm.py`, a publicação de versões em `deploy/deploy_vm.py`, e as considerações para o caso de o sistema crescer estão documentadas em `docs/INSTRUCOES.md`. Note-se a diferença face a um contentor: uma máquina virtual simula hardware e tem o seu próprio núcleo de sistema; um contentor partilha o núcleo do anfitrião e é muito mais leve. A Diomika usa as duas tecnologias em conjunto — contentores dentro de uma máquina virtual.
 
 #### VPN — Virtual Private Network (vs. Tunnel)
 
@@ -1575,7 +1581,7 @@ O script guarda o endereço obtido no `.env` local como `REMOTE_VM_SSH`, para qu
 
 "Always Free" é uma quota permanente (não um período de avaliação): uma instância e2-micro numa região elegível, dentro de limites de tráfego de saída. Zero euros por mês, indefinidamente.
 
-**Porquê.** O objectivo declarado do projecto é custo total de zero excepto o domínio (`docs/FREE_STACK.md`). Isto tem valor humano, não só financeiro: um sistema que não gera factura mensal não morre porque alguém se esqueceu de renovar um cartão de crédito.
+**Porquê.** O objectivo declarado do projecto é custo total de zero excepto o domínio (`docs/INSTRUCOES.md`). Isto tem valor humano, não só financeiro: um sistema que não gera factura mensal não morre porque alguém se esqueceu de renovar um cartão de crédito.
 
 Mas a escassez molda todo o desenho, e vale a pena tornar explícita essa cadeia de consequências:
 
@@ -1587,7 +1593,7 @@ Mas a escassez molda todo o desenho, e vale a pena tornar explícita essa cadeia
 | Tráfego de saída contabilizado | As imagens são servidas pelo Supabase Storage ou pela Cloudflare R2, nunca pela máquina. |
 | Uma única máquina, uma única região | Latência maior para a Europa nas escritas — aceitável, porque as escritas são raras (formulários), e as leituras vêm do *edge*. |
 
-**Quando isto deixa de servir.** O documento `docs/SCALE.md` existe precisamente para esse dia. Os sinais: alertas frequentes de latência (`ALERT_LATENCY_MS`), `429 Demasiados pedidos` legítimos, memória esgotada. O caminho de saída está preparado — mais processos `uvicorn`, trabalhadores em containers próprios, uma máquina maior — e nenhuma dessas mudanças exige reescrever a aplicação.
+**Quando isto deixa de servir.** O documento `docs/INSTRUCOES.md` existe precisamente para esse dia. Os sinais: alertas frequentes de latência (`ALERT_LATENCY_MS`), `429 Demasiados pedidos` legítimos, memória esgotada. O caminho de saída está preparado — mais processos `uvicorn`, trabalhadores em containers próprios, uma máquina maior — e nenhuma dessas mudanças exige reescrever a aplicação.
 
 ---
 
@@ -1874,7 +1880,7 @@ Três contentores a partir da **mesma imagem**, distinguidos apenas pelo comando
 
 **Quando usar cada um.** Se o objectivo é custo zero e o tráfego é modesto, o caminho gratuito. Se o tráfego cresce, ou se se quiser eliminar a dependência da Cloudflare como intermediário obrigatório, ou se for preciso separar trabalhadores por razões de fiabilidade, então o VPS. Nesse cenário, é obrigatório acrescentar: um proxy inverso com TLS (por exemplo Caddy, que gera certificados automaticamente), uma *firewall* que não deixe a porta 8000 aberta ao mundo, e um Redis — porque `backend-api/core/config.py` recusa arrancar em produção final sem `REDIS_URL`.
 
-**Porque os dois ficheiros coexistem.** Um sistema com apenas um caminho de publicação está preso a esse caminho. Manter a alternativa documentada e sintaticamente válida significa que a migração é uma decisão de uma tarde, não um projecto de reescrita. O ficheiro `docs/SCALE.md` descreve esse percurso.
+**Porque os dois ficheiros coexistem.** Um sistema com apenas um caminho de publicação está preso a esse caminho. Manter a alternativa documentada e sintaticamente válida significa que a migração é uma decisão de uma tarde, não um projecto de reescrita. O ficheiro `docs/INSTRUCOES.md` descreve esse percurso.
 
 ---
 
@@ -3371,9 +3377,9 @@ Se houvesse que resumir estes três capítulos em princípios de engenharia, ser
 | Modelo de dados, sagas, idempotência, retenção, armazenamento | Parte VI — mesmo ficheiro |
 | Observabilidade, backoffice de secretária, publicação, decisões, perguntas frequentes | Partes VII a XII — `deploy/relatorio_parts/part_04_ops_decisoes.md` |
 | Fundamentos da web e glossário A–Z | Parte I — `deploy/relatorio_parts/part_01_fundamentos.md` |
-| Escalar para além da e2-micro | `docs/SCALE.md` |
-| Rotina de operação e incidentes | `docs/OPS.md` |
-| A pilha de custo zero em resumo | `docs/FREE_STACK.md` |
+| Escalar para além da e2-micro | `docs/INSTRUCOES.md` |
+| Rotina de operação e incidentes | `docs/INSTRUCOES.md` |
+| A pilha de custo zero em resumo | `docs/INSTRUCOES.md` |
 
 **Recordatório final de segurança:** nada neste documento é um segredo. Todos os nomes de variáveis aqui citados — `API_SECRET_KEY`, `SUPABASE_KEY`, `TURNSTILE_SECRET_KEY`, `CLOUDFLARE_TUNNEL_TOKEN`, `DIOMIKA_DESKTOP_GATE`, `MAIL_PASSWORD` — aparecem sem valor, e devem continuar assim. Os valores vivem no ficheiro `.env` da máquina e no painel da Cloudflare Pages, nunca no repositório, nunca num relatório, nunca numa mensagem.
 
@@ -6275,7 +6281,7 @@ O compromisso tem custos concretos que devem ser conhecidos:
   acesso ao backoffice exige incluir `backend-api/data/` no procedimento de cópia da máquina virtual
   (instantâneo de disco ou cópia explícita), guardada com o mesmo cuidado que um segredo.
 * **É estado local, por instância.** Se algum dia a API correr em duas máquinas, cada uma teria o seu
-  ficheiro e as contas divergiriam. É uma limitação reconhecida e documentada em `docs/SCALE.md`; a
+  ficheiro e as contas divergiriam. É uma limitação reconhecida e documentada em `docs/INSTRUCOES.md`; a
   evolução natural, nesse cenário, é migrar as credenciais para um armazenamento partilhado.
 * **A recuperação é manual** — é o procedimento de V.10.3.
 * **Nunca deve ser versionado** — o `.gitignore` (linhas 24-25) exclui `admin_users.json` e
@@ -6424,7 +6430,7 @@ Vale a pena entender **porquê** é sensível, mesmo sendo tecnicamente uma chav
 
 Repare-se no segmento `<regiao>` no formato do DSN. A região não é uma opção de configuração do nosso lado: é decidida **quando a organização é criada** no Sentry, e fica embutida no endereço de ingestão. Não se muda depois com uma variável de ambiente — mudar exigiria criar uma organização nova e substituir o DSN.
 
-Isto importa porque a Diomika trata a localização de dados como um critério consistente, e não caso a caso. Nos dois serviços onde a decisão está explicitamente registada no repositório, ela é europeia: o Axiom é uma organização **EU Central**, com ingestão em `eu-central-1.aws.edge.axiom.co` (`.env.example`, `deploy/env.free.example`, `docs/OPS.md`), e o PostHog usa a instância `eu.i.posthog.com` (`CookieBanner.vue`). O raciocínio é o mesmo nos dois casos: manter os dados dentro do Espaço Económico Europeu evita toda a discussão sobre transferência internacional de dados pessoais ao abrigo do RGPD, e é a escolha coerente para os erros da API pela mesma razão.
+Isto importa porque a Diomika trata a localização de dados como um critério consistente, e não caso a caso. Nos dois serviços onde a decisão está explicitamente registada no repositório, ela é europeia: o Axiom é uma organização **EU Central**, com ingestão em `eu-central-1.aws.edge.axiom.co` (`.env.example`, `deploy/env.free.example`, `docs/INSTRUCOES.md`), e o PostHog usa a instância `eu.i.posthog.com` (`CookieBanner.vue`). O raciocínio é o mesmo nos dois casos: manter os dados dentro do Espaço Económico Europeu evita toda a discussão sobre transferência internacional de dados pessoais ao abrigo do RGPD, e é a escolha coerente para os erros da API pela mesma razão.
 
 Dito isto, para o Sentry especificamente há um controlo que faz mais trabalho do que a região: o `send_default_pii=False` descrito abaixo. A região determina **onde** os dados ficam alojados; a minimização determina **que** dados chegam a sair do servidor. Um erro sem informação pessoal anexada é pouco sensível independentemente do continente onde é armazenado, e é por isso que a desactivação de PII é a decisão mais consequente das duas.
 
@@ -6562,7 +6568,7 @@ E os comentários imediatamente acima documentam ambos os formatos, para que nin
 # US legacy: https://api.axiom.co/v1/datasets/{dataset}/ingest
 ```
 
-A configuração em produção é `AXIOM_API_URL=https://eu-central-1.aws.edge.axiom.co`, como se vê em `.env.example`, `deploy/env.free.example` e `docs/OPS.md`. A decisão de detectar por *substring* do domínio em vez de exigir uma variável extra do género `AXIOM_MODE=edge` é intencional: reduz a configuração que um operador tem de acertar. Quem cola o endereço da edge no `.env` obtém o comportamento correcto sem saber que existe uma bifurcação.
+A configuração em produção é `AXIOM_API_URL=https://eu-central-1.aws.edge.axiom.co`, como se vê em `.env.example`, `deploy/env.free.example` e `docs/INSTRUCOES.md`. A decisão de detectar por *substring* do domínio em vez de exigir uma variável extra do género `AXIOM_MODE=edge` é intencional: reduz a configuração que um operador tem de acertar. Quem cola o endereço da edge no `.env` obtém o comportamento correcto sem saber que existe uma bifurcação.
 
 ### Protecção contra falsificação de pedidos do lado do servidor
 
@@ -6594,7 +6600,7 @@ const posthogHost = import.meta.env.VITE_POSTHOG_HOST || 'https://eu.i.posthog.c
 
 `eu.i.posthog.com` é a instância europeia. A escolha da região não é configuração acidental — é a mesma decisão de RGPD do Axiom, aplicada a dados mais sensíveis, porque analítica de comportamento envolve identificadores de visitante e é matéria de tratamento de dados pessoais.
 
-Vale registar que houve uma escolha entre alternativas, documentada em `docs/APRESENTACAO_CLIENTE.md`. O Plausible foi considerado e **rejeitado**, e o mesmo documento lista o que foi "removido de propósito (era pior/duplicado): Plausible, pageviews first-party `/metrics/hit`, Grafana na VM". O Plausible é mais simples e mais leve, e por isso mesmo insuficiente: não faz funis nem análise de percursos. Havia também uma implementação caseira de contagem de visitas num endpoint próprio, que foi eliminada — manter código próprio para resolver um problema que um plano gratuito resolve melhor é custo permanente de manutenção sem benefício.
+Vale registar que houve uma escolha entre alternativas, documentada em `docs/INSTRUCOES.md`. O Plausible foi considerado e **rejeitado**, e o mesmo documento lista o que foi "removido de propósito (era pior/duplicado): Plausible, pageviews first-party `/metrics/hit`, Grafana na VM". O Plausible é mais simples e mais leve, e por isso mesmo insuficiente: não faz funis nem análise de percursos. Havia também uma implementação caseira de contagem de visitas num endpoint próprio, que foi eliminada — manter código próprio para resolver um problema que um plano gratuito resolve melhor é custo permanente de manutenção sem benefício.
 
 ### Consentimento: a parte legal e a parte técnica, feitas a sério
 
@@ -6635,7 +6641,7 @@ As opções de inicialização são `persistence: 'localStorage'`, `autocapture:
 
 Ao contrário do `SENTRY_DSN`, a chave do PostHog **é embutida no código que corre no browser**. O prefixo `VITE_` no nome (`VITE_POSTHOG_KEY`) indica isso mesmo: no Vite (a ferramenta que constrói a loja), só variáveis com esse prefixo são incluídas no resultado final, precisamente para tornar essa fronteira explícita e evitar que alguém injecte um segredo de servidor por distracção.
 
-Consequência operacional relevante: como a chave é embutida na **construção** (*build*), mudá-la exige **reconstruir e voltar a publicar** a loja no Cloudflare Pages. Não é uma variável de ambiente do servidor que se altera e reinicia — é uma constante compilada no ficheiro JavaScript. Está documentado como tal em `docs/OPS.md`, sob "analytics loja (Pages)".
+Consequência operacional relevante: como a chave é embutida na **construção** (*build*), mudá-la exige **reconstruir e voltar a publicar** a loja no Cloudflare Pages. Não é uma variável de ambiente do servidor que se altera e reinicia — é uma constante compilada no ficheiro JavaScript. Está documentado como tal em `docs/INSTRUCOES.md`, sob "analytics loja (Pages)".
 
 Essa fronteira é activamente verificada. O programa `deploy/verify_bundle_secrets.py` mantém uma lista `ALLOWED_PUBLIC` onde `VITE_POSTHOG_KEY` e `VITE_POSTHOG_HOST` constam como aceitáveis no resultado da construção, e uma lista `FORBIDDEN_PATTERNS` com o que nunca pode aparecer — `service_role`, `SUPABASE_KEY`, `API_SECRET_KEY`, `MAIL_PASSWORD`, `TURNSTILE_SECRET`, `SUPABASE_DB_PASSWORD` e senhas de IMAP (*Internet Message Access Protocol*, o protocolo de leitura de correio electrónico). Ver Parte IX.4.
 
@@ -8015,7 +8021,7 @@ Está desligado porque impõe um requisito ao utilizador final: instalar uma apl
 
 `backend-api/utils/storage_r2.py` implementa o carregamento e a geração de endereços assinados contra o R2, o serviço de armazenamento de objectos do Cloudflare compatível com a interface S3. Activa-se com `STORAGE_BACKEND=r2` e as variáveis `R2_*`. Usa `boto3` com assinatura `s3v4` contra `https://<conta>.r2.cloudflarestorage.com`.
 
-Está desactivado porque o armazenamento do Supabase é suficiente para o volume actual, e o R2 acrescentaria uma conta e um conjunto de credenciais para gerir. O ganho seria distribuição de imagens por rede de conteúdo — relevante com muito tráfego, irrelevante hoje. `docs/OPS.md` documenta-o como *"opcional; se preenchido + keys → imagens em R2"*, e `docs/SCALE.md` como *"Storage auto-R2 se `R2_*` existirem"*.
+Está desactivado porque o armazenamento do Supabase é suficiente para o volume actual, e o R2 acrescentaria uma conta e um conjunto de credenciais para gerir. O ganho seria distribuição de imagens por rede de conteúdo — relevante com muito tráfego, irrelevante hoje. `docs/INSTRUCOES.md` documenta-o como *"opcional; se preenchido + keys → imagens em R2"*, e `docs/INSTRUCOES.md` como *"Storage auto-R2 se `R2_*` existirem"*.
 
 **Assinatura de código — não feita.**
 
@@ -8023,7 +8029,7 @@ Discutida em detalhe na Parte VIII.5. Decisão económica, com consequência con
 
 ### O comando único de verificação
 
-`docs/OPS.md` resume a operação a uma linha:
+`docs/INSTRUCOES.md` resume a operação a uma linha:
 
 ```powershell
 python deploy/verify_production.py
@@ -8362,7 +8368,7 @@ Precisa-se de erros, logs, analítica de produto, uptime e alertas. Há três fo
 
 ### A decisão
 
-A terceira via, e a lista está registada em `docs/APRESENTACAO_CLIENTE.md` com a justificação de cada escolha:
+A terceira via, e a lista está registada em `docs/INSTRUCOES.md` com a justificação de cada escolha:
 
 | Função | Ferramenta | Porque esta |
 |---|---|---|
@@ -8390,7 +8396,7 @@ Há também um efeito de composição interessante: os alertas escrevem no log d
 
 ### O que faria mudar
 
-Crescimento que esgotasse as quotas gratuitas, ou uma operação com pessoas de plantão a exigir correlação rápida durante incidentes. `docs/SCALE.md` já aponta o primeiro passo nessa direcção: um alerta de orçamento na Google Cloud entre 1 e 5 dólares, para detectar crescimento de custo antes de ele surpreender.
+Crescimento que esgotasse as quotas gratuitas, ou uma operação com pessoas de plantão a exigir correlação rápida durante incidentes. `docs/INSTRUCOES.md` já aponta o primeiro passo nessa direcção: um alerta de orçamento na Google Cloud entre 1 e 5 dólares, para detectar crescimento de custo antes de ele surpreender.
 
 ## X.8 Arquitectura orientada ao esquema
 
@@ -8426,7 +8432,7 @@ Existe ainda `POST /system/schema/sync?dry_run=true`, que mostra o que seria alt
 
 ### O objectivo
 
-Está declarado em vários documentos, incluindo `docs/FREE_STACK.md`: *"Único gasto: domínio `diomika.com`."* Infra-estrutura recorrente de zero euros por mês.
+Está declarado em vários documentos, incluindo `docs/INSTRUCOES.md`: *"Único gasto: domínio `diomika.com`."* Infra-estrutura recorrente de zero euros por mês.
 
 ### Como se consegue
 
@@ -8460,7 +8466,7 @@ Cinco serviços gratuitos em vez de uma plataforma paga forçou a que cada integ
 
 **Nenhum acordo de nível de serviço.** Nenhum destes fornecedores garante nada para um plano gratuito. Não há a quem recorrer numa interrupção.
 
-**Quotas que podem ser atingidas.** Especialmente na observabilidade. `docs/SCALE.md` reconhece isto e prescreve o alerta de orçamento como primeiro sinal.
+**Quotas que podem ser atingidas.** Especialmente na observabilidade. `docs/INSTRUCOES.md` reconhece isto e prescreve o alerta de orçamento como primeiro sinal.
 
 **Capacidade limitada.** Uma `e2-micro` tem um tecto real, registado em `RELATORIO_TECNICO.md` §12.
 
@@ -8468,7 +8474,7 @@ Cinco serviços gratuitos em vez de uma plataforma paga forçou a que cada integ
 
 ### O caminho de saída, já documentado
 
-`docs/SCALE.md` é curto e útil precisamente por isso:
+`docs/INSTRUCOES.md` é curto e útil precisamente por isso:
 
 1. Alerta de orçamento na Google Cloud entre 1 e 5 dólares — detecção precoce.
 2. Mais trabalhadores, ou upgrade do Supabase, se o processador da base de dados estiver alto.
@@ -8506,7 +8512,7 @@ Esta secção existe porque um relatório técnico que só descreve o que funcio
 
 **Exemplo concreto e documentado.** A interface do UptimeRobot mudou o caminho de criação de monitores de `/create` para `/new/http`, invalidando um procedimento escrito.
 
-**O que mitiga.** Cada integração é opcional: remover uma variável de ambiente desactiva a peça sem afectar o resto. Nenhum dado de negócio vive exclusivamente num serviço de observabilidade — a fonte de verdade é o PostgreSQL. `docs/SCALE.md` prescreve o alerta de orçamento como detector precoce.
+**O que mitiga.** Cada integração é opcional: remover uma variável de ambiente desactiva a peça sem afectar o resto. Nenhum dado de negócio vive exclusivamente num serviço de observabilidade — a fonte de verdade é o PostgreSQL. `docs/INSTRUCOES.md` prescreve o alerta de orçamento como detector precoce.
 
 **O que faria mudar.** Esgotar quotas, ou uma mudança de condições que torne um serviço inviável. A resposta seria migrar essa peça, não a arquitectura.
 
@@ -8524,7 +8530,7 @@ Esta secção existe porque um relatório técnico que só descreve o que funcio
 
 **O que mitiga.** Ficheiro de swap de 2 gigabytes criado pelo `deploy_vm.py`; Redis sem persistência; cache de 30 segundos na contagem de pendentes; prazos curtos em todas as chamadas externas; envio de logs em lote; alerta de latência a 2 segundos como sinal precoce; `load_test.py` para medir antes de doer.
 
-**O que faria mudar.** Um percentil 95 consistentemente acima do limiar de latência, ou alertas de latência frequentes. `docs/SCALE.md` tem o caminho.
+**O que faria mudar.** Um percentil 95 consistentemente acima do limiar de latência, ou alertas de latência frequentes. `docs/INSTRUCOES.md` tem o caminho.
 
 ## XI.6 Segundo factor implementado e desligado
 
@@ -8556,7 +8562,7 @@ Esta secção existe porque um relatório técnico que só descreve o que funcio
 
 **A limitação transversal.** Todos os procedimentos assumem uma pessoa com acesso ao `.env`, ao SSH da máquina, ao GitHub e às contas dos fornecedores. Não há rotação de plantão, nem revisão por segunda pessoa, nem separação de funções.
 
-**O que mitiga.** Automação que reduz passos manuais (`deploy_vm.py`, `verify_production.py`, um comando por operação); documentação escrita (`OPS.md`, `FREE_STACK.md`, `SCALE.md`, este relatório); e verificações que não dependem de memória humana (integração contínua, `pre-commit`, gitleaks).
+**O que mitiga.** Automação que reduz passos manuais (`deploy_vm.py`, `verify_production.py`, um comando por operação); documentação escrita ([`INSTRUCOES.md`](INSTRUCOES.md), este relatório); e verificações que não dependem de memória humana (integração contínua, `pre-commit`, gitleaks).
 
 **O que faria mudar.** Uma segunda pessoa envolvida na operação exigiria gestão de segredos partilhados e registo de auditoria mais formal.
 
@@ -8599,7 +8605,7 @@ diomika/
 
 A tentação natural é abrir ficheiros ao acaso. Não funciona bem neste código, porque a lógica interessante está nas camadas transversais e não nas rotas. A ordem abaixo constrói entendimento em camadas.
 
-**Nível 1 — Orientação (30 minutos).** `README.md` na raiz, `docs/APRESENTACAO_CLIENTE.md` (a visão de negócio), `docs/FREE_STACK.md` (a topologia num diagrama), e `docs/RELATORIO_TECNICO.md` (o mapa completo). Nada de código ainda.
+**Nível 1 — Orientação (30 minutos).** `README.md` na raiz, [`INSTRUCOES.md`](INSTRUCOES.md) (ligar e operar), e [`RELATORIO_TECNICO.md`](RELATORIO_TECNICO.md) (mapa pedagógico completo). Nada de código ainda.
 
 **Nível 2 — O ponto de entrada (1 hora).** `backend-api/main.py`, do princípio ao fim. É o índice de toda a API: a configuração de logging, o arranque do rastreio de erros, a ordem dos middlewares com o comentário sobre a inversão do Starlette, os routers incluídos, o manipulador global de excepções, e as três rotas de saúde. Depois `backend-api/core/config.py`, para ver como a configuração é lida e validada no arranque.
 
@@ -8907,9 +8913,11 @@ A tentação natural é abrir ficheiros ao acaso. Não funciona bem neste códig
 | `verify_bundle_secrets.py` | Analisa a construção da loja à procura de segredos |
 | `uptime_check.py` | Verificação de saúde e prontidão |
 | `load_test.py` | Percentis 50 e 95, falha acima de 5% de erro |
+| `monitor_check.py` | Check API+loja; `--alert` envia ntfy |
+| `fetch_backoffice_release.py` | Descarrega instaladores do GitHub Release |
 | `cloudflare/waf_rules.json` | Modelo das regras de firewall |
 | `env.free.example` | Modelo de produção com comentários operacionais |
-| `OPS.md` / `FREE_STACK.md` / `SCALE.md` / `APRESENTACAO_CLIENTE.md` | Manuais e decisões |
+| [`INSTRUCOES.md`](INSTRUCOES.md) | Operação do dia-a-dia (único guia prático) |
 
 ## Automação (`.github/`)
 
@@ -8917,7 +8925,7 @@ A tentação natural é abrir ficheiros ao acaso. Não funciona bem neste códig
 |---|---|
 | `workflows/ci.yml` | Portão de segurança e testes: pip-audit, gitleaks, pytest, construção, Playwright |
 | `workflows/backoffice-release.yml` | Matriz de três sistemas operativos com o segredo do portão |
-| `workflows/uptime.yml` | Verificação secundária a cada 15 minutos |
+| `workflows/uptime.yml` | Verificação a cada **5 min** (`monitor_check.py --alert`) |
 | `dependabot.yml` | Actualizações de dependências |
 
 ## Configuração na raiz
@@ -9033,11 +9041,11 @@ Zero euros por mês de infra-estrutura recorrente. O único custo é o domínio 
 
 **25. O que acontece se um destes serviços gratuitos desaparecer ou passar a ser pago?**
 
-Depende de qual. Para as cinco ferramentas de monitorização, o impacto é limitado por desenho: cada uma está ligada a uma variável de ambiente e, se essa variável desaparecer, a integração desliga-se sozinha e o sistema continua a funcionar exactamente igual, apenas mais cego. Nenhum dado de negócio vive num serviço de observabilidade — a fonte de verdade é a base de dados. Para o Cloudflare ou o Supabase, o impacto seria estrutural e exigiria migração planeada. `docs/SCALE.md` prescreve, como primeiro sinal de alerta, um limite de orçamento na Google Cloud entre 1 e 5 dólares — para detectar crescimento de custo antes de ele surpreender.
+Depende de qual. Para as cinco ferramentas de monitorização, o impacto é limitado por desenho: cada uma está ligada a uma variável de ambiente e, se essa variável desaparecer, a integração desliga-se sozinha e o sistema continua a funcionar exactamente igual, apenas mais cego. Nenhum dado de negócio vive num serviço de observabilidade — a fonte de verdade é a base de dados. Para o Cloudflare ou o Supabase, o impacto seria estrutural e exigiria migração planeada. `docs/INSTRUCOES.md` prescreve, como primeiro sinal de alerta, um limite de orçamento na Google Cloud entre 1 e 5 dólares — para detectar crescimento de custo antes de ele surpreender.
 
 **26. O sistema aguenta muito tráfego?**
 
-Tem um tecto conhecido e reconhecido. A máquina virtual é da categoria mais pequena disponível, e partilha recursos entre a API, o Redis e os trabalhadores de fundo. Há várias medidas para esticar essa capacidade: um ficheiro de troca de 2 gigabytes para a memória não esgotar durante construções, cache nas contagens mais caras, prazos curtos em todas as chamadas externas, envio de logs em lote, Redis sem escrita em disco, e um alerta que avisa quando um pedido demora mais de 2 segundos. Existe também um programa (`load_test.py`) que mede a latência sob carga e falha se mais de 5% dos pedidos falharem — para se saber o número antes de haver um problema. O caminho de crescimento está escrito em `docs/SCALE.md`.
+Tem um tecto conhecido e reconhecido. A máquina virtual é da categoria mais pequena disponível, e partilha recursos entre a API, o Redis e os trabalhadores de fundo. Há várias medidas para esticar essa capacidade: um ficheiro de troca de 2 gigabytes para a memória não esgotar durante construções, cache nas contagens mais caras, prazos curtos em todas as chamadas externas, envio de logs em lote, Redis sem escrita em disco, e um alerta que avisa quando um pedido demora mais de 2 segundos. Existe também um programa (`load_test.py`) que mede a latência sob carga e falha se mais de 5% dos pedidos falharem — para se saber o número antes de haver um problema. O caminho de crescimento está escrito em `docs/INSTRUCOES.md`.
 
 **27. Onde estão as passwords guardadas?**
 
@@ -9053,11 +9061,160 @@ Porque os utilizadores administrativos são poucos, conhecidos, e não se regist
 
 **30. Como é que sei que o sistema está a funcionar bem, agora?**
 
-Três formas, de diferentes profundidades. A mais rápida: abrir `https://api.diomika.com/health` num browser e ver `{"status": "online", ...}`. A mais completa: correr `python deploy/verify_production.py`, que testa disponibilidade, prontidão, funcionalidade, segurança, carga e os fluxos ponta a ponta, num comando. E a passiva: se algo estiver mal, o UptimeRobot envia um correio electrónico em até 5 minutos, e os alertas do sistema chegam por notificação — o que significa que a ausência de notícias é, ela própria, uma informação.
+Três formas, de diferentes profundidades. A mais rápida: abrir `https://api.diomika.com/health` ou `https://www.diomika.com/status.html`. A mais completa: correr `python deploy/verify_production.py`. A passiva: UptimeRobot + GitHub Actions (cada **5 min** via `monitor_check.py`) + alertas ntfy se `ALERT_WEBHOOK_URL` estiver configurado. Ver [`INSTRUCOES.md`](INSTRUCOES.md) §5–6.
 
 **31. Se eu quiser entender o código, por onde começo?**
 
-A Parte XII tem uma ordem de leitura em oito níveis, mas o resumo é: começar pelos documentos (`README.md` e `docs/APRESENTACAO_CLIENTE.md`), depois `backend-api/main.py`, que é o índice de toda a API, e depois os ficheiros de segurança pela ordem indicada — `local_only.py`, `path_guard.py`, `middleware.py`, `auth.py`. Duas notas úteis: os ficheiros mais curtos são os mais importantes (`local_only.py` tem 55 linhas e é o pilar de todo o modelo de acesso), e vale a pena ler os comentários, porque vários documentam avarias reais e a razão de decisões que parecem estranhas à primeira vista.
+A Parte XII tem uma ordem de leitura em oito níveis. Resumo: [`INSTRUCOES.md`](INSTRUCOES.md) (operar), depois `backend-api/main.py`, depois `local_only.py`, `path_guard.py`, `middleware.py`, `auth.py`. Os ficheiros mais curtos são frequentemente os mais importantes.
+
+---
+
+## Apêndice D — Registo de actualizações (Agosto 2026)
+
+**Data de consolidação:** 16 de Agosto de 2026  
+**Estado verificado:** `python deploy/verify_production.py` → VERIFY OK
+
+Este apêndice **prevalece** sobre secções anteriores do relatório que mencionem sessão de 15 minutos, uptime CI de 15 minutos, ou documentos que deixaram de existir como ficheiros separados.
+
+### D.1 Produção actual
+
+| Componente | URL / local | Notas |
+|---|---|---|
+| API | `https://api.diomika.com` | v2.3.0, Docker na GCP e2-micro |
+| Loja | `https://www.diomika.com` | Cloudflare Pages |
+| Estado público | `https://www.diomika.com/status.html` | Auto-refresh 60s |
+| Supabase | projecto `ptvzctrutihcfknowbam` | Migração `material → composicao` aplicada |
+| Backoffice | `cliente-backoffice/` | Release GitHub `backoffice-cliente-latest` |
+| Monitor Hub | `monitor-hub/` (local) | Aba «Estado & Alertas» + painéis SaaS |
+
+**Cabeçalhos HTTP da API:** os cabeçalhos de **resposta** (`Strict-Transport-Security`, `Content-Security-Policy`, `X-Frame-Options`, etc.) são protecções públicas — não são segredos. Implementação: `backend-api/core/middleware.py`. Correctamente **não** expostos: tokens, OpenAPI, stack traces, `/api/docs`.
+
+### D.2 Catálogo e loja
+
+- **7 categorias** com modelos de teste (`[TESTE]`) e logo.
+- **URLs por slug** na loja (rotas legíveis por categoria/modelo).
+- **Composição unificada:** campo `composicao` (JSON) em almofadas; migração SQL `migration_material_to_composicao.sql` aplicada em produção.
+- **Labels** Decorativa / Dormir nos tipos de almofada.
+- **Assentos multi-altura:** alturas no modelo (`modelos_assentos.alturas` JSON).
+- **Performance admin/API:** cache de contagens, índices, queries optimizadas na listagem.
+
+### D.3 Sessão administrativa (política actual)
+
+Ficheiro: `backend-api/core/session_tokens.py`
+
+| Parâmetro | Valor por omissão | Env |
+|---|---|---|
+| TTL absoluto | **30 dias** (43200 min) | `ADMIN_SESSION_TTL_MINUTES` |
+| Idle timeout | **Desactivado** (0) | `ADMIN_SESSION_IDLE_MINUTES` (vazio = off) |
+| Sessões activas | Uma por utilizador | Redis multi-worker |
+| Revogação | Por logout / nova sessão | chaves `diomika:sess:*` |
+
+Secções anteriores que descrevam 10–15 minutos reflectem a política **antiga**.
+
+### D.4 Backoffice cliente e releases
+
+- Instaladores Win / Mac / Linux via GitHub Actions (`backoffice-release.yml`).
+- Release pública `backoffice-cliente-latest`; script `deploy/fetch_backoffice_release.py` copia para `cliente-backoffice/` e `Desktop/cliente-backoffice/`.
+- **Assinatura EV:** pendente (custo externo) — SmartScreen / Gatekeeper mostram aviso até certificado.
+- `admin_users.json` na VM: scrypt, permissões 600, backup rotativo; **persiste** entre deploys.
+
+### D.5 Monitorização integrada (Agosto 2026)
+
+| Peça | Ficheiro | Função |
+|---|---|---|
+| Check unificado | `deploy/monitor_check.py` | API + loja; `--alert` → ntfy |
+| CI uptime | `.github/workflows/uptime.yml` | Cada **5 min** |
+| Painel hub | `monitor-hub/ui/panel-status.html` | API, loja, BD, `deploy/alerts.log`, stream ntfy |
+| Config hub | `monitor-hub/config.local.json` | `ntfyTopicJsonUrl` (copiar de `.example`) |
+| Meta API | `backend-api/core/public_meta.py` | `GET /`, `/robots.txt`, `/.well-known/security.txt` |
+| Meta loja | `frontend-web/public/.well-known/security.txt` | Contacto segurança |
+| Latência | `LatencyAlertMiddleware` | Webhook se pedido > `ALERT_LATENCY_MS` |
+
+**Stack observabilidade (sem duplicados):** Sentry (erros), Axiom EU (logs), PostHog EU (analytics pós-consentimento), UptimeRobot (uptime email), ntfy (alertas push). Removidos de propósito: Plausible, Grafana na VM, pageviews `/metrics/hit`.
+
+Operação diária: [`INSTRUCOES.md`](INSTRUCOES.md) §5–8.
+
+### D.6 Deploy e verificação
+
+```powershell
+python deploy/deploy_vm.py
+python deploy/deploy_pages.py --build --pages-deploy --api-url https://api.diomika.com
+python deploy/verify_production.py
+python deploy/monitor_check.py --alert
+python deploy/security_test.py
+```
+
+Testes novos/actualizados: `backend-api/tests/test_meta_routes.py`, `deploy/security_test.py` (meta routes), `frontend-web/e2e/critical.spec.js`.
+
+### D.7 Documentação consolidada
+
+A partir de Agosto 2026 existem **dois** documentos em `docs/`:
+
+| Ficheiro | Uso |
+|---|---|
+| [`INSTRUCOES.md`](INSTRUCOES.md) | Ligar, deploy, hub, incidentes, escala |
+| [`RELATORIO_TECNICO.md`](RELATORIO_TECNICO.md) | Manual pedagógico completo (este ficheiro) |
+
+Ficheiros absorvidos e removidos: `relatorio.md`, `MONITORIZACAO.md`, `OPS.md`, `FREE_STACK.md`, `SCALE.md`, `APRESENTACAO_CLIENTE.md`, `BD_COMERCIAL.md`, `docs/README.md`.
+
+### D.8 Pendente (acção manual)
+
+1. GitHub secret `ALERT_WEBHOOK_URL` (mesmo ntfy do `.env`)
+2. GitHub secret `SITE_URL` (opcional, default `https://www.diomika.com`)
+3. Certificado EV para assinar instaladores backoffice
+4. Restore drill Supabase — próximo: **2026-11-01** (calendário trimestral)
+
+---
+
+## Apêndice E — Base de dados comercial
+
+Modelo de **negócio** (catálogo + pedidos + contacto). Não inclui tabelas de infra (`outbox_events`, `saga_instances`, `idempotency_keys`).
+
+Fonte: `backend-api/models/schemas.py` (`CATALOG_TYPES` + `TABLE_MAP`).
+
+### E.1 Diagrama entidade–relação
+
+```mermaid
+erDiagram
+    categories ||--o{ modelos_almofadas : "tem modelos"
+    categories ||--o{ modelos_assentos : "tem modelos"
+    modelos_almofadas ||--o{ modelo_cores : "cores do modelo"
+    modelos_almofadas ||--o{ almofada : "tamanhos/EAN"
+    modelos_assentos ||--o{ modelo_cores : "cores do modelo"
+    modelos_assentos ||--o{ assento : "um EAN por modelo"
+    pedidos_orcamento ||--|{ pedido_linhas : "pedido no site"
+    encomendas_internas ||--|{ encomenda_linhas : "criada no backoffice"
+```
+
+> `pedido_linhas` / `encomenda_linhas` = conteúdo JSON `linhas` (EAN + cor + quantidade [+ altura]), não tabelas físicas.
+
+### E.2 Regras formais
+
+| Regra | Detalhe |
+|---|---|
+| Categoria | Só em `categories` e modelos (`id_categoria`). Produtos não têm categoria directa. |
+| Cor | Só em `modelo_cores` com `id_modelo` obrigatório. Sem `paletas_cores`. |
+| Orçamento | `pedidos_orcamento` — pedido no **site**. |
+| Encomenda | `encomendas_internas` — criada no **backoffice**. |
+| Composição | JSON `composicao` em `modelos_almofadas` (substituiu `material`). |
+
+### E.3 Famílias de catálogo
+
+| tipo_catalogo | Tabela modelo | Tabela produto |
+|---|---|---|
+| `almofada` | `modelos_almofadas` | `almofada` (variantes por dimensões) |
+| `assento` | `modelos_assentos` | `assento` (alturas no modelo) |
+
+Nova família: editar `CATALOG_TYPES` + `CATEGORY_DEFINITIONS` em `schemas.py`.
+
+### E.4 Leitura comercial
+
+1. **Categoria** — regras carrinho (múltiplos de 6 ou 12).
+2. **Modelo** — família; `id_categoria` vive aqui.
+3. **Cor** — por modelo; estampados iguais = duplicar por modelo.
+4. **Produto** — EAN-13; assento escolhe cor/altura no pedido.
+5. **Orçamento** (site) vs **encomenda** (backoffice) — fluxos distintos.
+6. Mínimo visível na loja: **500€ + IVA** (`MIN_ORCAMENTO_TEXTO`); preços sob consulta.
 
 
 ---

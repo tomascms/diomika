@@ -10,6 +10,28 @@ export const supabase = supabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null
 
+/** Subscreve Realtime sem derrubar a UI se WebSocket falhar. */
+export function subscribeRealtime(channel) {
+  if (!channel) return null
+  if (typeof WebSocket === 'undefined') {
+    console.warn('[Diomika] Realtime indisponível: WebSocket não suportado')
+    return null
+  }
+  try {
+    channel.subscribe((status, err) => {
+      if (status === 'SUBSCRIBED') {
+        console.debug('[Diomika] Realtime ligado:', channel.topic)
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn('[Diomika] Realtime indisponível:', err?.message || status, err?.cause || '')
+      }
+    })
+    return channel
+  } catch (err) {
+    console.warn('[Diomika] Realtime indisponível:', err?.message || err)
+    return null
+  }
+}
+
 function normalizeStorageUrl(url) {
   if (!url || !/^https?:\/\//i.test(url)) return url
 

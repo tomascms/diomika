@@ -75,7 +75,7 @@ def catalogue_models(q: CatalogueModelsQuery):
 
     if model_ids:
         cores = (
-            db.table("modelo_cores")
+            db.table("modelo_almofada_cores")
             .select("id_modelo, numero, nome, imagem, visibilidade")
             .in_("id_modelo", model_ids)
             .execute()
@@ -113,7 +113,7 @@ def model_detail(id_modelo: str):
     if not is_visible(data):
         return None
     cores = (
-        db.table("modelo_cores")
+        db.table("modelo_almofada_cores")
         .select("*")
         .eq("id_modelo", id_modelo)
         .execute()

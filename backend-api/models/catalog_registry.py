@@ -9,13 +9,22 @@ from typing import Type
 
 from pydantic import BaseModel
 
-from models.schemas import CATALOG_TYPES, TIPO_CATALOGO_LABELS
+from models.schemas import (
+    CATALOG_TYPES,
+    TIPO_CATALOGO_LABELS,
+    aggregated_tipos_for_tipo,
+    is_registered_tipo,
+)
 
 CATALOGO_TIPOS = CATALOG_TYPES
 
 
 def is_valid_tipo(tipo: str | None) -> bool:
     return bool(tipo and tipo in CATALOG_TYPES)
+
+
+def is_valid_storefront_tipo(tipo: str | None) -> bool:
+    return is_registered_tipo(tipo)
 
 
 def tipo_label(tipo: str | None) -> str:
@@ -36,6 +45,31 @@ def product_table_for_tipo(tipo: str | None) -> str | None:
     return CATALOG_TYPES[tipo]["product_table"]
 
 
+def colors_table_for_tipo(tipo: str | None) -> str | None:
+    if not is_valid_tipo(tipo):
+        return None
+    return CATALOG_TYPES[tipo].get("colors_table")
+
+
+def colors_schema_for_tipo(tipo: str | None) -> Type[BaseModel] | None:
+    if not is_valid_tipo(tipo):
+        return None
+    return CATALOG_TYPES[tipo].get("colors_schema")
+
+
+def all_colors_tables() -> list[str]:
+    return [cfg["colors_table"] for cfg in CATALOG_TYPES.values() if cfg.get("colors_table")]
+
+
+def colors_table_for_model_table(model_table: str | None) -> str | None:
+    if not model_table:
+        return None
+    for cfg in CATALOG_TYPES.values():
+        if cfg["model_table"] == model_table:
+            return cfg.get("colors_table")
+    return None
+
+
 def model_schema_for_tipo(tipo: str | None) -> Type[BaseModel] | None:
     if not is_valid_tipo(tipo):
         return None
@@ -52,7 +86,8 @@ def tipo_for_table(ptable: str | None) -> str | None:
     if not ptable:
         return None
     for tipo, cfg in CATALOG_TYPES.items():
-        if ptable in (cfg["model_table"], cfg["product_table"]):
+        tables = (cfg["model_table"], cfg["product_table"], cfg.get("colors_table"))
+        if ptable in tables:
             return tipo
     return None
 
@@ -70,6 +105,8 @@ def all_catalog_tables() -> list[str]:
     for cfg in CATALOG_TYPES.values():
         out.append(cfg["model_table"])
         out.append(cfg["product_table"])
+        if cfg.get("colors_table"):
+            out.append(cfg["colors_table"])
     return out
 
 
@@ -117,7 +154,8 @@ def list_select_query(table: str) -> str:
         disc = cfg.get("model_discriminator_field")
         if disc:
             model_fields.append(disc)
-        return f"*, {mt}({', '.join(model_fields)}), categories(nome)"
+        # Categoria via modelo — produtos não têm FK directo para categories
+        return f"*, {mt}({', '.join(model_fields)})"
     if table == mt:
         return "*, categories(nome)"
     return "*"
@@ -147,6 +185,22 @@ def embedded_model_keys(item: dict) -> list[str]:
     return [cfg["model_table"] for cfg in CATALOG_TYPES.values() if item.get(cfg["model_table"]) is not None]
 
 
+def aggregated_family_filter(tipo: str | None) -> dict | None:
+    tipos = aggregated_tipos_for_tipo(tipo)
+    if not tipos:
+        return None
+    return {
+        "field": "_tipo_catalogo",
+        "label": "Família",
+        "options": tipos,
+        "labels": {
+            t: CATALOG_TYPES[t]["label"]
+            for t in tipos
+            if t in CATALOG_TYPES
+        },
+    }
+
+
 def storefront_filters_for_model_tipo(tipo: str | None) -> list[dict]:
     if not is_valid_tipo(tipo):
         return []
@@ -156,6 +210,13 @@ def storefront_filters_for_model_tipo(tipo: str | None) -> list[dict]:
     from models.storefront_meta import storefront_filters_for_model
 
     return storefront_filters_for_model(cfg["model_schema"])
+
+
+def storefront_filters_for_category_tipo(tipo: str | None) -> list[dict]:
+    agg = aggregated_family_filter(tipo)
+    if agg:
+        return [agg]
+    return storefront_filters_for_model_tipo(tipo)
 
 
 def catalog_metadata() -> dict:
@@ -172,6 +233,7 @@ def catalog_metadata() -> dict:
                 "label": cfg.get("label") or key,
                 "model_table": cfg["model_table"],
                 "product_table": cfg["product_table"],
+                "colors_table": cfg.get("colors_table"),
                 "storefront_mode": ctx["mode"],
                 "storefront_filters": storefront_filters_for_model_tipo(key),
                 "storefront_picker": ctx["picker"],
@@ -181,7 +243,23 @@ def catalog_metadata() -> dict:
             }
         )
 
+    aggregated = []
+    for _slug, definition in CATEGORY_DEFINITIONS.items():
+        virtual = definition.get("tipo_catalogo")
+        if virtual and aggregated_tipos_for_tipo(virtual):
+            fam = aggregated_family_filter(virtual)
+            aggregated.append(
+                {
+                    "tipo": virtual,
+                    "label": definition.get("nome") or virtual,
+                    "aggregated_tipos": list(definition["aggregated_tipos"]),
+                    "storefront_mode": "aggregado",
+                    "storefront_filters": [fam] if fam else [],
+                }
+            )
+
     return {
         "catalog_types": tipos,
+        "aggregated_categories": aggregated,
         "category_definitions": CATEGORY_DEFINITIONS,
     }

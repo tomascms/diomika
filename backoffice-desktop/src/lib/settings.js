@@ -146,14 +146,14 @@ export function mapApiError(message) {
   if (/403|localhost na produção|Admin\/system/i.test(msg)) {
     return 'Acesso admin recusado pelo servidor. Contacte o suporte Diomika.'
   }
-  if (/502|inacessível/i.test(msg)) {
-    return 'API inacessível. Verifique a internet (a API está na cloud).'
+  if (/502|504|inacessível/i.test(msg)) {
+    return 'A API não respondeu (502). O registo pode ter sido guardado — confirme na lista antes de repetir.'
   }
   if (/abort|timeout/i.test(msg)) return 'Timeout ao contactar a API. Verifique a internet.'
   if (/fetch|network|failed/i.test(msg)) {
     return 'Sem rede. Confirme a ligação à internet e tente de novo.'
   }
-  if (/500|internal|Erro HTTP 500/i.test(msg)) return 'Erro no servidor. Tente mais tarde ou Schema & Sync.'
+  if (/500|internal|Erro HTTP 500/i.test(msg)) return 'Erro no servidor. Tente mais tarde ou contacte o suporte Diomika.'
   return msg || 'Erro de ligação.'
 }
 

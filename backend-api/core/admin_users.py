@@ -326,23 +326,55 @@ def change_password(username: str, current_password: str, new_password: str) -> 
     upsert_user(username, new_password, role=str(user.get("role") or "admin"))
 
 
-def ensure_bootstrap() -> None:
-    """Cria utilizador inicial a partir de ADMIN_BOOTSTRAP_* se ainda não houver users."""
-    if has_users():
-        return
+def _bootstrap_credentials() -> tuple[str, str, str] | None:
     user = (os.getenv("ADMIN_BOOTSTRAP_USER") or "").strip()
     password = (os.getenv("ADMIN_BOOTSTRAP_PASSWORD") or "").strip()
-    # Default admin (único user inicial); em produção criar roles dedicadas depois
     role = (os.getenv("ADMIN_BOOTSTRAP_ROLE") or "admin").strip().lower()
     if not user or not password:
-        logger.warning(
-            "Sem utilizadores admin locais. Defina ADMIN_BOOTSTRAP_USER + "
-            f"ADMIN_BOOTSTRAP_PASSWORD (min {MIN_PASSWORD_LEN} chars, letra+dígito) "
-            "para activar login real."
-        )
+        return None
+    return user, password, role if role in VALID_ROLES else "admin"
+
+
+def bootstrap_sync_enabled() -> bool:
+    """Opt-in: alinhar password do user bootstrap com ADMIN_BOOTSTRAP_PASSWORD no arranque."""
+    return (os.getenv("ADMIN_BOOTSTRAP_SYNC") or "").strip().lower() in ("1", "true", "yes")
+
+
+def ensure_bootstrap() -> None:
+    """Cria ou (opcionalmente) sincroniza utilizador inicial a partir de ADMIN_BOOTSTRAP_*."""
+    creds = _bootstrap_credentials()
+    if creds is None:
+        if not has_users():
+            logger.warning(
+                "Sem utilizadores admin locais. Defina ADMIN_BOOTSTRAP_USER + "
+                f"ADMIN_BOOTSTRAP_PASSWORD (min {MIN_PASSWORD_LEN} chars, letra+dígito) "
+                "para activar login real."
+            )
         return
+
+    user, password, role = creds
+
+    if has_users():
+        if not bootstrap_sync_enabled():
+            return
+        existing = get_user(user)
+        if existing is None:
+            return
+        current_hash = str(existing.get("password_hash") or "")
+        if verify_password(password, current_hash):
+            return
+        try:
+            upsert_user(user, password, role=str(existing.get("role") or role))
+            logger.info(
+                "Password bootstrap sincronizada para %s (ADMIN_BOOTSTRAP_SYNC=1)",
+                user,
+            )
+        except ValueError as exc:
+            logger.error("Sync bootstrap admin falhou: %s", exc)
+        return
+
     try:
-        upsert_user(user, password, role=role if role in VALID_ROLES else "admin")
+        upsert_user(user, password, role=role)
         logger.info("Utilizador bootstrap criado: %s (role=%s)", user, role)
     except ValueError as exc:
         logger.error("Bootstrap admin falhou: %s", exc)

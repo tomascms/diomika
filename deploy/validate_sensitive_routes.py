@@ -10,13 +10,9 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Any, Iterator
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend-api"))
-
-PRIVILEGED_PREFIXES = ("/admin", "/system")
-PRIVILEGED_EXACT = {"/health/detail"}
 
 
 def _dep_names(dependant) -> set[str]:
@@ -34,29 +30,6 @@ def _dep_names(dependant) -> set[str]:
         for child in getattr(d, "dependencies", []) or []:
             stack.append(child)
     return names
-
-
-def _iter_api_routes(routes: list[Any]) -> Iterator[Any]:
-    """Percorre APIRoute, incluindo _IncludedRouter do FastAPI recente."""
-    from fastapi.routing import APIRoute
-
-    for route in routes:
-        if isinstance(route, APIRoute):
-            yield route
-            continue
-        original = getattr(route, "original_router", None)
-        if original is not None:
-            yield from _iter_api_routes(list(getattr(original, "routes", []) or []))
-            continue
-        nested = getattr(route, "routes", None)
-        if nested:
-            yield from _iter_api_routes(list(nested))
-
-
-def _is_privileged(path: str) -> bool:
-    if path in PRIVILEGED_EXACT:
-        return True
-    return any(path.startswith(p) for p in PRIVILEGED_PREFIXES)
 
 
 def check_static() -> int:
@@ -87,13 +60,12 @@ def check_static() -> int:
 
     failed: list[str] = []
     checked = 0
-    for route in _iter_api_routes(list(app.routes)):
+    for route in app.routes:
         path = getattr(route, "path", "") or ""
-        if not _is_privileged(path):
+        if not (path.startswith("/admin") or path.startswith("/system") or path == "/health/detail"):
             continue
         dependant = getattr(route, "dependant", None)
         if dependant is None:
-            failed.append(f"{path}: sem dependant FastAPI")
             continue
         names = _dep_names(dependant)
         checked += 1

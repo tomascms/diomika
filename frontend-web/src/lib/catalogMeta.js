@@ -1,63 +1,431 @@
 /** Metadados estáticos do catálogo — espelham backend/models/schemas.py (CATALOG_TYPES). */
 export const CATALOG_META = {
-  catalog_types: [
+  "catalog_types": [
     {
-      tipo: 'almofada',
-      label: 'Almofadas',
-      model_table: 'modelos_almofadas',
-      product_table: 'almofada',
-      product_select: 'id, ean, barcode_url, visibilidade, dimensoes',
-      storefront_mode: 'variantes',
-      storefront_filters: [
+      "tipo": "almofada",
+      "label": "Almofadas",
+      "model_table": "modelos_almofadas",
+      "product_table": "almofada",
+      "colors_table": "modelo_almofada_cores",
+      "storefront_mode": "variantes",
+      "storefront_filters": [
         {
-          field: 'tipo',
-          label: 'Tipo de Almofada',
-          options: ['decorativa', 'dormir'],
-          labels: { decorativa: 'decorativa', dormir: 'dormir' },
-        },
+          "field": "tipo",
+          "label": "Tipo de Almofada",
+          "options": [
+            "decorativa",
+            "dormir"
+          ],
+          "labels": {
+            "decorativa": "decorativa",
+            "dormir": "dormir"
+          }
+        }
       ],
-      storefront_picker: {
-        source: 'products',
-        field: 'dimensoes',
-        label: 'Tamanho',
-        format: 'dimensions',
-        suffix: ' cm',
+      "storefront_picker": {
+        "source": "products",
+        "field": "dimensoes",
+        "label": "Tamanho",
+        "format": "dimensions",
+        "suffix": " cm"
       },
-      storefront_badge: {
-        field: 'tipo',
-        labels: { decorativa: 'decorativa', dormir: 'dormir' },
-      },
-      storefront_specs: [
-        { field: 'composicao', label: 'Composição', widget: 'composition', enum_labels: {} },
+      "storefront_specs": [
+        {
+          "field": "composicao",
+          "label": "Composicao",
+          "widget": "composition",
+          "enum_labels": {}
+        }
       ],
-      order_picker_mode: 'variantes',
+      "storefront_badge": {
+        "field": "tipo",
+        "labels": {
+          "decorativa": "decorativa",
+          "dormir": "dormir"
+        }
+      },
+      "order_picker_mode": "variantes",
+      "product_select": "id, ean, barcode_url, visibilidade, dimensoes"
     },
     {
-      tipo: 'assento',
-      label: 'Assentos',
-      model_table: 'modelos_assentos',
-      product_table: 'assento',
-      product_select: 'id, ean, barcode_url, visibilidade',
-      storefront_mode: 'assento',
-      storefront_filters: [],
-      storefront_picker: {
-        source: 'model',
-        field: 'alturas',
-        label: 'Variante',
-        format: 'plain',
+      "tipo": "assento",
+      "label": "Assentos",
+      "model_table": "modelos_assentos",
+      "product_table": "assento",
+      "colors_table": "modelo_assento_cores",
+      "storefront_mode": "assento",
+      "storefront_filters": [],
+      "storefront_picker": {
+        "source": "products",
+        "field": "altura",
+        "label": "Altura",
+        "format": "plain"
       },
-      storefront_badge: null,
-      storefront_specs: [
-        { field: 'material_forro', label: 'Material do forro', widget: 'text', enum_labels: {} },
-        { field: 'material_enchimento', label: 'Material do enchimento', widget: 'text', enum_labels: {} },
+      "storefront_specs": [
+        {
+          "field": "material_forro",
+          "label": "Material Forro",
+          "widget": "text",
+          "enum_labels": {}
+        },
+        {
+          "field": "material_enchimento",
+          "label": "Material Enchimento",
+          "widget": "text",
+          "enum_labels": {}
+        }
       ],
-      order_picker_mode: 'assento',
+      "storefront_badge": null,
+      "order_picker_mode": "assento",
+      "product_select": "id, ean, barcode_url, visibilidade, altura"
     },
+    {
+      "tipo": "guarda_chuva",
+      "label": "Guarda-chuvas",
+      "model_table": "modelos_guarda_chuvas",
+      "product_table": "guarda_chuva",
+      "colors_table": "modelo_guarda_chuva_cores",
+      "storefront_mode": "unico",
+      "storefront_filters": [],
+      "storefront_picker": null,
+      "storefront_specs": [],
+      "storefront_badge": null,
+      "order_picker_mode": "unico",
+      "product_select": "id, ean, barcode_url, visibilidade"
+    },
+    {
+      "tipo": "oculo",
+      "label": "Óculos",
+      "model_table": "modelos_oculos",
+      "product_table": "oculo",
+      "colors_table": "modelo_oculo_cores",
+      "storefront_mode": "variantes",
+      "storefront_filters": [
+        {
+          "field": "tipo_oculo",
+          "label": "Tipo",
+          "options": [
+            "sol",
+            "leitura"
+          ],
+          "labels": {
+            "sol": "Óculos de sol",
+            "leitura": "Óculos de leitura"
+          }
+        }
+      ],
+      "storefront_picker": {
+        "source": "products",
+        "field": "segmento",
+        "label": "Segmento",
+        "format": "plain"
+      },
+      "storefront_specs": [],
+      "storefront_badge": {
+        "field": "tipo_oculo",
+        "labels": {
+          "sol": "Óculos de sol",
+          "leitura": "Óculos de leitura"
+        }
+      },
+      "order_picker_mode": "variantes",
+      "product_select": "id, ean, barcode_url, visibilidade, segmento"
+    },
+    {
+      "tipo": "toalha_mesa",
+      "label": "Toalhas de mesa",
+      "model_table": "modelos_toalhas_mesa",
+      "product_table": "toalha_mesa",
+      "colors_table": "modelo_toalha_mesa_cores",
+      "storefront_mode": "variantes",
+      "storefront_filters": [
+        {
+          "field": "tipo_produto",
+          "label": "Tipo",
+          "options": [
+            "toalha",
+            "protetor"
+          ],
+          "labels": {
+            "toalha": "Toalha de mesa",
+            "protetor": "Protetor de mesa"
+          }
+        },
+        {
+          "field": "material",
+          "label": "Material",
+          "options": [
+            "pvc",
+            "poliester"
+          ],
+          "labels": {
+            "pvc": "PVC",
+            "poliester": "Poliéster"
+          }
+        }
+      ],
+      "storefront_picker": {
+        "source": "products",
+        "field": "dimensoes",
+        "label": "Dimensão",
+        "format": "dimensions",
+        "suffix": " cm"
+      },
+      "storefront_specs": [
+        {
+          "field": "material",
+          "label": "Material",
+          "widget": "enum",
+          "enum_labels": {
+            "pvc": "PVC",
+            "poliester": "Poliéster"
+          }
+        },
+        {
+          "field": "composicao",
+          "label": "Composicao",
+          "widget": "composition",
+          "enum_labels": {}
+        }
+      ],
+      "storefront_badge": {
+        "field": "tipo_produto",
+        "labels": {
+          "toalha": "Toalha de mesa",
+          "protetor": "Protetor de mesa"
+        }
+      },
+      "order_picker_mode": "variantes",
+      "product_select": "id, ean, barcode_url, visibilidade, dimensoes"
+    },
+    {
+      "tipo": "avental",
+      "label": "Aventais",
+      "model_table": "modelos_aventais",
+      "product_table": "avental",
+      "colors_table": "modelo_avental_cores",
+      "storefront_mode": "unico",
+      "storefront_filters": [],
+      "storefront_picker": null,
+      "storefront_specs": [
+        {
+          "field": "material",
+          "label": "Material",
+          "widget": "text",
+          "enum_labels": {}
+        }
+      ],
+      "storefront_badge": null,
+      "order_picker_mode": "unico",
+      "product_select": "id, ean, barcode_url, visibilidade"
+    },
+    {
+      "tipo": "luva",
+      "label": "Luvas",
+      "model_table": "modelos_luvas",
+      "product_table": "luva",
+      "colors_table": "modelo_luva_cores",
+      "storefront_mode": "unico",
+      "storefront_filters": [],
+      "storefront_picker": null,
+      "storefront_specs": [
+        {
+          "field": "material",
+          "label": "Material",
+          "widget": "text",
+          "enum_labels": {}
+        }
+      ],
+      "storefront_badge": null,
+      "order_picker_mode": "unico",
+      "product_select": "id, ean, barcode_url, visibilidade"
+    },
+    {
+      "tipo": "pega",
+      "label": "Pegas",
+      "model_table": "modelos_pegas",
+      "product_table": "pega",
+      "colors_table": "modelo_pega_cores",
+      "storefront_mode": "unico",
+      "storefront_filters": [],
+      "storefront_picker": null,
+      "storefront_specs": [
+        {
+          "field": "material",
+          "label": "Material",
+          "widget": "text",
+          "enum_labels": {}
+        }
+      ],
+      "storefront_badge": null,
+      "order_picker_mode": "unico",
+      "product_select": "id, ean, barcode_url, visibilidade"
+    },
+    {
+      "tipo": "pano_cozinha",
+      "label": "Panos de cozinha",
+      "model_table": "modelos_panos_cozinha",
+      "product_table": "pano_cozinha",
+      "colors_table": "modelo_pano_cozinha_cores",
+      "storefront_mode": "variantes",
+      "storefront_filters": [],
+      "storefront_picker": {
+        "source": "products",
+        "field": "dimensoes",
+        "label": "Dimensão",
+        "format": "dimensions",
+        "suffix": " cm"
+      },
+      "storefront_specs": [
+        {
+          "field": "material",
+          "label": "Material",
+          "widget": "text",
+          "enum_labels": {}
+        }
+      ],
+      "storefront_badge": null,
+      "order_picker_mode": "variantes",
+      "product_select": "id, ean, barcode_url, visibilidade, dimensoes"
+    },
+    {
+      "tipo": "regional",
+      "label": "Regional",
+      "model_table": "modelos_regionais",
+      "product_table": "regional",
+      "colors_table": "modelo_regional_cores",
+      "storefront_mode": "variantes",
+      "storefront_filters": [
+        {
+          "field": "subtipo",
+          "label": "Tipo",
+          "options": [
+            "avental",
+            "luva",
+            "pega",
+            "pano_cozinha",
+            "toalha",
+            "protetor"
+          ],
+          "labels": {
+            "avental": "Avental",
+            "luva": "Luva",
+            "pega": "Pega",
+            "pano_cozinha": "Pano de cozinha",
+            "toalha": "Toalha de mesa",
+            "protetor": "Protetor de mesa"
+          }
+        }
+      ],
+      "storefront_picker": {
+        "source": "products",
+        "field": "dimensoes",
+        "label": "Dimensão",
+        "format": "dimensions",
+        "suffix": " cm"
+      },
+      "storefront_specs": [
+        {
+          "field": "material",
+          "label": "Material",
+          "widget": "text",
+          "enum_labels": {}
+        },
+        {
+          "field": "composicao",
+          "label": "Composicao",
+          "widget": "composition",
+          "enum_labels": {}
+        }
+      ],
+      "storefront_badge": {
+        "field": "subtipo",
+        "labels": {
+          "avental": "Avental",
+          "luva": "Luva",
+          "pega": "Pega",
+          "pano_cozinha": "Pano de cozinha",
+          "toalha": "Toalha de mesa",
+          "protetor": "Protetor de mesa"
+        }
+      },
+      "order_picker_mode": "variantes",
+      "product_select": "id, ean, barcode_url, visibilidade, dimensoes"
+    },
+    {
+      "tipo": "material_cozinha",
+      "label": "Material de cozinha",
+      "aggregated_tipos": [
+        "avental",
+        "luva",
+        "pega",
+        "pano_cozinha"
+      ],
+      "storefront_mode": "aggregado",
+      "storefront_filters": [
+        {
+          "field": "_tipo_catalogo",
+          "label": "Família",
+          "options": [
+            "avental",
+            "luva",
+            "pega",
+            "pano_cozinha"
+          ],
+          "labels": {
+            "avental": "Aventais",
+            "luva": "Luvas",
+            "pega": "Pegas",
+            "pano_cozinha": "Panos de cozinha"
+          }
+        }
+      ],
+      "storefront_picker": null,
+      "storefront_specs": [],
+      "storefront_badge": null,
+      "order_picker_mode": "aggregado"
+    }
   ],
-  category_definitions: {
-    almofadas: { nome: 'Almofadas', tipo_catalogo: 'almofada', carrinho_step: 6, carrinho_min: 6 },
-    assentos: { nome: 'Assentos', tipo_catalogo: 'assento', carrinho_step: 12, carrinho_min: 12 },
-  },
+  "category_definitions": {
+    "almofadas": {
+      "nome": "Almofadas",
+      "tipo_catalogo": "almofada",
+      "carrinho_step": 6,
+      "carrinho_min": 6
+    },
+    "assentos": {
+      "nome": "Assentos",
+      "tipo_catalogo": "assento",
+      "carrinho_step": 12,
+      "carrinho_min": 12
+    },
+    "guarda-chuvas": {
+      "nome": "Guarda-chuvas",
+      "tipo_catalogo": "guarda_chuva"
+    },
+    "oculos": {
+      "nome": "Óculos",
+      "tipo_catalogo": "oculo"
+    },
+    "toalhas-mesa": {
+      "nome": "Toalhas de mesa",
+      "tipo_catalogo": "toalha_mesa"
+    },
+    "material-cozinha": {
+      "nome": "Material de cozinha",
+      "tipo_catalogo": "material_cozinha",
+      "aggregated_tipos": [
+        "avental",
+        "luva",
+        "pega",
+        "pano_cozinha"
+      ]
+    },
+    "regional": {
+      "nome": "Regional",
+      "tipo_catalogo": "regional"
+    }
+  }
 }
 
 export function getTipoConfig(tipo) {

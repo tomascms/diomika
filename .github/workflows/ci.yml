@@ -77,6 +77,8 @@ jobs:
           VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder
           VITE_SUPABASE_STORAGE_BUCKET: product-images
           VITE_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
+          VITE_POSTHOG_KEY: phc_ci_build_only
+          VITE_POSTHOG_HOST: https://eu.i.posthog.com
         run: |
           npm ci --ignore-scripts
           npm audit --audit-level=high

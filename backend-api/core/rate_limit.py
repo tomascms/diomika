@@ -64,7 +64,8 @@ def get_client_ip(request: Request) -> str:
         real_ip = request.headers.get("x-real-ip") or request.headers.get("X-Real-IP")
         if real_ip:
             return real_ip.strip()
-    return request.client.host if request.client else "unknown"
+    client = getattr(request, "client", None)
+    return client.host if client else "unknown"
 
 
 def _is_public_catalog_read(method: str, path: str) -> bool:

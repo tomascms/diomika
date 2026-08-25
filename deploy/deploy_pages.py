@@ -315,7 +315,7 @@ def deploy_full(env: dict[str, str], pages_project: str, *, detach: bool = False
     API_BASE_URL={api_public}
 
   Nota: URLs trycloudflare/pages.dev — não partilhar publicamente.
-  Endgame produção: docs/FREE_STACK.md
+  Endgame produção: docs/INSTRUCOES.md
 
   Tunnels activos — mantém este terminal/processo. Ctrl+C para parar.
 """
@@ -374,6 +374,10 @@ def main() -> int:
         if not api:
             print("ERRO: --api-url ou BETA_API_URL em falta")
             return 1
+        if args.build:
+            prod = os.getenv("PAGES_PRODUCTION", "").strip().lower() in ("1", "true", "yes")
+            if not build_frontend(env, api, beta=not prod):
+                return 1
         return pages_deploy_only(env, args.pages_project, api)
 
     if args.deploy:
