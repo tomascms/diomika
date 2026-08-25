@@ -39,13 +39,11 @@ def _variant_picker_field(product_schema) -> str:
             return fname
     return "dimensoes"
 
-def storefront_picker_for_type(cfg: dict) -> dict | None:
+def storefront_picker_for_type(cfg: dict) -> dict:
     """Configuração do selector na página de produto (tamanho, altura, etc.)."""
-    mode = cfg.get("storefront_mode") or "variantes"
-    if mode == "unico":
-        return None
     if cfg.get("storefront_picker"):
         return dict(cfg["storefront_picker"])
+    mode = cfg.get("storefront_mode") or "variantes"
     model_schema = cfg["model_schema"]
     product_schema = cfg["product_schema"]
     if mode == "assento":
@@ -145,7 +143,7 @@ def storefront_context_for_tipo(cfg: dict) -> dict:
 def attach_storefront_fields(data: dict, cfg: dict) -> dict:
     """Normaliza campos usados pelo picker (ex.: listas JSON de alturas)."""
     picker = storefront_picker_for_type(cfg)
-    if picker and picker.get("source") == "model":
+    if picker.get("source") == "model":
         field = picker.get("field")
         if field and field in data:
             data[field] = _normalize_string_list(data[field])

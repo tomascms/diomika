@@ -26,9 +26,6 @@ logs
 backend-api/.schema_snapshot.json
 backend-api/.email_worker_state.json
 backend-api/.email_worker_heartbeat.json
-backend-api/data/admin_users.json
-backend-api/data/admin_users.json.bak
-backend-api/data/admin_users.tmp
 backend-api/sql/generated_*.sql
 
 # IDE

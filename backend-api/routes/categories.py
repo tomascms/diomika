@@ -30,32 +30,6 @@ async def get_categories():
         raise HTTPException(status_code=500, detail="Erro ao carregar categorias") from e
 
 
-@router.get("/slug/{slug}")
-async def get_category_by_slug(slug: str):
-    ttl = catalog_cache_ttl()
-    cache_key = f"categories:slug:{slug}"
-
-    def load():
-        res = (
-            get_db()
-            .table("categories")
-            .select(PUBLIC_CATEGORY_FIELDS)
-            .eq("slug", slug.strip())
-            .execute()
-        )
-        if not res.data:
-            raise HTTPException(status_code=404, detail="Categoria não encontrada")
-        return public_category(require_visible(res.data[0]))
-
-    try:
-        return await asyncio.to_thread(get_or_set, cache_key, float(ttl), load)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Erro ao buscar categoria slug %s: %s", slug, e)
-        raise HTTPException(status_code=500, detail="Erro ao carregar categoria") from e
-
-
 @router.get("/{id_categoria}")
 async def get_category(id_categoria: UUID):
     ttl = catalog_cache_ttl()

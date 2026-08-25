@@ -28,7 +28,7 @@ def _attach_cores(rows: list[dict]) -> None:
     by_model: dict[str, list] = {mid: [] for mid in model_ids}
     if model_ids:
         for cor in (
-            db.table("modelo_assento_cores")
+            db.table("modelo_cores")
             .select("id_modelo, numero, nome, imagem, visibilidade")
             .in_("id_modelo", model_ids)
             .execute()
@@ -48,7 +48,7 @@ def catalogue_assento_models(q: AssentoCatalogueQuery):
         db.table("modelos_assentos")
         .select(
             "*, categories(nome, carrinho_step, carrinho_min, slug, tipo_catalogo), "
-            "assento(ean, barcode_url, visibilidade, altura)"
+            "assento(ean, barcode_url, visibilidade)"
         )
         .eq("id_categoria", q.id_categoria)
         .eq("visibilidade", True)
@@ -62,8 +62,7 @@ def catalogue_assento_models(q: AssentoCatalogueQuery):
         assento_rows = [a for a in (row.get("assento") or []) if a.get("visibilidade", True)]
         if not assento_rows:
             continue
-        assento_rows.sort(key=lambda a: str(a.get("altura") or ""))
-        row["assento"] = assento_rows
+        row["assento"] = assento_rows[0]
         row["modelo_cores"] = _modelo_cores(row)
         out.append(row)
     return out
@@ -85,8 +84,7 @@ def assento_model_detail(id_modelo: str):
         return None
     _attach_cores([data])
     assento_rows = [a for a in (data.get("assento") or []) if a.get("visibilidade", True)]
-    assento_rows.sort(key=lambda a: str(a.get("altura") or ""))
-    data["assento"] = assento_rows
+    data["assento"] = assento_rows[0] if assento_rows else None
     data["modelo_cores"] = _modelo_cores(data)
     alturas = data.get("alturas") or []
     if isinstance(alturas, str):

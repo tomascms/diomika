@@ -109,10 +109,8 @@ def test_role_acl_tables():
         assert_table_action("outbox_events", "read", "admin")
     assert exc.value.status_code == 403
 
-    assert_table_action("categories", "hard_delete", "catalog")
-
     with pytest.raises(HTTPException):
-        assert_table_action("categories", "hard_delete", "mensagens")
+        assert_table_action("categories", "hard_delete", "catalog")
 
 
 def test_assert_dedicated_mensagens():
@@ -177,48 +175,3 @@ def test_upload_rejects_zip_polyglot():
     data = b"\x89PNG\r\n\x1a\n" + b"\x00" * 20 + b"PK\x03\x04" + b"x" * 100
     with pytest.raises(ValueError, match="embutido"):
         validate_upload_bytes(data, "evil.png")
-
-
-def test_bootstrap_creates_user_when_store_empty(user_store, monkeypatch):
-    monkeypatch.setenv("ADMIN_BOOTSTRAP_USER", "admin")
-    monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "Bootstrap-Sync-1!")
-    monkeypatch.delenv("ADMIN_BOOTSTRAP_SYNC", raising=False)
-
-    from core.admin_users import authenticate, ensure_bootstrap
-
-    ensure_bootstrap()
-    user, err = authenticate("admin", "Bootstrap-Sync-1!")
-    assert err is None
-    assert user and user["username"] == "admin"
-
-
-def test_bootstrap_sync_updates_password_when_enabled(user_store, monkeypatch):
-    from core.admin_users import authenticate, ensure_bootstrap, upsert_user
-
-    upsert_user("admin", "Password-Old-123!", role="admin")
-    monkeypatch.setenv("ADMIN_BOOTSTRAP_USER", "admin")
-    monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "Password-New-456!")
-    monkeypatch.setenv("ADMIN_BOOTSTRAP_SYNC", "1")
-
-    ensure_bootstrap()
-    user, err = authenticate("admin", "Password-New-456!")
-    assert err is None
-    assert user and user["username"] == "admin"
-    _, err_old = authenticate("admin", "Password-Old-123!")
-    assert err_old
-
-
-def test_bootstrap_sync_skipped_without_flag(user_store, monkeypatch):
-    from core.admin_users import authenticate, ensure_bootstrap, upsert_user
-
-    upsert_user("admin", "Password-Old-123!", role="admin")
-    monkeypatch.setenv("ADMIN_BOOTSTRAP_USER", "admin")
-    monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "Password-New-456!")
-    monkeypatch.delenv("ADMIN_BOOTSTRAP_SYNC", raising=False)
-
-    ensure_bootstrap()
-    user, err = authenticate("admin", "Password-Old-123!")
-    assert err is None
-    assert user and user["username"] == "admin"
-    _, err_new = authenticate("admin", "Password-New-456!")
-    assert err_new

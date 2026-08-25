@@ -81,7 +81,7 @@ def main() -> int:
     ssh = (env.get("REMOTE_VM_SSH") or "").strip()
     if not ssh:
         print("ERRO: define REMOTE_VM_SSH no .env (ex: tomas@34.x.x.x)")
-        print("  GCP Always Free: e2-micro em us-central1 — docs/INSTRUCOES.md")
+        print("  GCP Always Free: e2-micro em us-central1 — docs/FREE_STACK.md")
         return 1
 
     if not (env.get("CLOUDFLARE_TUNNEL_TOKEN") or "").strip():
@@ -134,9 +134,6 @@ def main() -> int:
             "--exclude=.venv",
             "--exclude=*.pyc",
             "--exclude=.env",
-            "--exclude=backend-api/data/admin_users.json",
-            "--exclude=backend-api/data/admin_users.json.bak",
-            "--exclude=backend-api/data/admin_users.tmp",
         ]
         tar_cmd = ["tar", "-cf", tar_path, *excludes, "-C", str(ROOT), "."]
         if subprocess.run(tar_cmd, cwd=ROOT).returncode != 0:

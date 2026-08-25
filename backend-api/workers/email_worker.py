@@ -269,7 +269,6 @@ def process_inbox():
         return
 
     processed = _load_state()
-    mail = None
     try:
         mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
         mail.login(MAIL_USERNAME, MAIL_PASSWORD)
@@ -283,6 +282,7 @@ def process_inbox():
         else:
             logger.warning("Pasta de enviados nao encontrada")
 
+        mail.logout()
         _save_state(processed)
 
         heartbeat = BACKEND_ROOT / ".email_worker_heartbeat.json"
@@ -293,16 +293,8 @@ def process_inbox():
 
         if total:
             logger.info("%d mensagem(ns) nova(s) registada(s)", total)
-    except (imaplib.IMAP4.abort, ConnectionResetError, OSError, TimeoutError) as e:
-        logger.warning("IMAP ligação perdida (reconecta no próximo ciclo): %s", e)
     except Exception as e:
         logger.error("Erro ao processar email: %s", e)
-    finally:
-        if mail is not None:
-            try:
-                mail.logout()
-            except Exception:
-                pass
 
 
 if __name__ == "__main__":

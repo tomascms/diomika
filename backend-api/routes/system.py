@@ -288,7 +288,7 @@ def order_picker_for_category(category_id: str):
                 or [{}]
             )[0]
             cores = (
-                db.table(cfg.get("colors_table") or "modelo_assento_cores")
+                db.table("modelo_cores")
                 .select("numero, nome")
                 .eq("id_modelo", m["id"])
                 .eq("visibilidade", True)
@@ -333,9 +333,8 @@ def order_picker_for_category(category_id: str):
         or []
     )
     cores_map: dict[str, list] = {}
-    colors_table = cfg.get("colors_table") or "modelo_almofada_cores"
     cores_res = (
-        db.table(colors_table)
+        db.table("modelo_cores")
         .select("id_modelo, numero, nome")
         .in_("id_modelo", model_ids)
         .eq("visibilidade", True)

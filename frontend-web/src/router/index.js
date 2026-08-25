@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { capturePageview, isPosthogReady } from '@/lib/posthog'
 import HomeView from '@/views/HomeView.vue'
 import ProductsView from '@/views/ProductsView.vue'
 
@@ -18,36 +17,24 @@ const router = createRouter({
   },
   routes: [
     {
-      path: '/',
+      path: '/', // Rota para a página inicial
       name: 'home',
-      component: HomeView,
+      component: HomeView
     },
     {
       path: '/categorias',
       name: 'categories',
-      component: () => import('@/views/CategoriesView.vue'),
+      component: () => import('@/views/CategoriesView.vue')
     },
     {
-      path: '/categoria/:categorySlug',
+      path: '/produtos/:categoryId?',
       name: 'products',
-      component: ProductsView,
+      component: ProductsView
     },
     {
-      path: '/categoria/:categorySlug/:modelSlug',
+      path: '/produto/:id',
       name: 'product-detail',
-      component: () => import('@/views/ProductDetailView.vue'),
-    },
-    {
-      path: '/produtos/:categorySlug',
-      redirect: (to) => ({
-        name: 'products',
-        params: { categorySlug: to.params.categorySlug },
-      }),
-    },
-    {
-      path: '/produto/:legacyModelId',
-      name: 'product-detail-legacy',
-      component: () => import('@/views/ProductDetailView.vue'),
+      component: () => import('@/views/ProductDetailView.vue')
     },
     {
       path: '/carrinho',
@@ -63,23 +50,20 @@ const router = createRouter({
     {
       path: '/sobre',
       name: 'about',
-      component: () => import('@/views/AboutView.vue'),
+      component: () => import('@/views/AboutView.vue')
     },
     {
       path: '/privacidade',
       name: 'privacy',
-      component: () => import('@/views/PrivacyView.vue'),
+      component: () => import('@/views/PrivacyView.vue')
     },
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
-      component: () => import('@/views/NotFoundView.vue'),
-    },
+      component: () => import('@/views/NotFoundView.vue')
+    }
   ],
 })
 
-router.afterEach(() => {
-  if (isPosthogReady()) capturePageview()
-})
 
 export default router

@@ -13,11 +13,12 @@ const currentTable = computed(() => route.params.table || '')
 const sidebarOpen = ref(false)
 const sessionUser = ref(readSessionUser())
 
-const pageTitle = computed(() =>
-  workspace.value?.sidebar?.[currentTable.value]?.label
+const pageTitle = computed(() => {
+  if (route.name === 'schema') return 'Schema & Sync'
+  return workspace.value?.sidebar?.[currentTable.value]?.label
     || workspace.value?.tables?.[currentTable.value]?.label
-    || 'Painel',
-)
+    || 'Painel'
+})
 
 const apiOnline = ref(null)
 

@@ -16,9 +16,6 @@ const loading = ref(true)
 const error = ref('')
 const message = ref('')
 const filterText = ref('')
-const filterCategoriaId = ref('')
-const filterModeloId = ref('')
-const filterTipoCatalogo = ref('')
 const showNewPicker = ref(false)
 const importInput = ref(null)
 const importBusy = ref(false)
@@ -37,34 +34,17 @@ const canShowNew = computed(() => !isCategories.value)
 const canImportExport = computed(() => !isCategories.value && !isMerged.value)
 
 const catalogTypes = computed(() => workspace.value?.catalog?.catalog_types || [])
-const categoryDefinitions = computed(() => workspace.value?.catalog?.category_definitions || {})
-
-const modelTables = computed(() =>
-  (catalogTypes.value || []).map((t) => t.model_table).filter(Boolean),
-)
-
-const embeddedModel = (row) => {
-  for (const mt of modelTables.value) {
-    if (row[mt]) return row[mt]
-  }
-  return null
-}
 
 const recordLabel = (row) => {
   if (table.value === 'produtos') {
-    const model = embeddedModel(row)
-    const parts = [model?.nome, row.dimensoes, row.altura, row.segmento, row.ean].filter(Boolean)
+    const model = row.modelos_almofadas || row.modelos_assentos
+    const parts = [model?.nome, row.dimensoes, row.ean].filter(Boolean)
     return parts.join(' · ') || '—'
   }
   return row.nome || row.ean || String(row.id).slice(0, 8)
 }
 
-const categoryLabel = (row) => {
-  if (row._categoria_label) return row._categoria_label
-  if (row.categories?.nome) return row.categories.nome
-  const model = embeddedModel(row)
-  return model?.categories?.nome || '—'
-}
+const categoryLabel = (row) => row._categoria_label || row.categories?.nome || '—'
 
 const columns = computed(() => {
   if (isMerged.value) {
@@ -107,39 +87,13 @@ const loadPlan = async () => {
   }
 }
 
-const newPhysicalTipo = ref('')
-
-const mergedListParams = computed(() => {
-  const params = {}
-  if (filterCategoriaId.value) params.categoria_id = filterCategoriaId.value
-  if (filterModeloId.value) params.modelo_id = filterModeloId.value
-  if (filterTipoCatalogo.value) params.tipo_catalogo = filterTipoCatalogo.value
-  return params
-})
-
-const selectedCategory = computed(() =>
-  categories.value.find((c) => c.id === newCategoryId.value) || null,
-)
-
-const aggregatedTiposForCategory = (cat) => {
-  if (!cat?.tipo_catalogo) return null
-  for (const def of Object.values(categoryDefinitions.value || {})) {
-    if (def.tipo_catalogo === cat.tipo_catalogo && def.aggregated_tipos?.length) {
-      return def.aggregated_tipos
-    }
-  }
-  return null
-}
-
-const isAggregatedCategory = computed(() => Boolean(aggregatedTiposForCategory(selectedCategory.value)))
-
 const loadRows = async () => {
   loading.value = true
   error.value = ''
   try {
     if (isMerged.value) {
       const viewKey = table.value === 'produtos' ? 'produtos' : 'modelos'
-      rows.value = await api.mergedList(viewKey, mergedListParams.value)
+      rows.value = await api.mergedList(viewKey)
     } else {
       rows.value = await api.listRecords(table.value, { visible_only: 'false' })
     }
@@ -190,13 +144,10 @@ const deleteRow = async (row) => {
   }
 }
 
-const physicalTableForCategory = (categoryId, physicalTipo = null) => {
+const physicalTableForCategory = (categoryId) => {
   const cat = categories.value.find((c) => c.id === categoryId)
   if (!cat?.tipo_catalogo) return null
-  const aggregated = aggregatedTiposForCategory(cat)
-  const tipo = physicalTipo || cat.tipo_catalogo
-  if (aggregated && !physicalTipo) return null
-  const ct = catalogTypes.value.find((t) => t.tipo === tipo)
+  const ct = catalogTypes.value.find((t) => t.tipo === cat.tipo_catalogo)
   if (!ct) return null
   return table.value === 'produtos' ? ct.product_table : ct.model_table
 }
@@ -205,7 +156,6 @@ const startNew = async () => {
   if (isMerged.value) {
     categories.value = (await api.listCategories()).filter((c) => c.tipo_catalogo)
     newCategoryId.value = ''
-    newPhysicalTipo.value = ''
     showNewPicker.value = true
     return
   }
@@ -217,13 +167,7 @@ const confirmNew = () => {
     error.value = 'Escolha uma categoria.'
     return
   }
-  const cat = selectedCategory.value
-  const aggregated = aggregatedTiposForCategory(cat)
-  if (aggregated && !newPhysicalTipo.value) {
-    error.value = 'Escolha a família de produto.'
-    return
-  }
-  const physicalTable = physicalTableForCategory(newCategoryId.value, newPhysicalTipo.value || null)
+  const physicalTable = physicalTableForCategory(newCategoryId.value)
   if (!physicalTable) {
     error.value = 'Categoria inválida ou tipo de catálogo em falta.'
     return
@@ -274,27 +218,11 @@ const onImportFile = async (event) => {
 }
 
 watch(table, () => {
-  filterCategoriaId.value = ''
-  filterModeloId.value = ''
-  filterTipoCatalogo.value = ''
   loadRows()
   loadPlan()
 }, { immediate: true })
 
-watch([filterCategoriaId, filterModeloId, filterTipoCatalogo], () => {
-  if (isMerged.value) loadRows()
-})
-
-onMounted(async () => {
-  await loadPlan()
-  if (isMerged.value) {
-    try {
-      categories.value = (await api.listCategories()).filter((c) => c.tipo_catalogo)
-    } catch {
-      categories.value = []
-    }
-  }
-})
+onMounted(loadPlan)
 </script>
 
 <template>
@@ -312,19 +240,6 @@ onMounted(async () => {
 
     <div class="toolbar toolbar-panel">
       <input v-model="filterText" class="input search" type="search" placeholder="Filtrar registos…" />
-      <template v-if="isMerged">
-        <select v-model="filterCategoriaId" class="input filter-mini">
-          <option value="">Todas categorias</option>
-          <option v-for="c in categories.length ? categories : []" :key="c.id" :value="c.id">{{ c.nome }}</option>
-        </select>
-        <select v-if="table === 'produtos'" v-model="filterModeloId" class="input filter-mini">
-          <option value="">Todos modelos</option>
-        </select>
-        <select v-model="filterTipoCatalogo" class="input filter-mini">
-          <option value="">Todos tipos</option>
-          <option v-for="t in catalogTypes" :key="t.tipo" :value="t.tipo">{{ t.label || t.tipo }}</option>
-        </select>
-      </template>
       <button v-if="canShowNew" type="button" class="btn btn-primary" @click="startNew">Novo registo</button>
       <template v-if="canImportExport">
         <button class="btn btn-ghost" @click="exportTable">Exportar CSV</button>
@@ -342,19 +257,6 @@ onMounted(async () => {
         <option value="">— Escolher categoria —</option>
         <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.nome }}</option>
       </select>
-      <template v-if="isAggregatedCategory">
-        <label>Família</label>
-        <select v-model="newPhysicalTipo" class="input">
-          <option value="">— Escolher família —</option>
-          <option
-            v-for="tipo in aggregatedTiposForCategory(selectedCategory)"
-            :key="tipo"
-            :value="tipo"
-          >
-            {{ catalogTypes.find((t) => t.tipo === tipo)?.label || tipo }}
-          </option>
-        </select>
-      </template>
       <div class="picker-actions">
         <button class="btn btn-ghost" @click="showNewPicker = false">Cancelar</button>
         <button class="btn btn-primary" @click="confirmNew">Continuar</button>

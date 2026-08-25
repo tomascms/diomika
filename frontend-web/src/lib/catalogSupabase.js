@@ -2,7 +2,7 @@ import { supabase, supabaseConfigured } from '@/lib/supabase'
 import { CATALOG_META, getTipoConfig } from '@/lib/catalogMeta'
 
 const CATEGORY_FIELDS = 'id,nome,slug,imagem,tipo_catalogo,carrinho_step,carrinho_min'
-const CATEGORY_EMBED = 'id, nome, slug, carrinho_step, carrinho_min, tipo_catalogo'
+const CATEGORY_EMBED = 'nome, carrinho_step, carrinho_min, slug, tipo_catalogo'
 
 function isVisible(row) {
   return row && row.visibilidade !== false
@@ -38,12 +38,6 @@ function attachStorefrontFields(data, cfg) {
   if (picker?.source === 'model' && picker.field && picker.field in data) {
     data[picker.field] = normalizeStringList(data[picker.field])
   }
-  if ('dimensoes' in data) {
-    data.dimensoes = normalizeStringList(data.dimensoes)
-  }
-  if ('alturas' in data) {
-    data.alturas = normalizeStringList(data.alturas)
-  }
   return data
 }
 
@@ -53,19 +47,15 @@ function modeloCores(data) {
   return cores
 }
 
-async function attachModeloCores(rows, tipo = null) {
+async function attachModeloCores(rows) {
   if (!rows?.length) return
-
-  const cfg = getTipoConfig(tipo)
-  const colorsTable = cfg?.colors_table
-  if (!colorsTable) return
 
   const modelIds = rows.map((row) => String(row.id)).filter(Boolean)
   const coresByModel = Object.fromEntries(modelIds.map((id) => [id, []]))
 
   if (modelIds.length) {
     const { data: direct } = await supabase
-      .from(colorsTable)
+      .from('modelo_cores')
       .select('id_modelo, numero, nome, imagem, visibilidade')
       .in('id_modelo', modelIds)
 
@@ -96,18 +86,12 @@ function finalizeModelRow(row, cfg) {
   const mode = cfg.storefront_mode || 'variantes'
   const products = visibleProducts(row[pt])
 
-  if (mode === 'unico') {
+  if (mode === 'assento') {
     if (!products.length) return null
-    row[pt] = products.length === 1 ? products[0] : products
-  } else if (mode === 'assento') {
-    if (!products.length) return null
-    products.sort((a, b) => String(a.altura || '').localeCompare(String(b.altura || '')))
-    row[pt] = products
+    row[pt] = products[0]
   } else {
     if (!products.length) return null
-    products.sort((a, b) =>
-      String(a.dimensoes || a.segmento || '').localeCompare(String(b.dimensoes || b.segmento || '')),
-    )
+    products.sort((a, b) => String(a.dimensoes || '').localeCompare(String(b.dimensoes || '')))
     row[pt] = products
   }
 
@@ -149,43 +133,6 @@ export async function getCategoryById(id) {
   return data
 }
 
-export async function getCategoryBySlug(slug) {
-  if (!supabaseConfigured) throw new Error('Supabase não configurado.')
-
-  const key = String(slug || '').trim()
-  if (!key) throw new Error('Categoria não encontrada.')
-
-  const { data, error } = await supabase
-    .from('categories')
-    .select(CATEGORY_FIELDS)
-    .eq('slug', key)
-    .eq('visibilidade', true)
-    .maybeSingle()
-
-  if (error) throw new Error(error.message)
-  if (data) return data
-
-  const { data: byName, error: nameError } = await supabase
-    .from('categories')
-    .select(CATEGORY_FIELDS)
-    .ilike('nome', key)
-    .eq('visibilidade', true)
-    .maybeSingle()
-
-  if (nameError) throw new Error(nameError.message)
-  if (!byName) throw new Error('Categoria não encontrada.')
-  return byName
-}
-
-export async function resolveCategoryParam(param) {
-  const key = String(param || '').trim()
-  if (!key) throw new Error('Categoria não encontrada.')
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key)) {
-    return getCategoryById(key)
-  }
-  return getCategoryBySlug(key)
-}
-
 async function requirePublicCategory(categoryId) {
   const { data, error } = await supabase
     .from('categories')
@@ -196,19 +143,16 @@ async function requirePublicCategory(categoryId) {
   return isVisible(data)
 }
 
-export async function catalogueModelsForTipo(tipo, categoryId, { filters = {}, filterField = null, filterValue = null } = {}) {
+export async function catalogueModelsForTipo(tipo, categoryId, { filterField = null, filterValue = null } = {}) {
   if (!supabaseConfigured) throw new Error('Supabase não configurado.')
 
   const cfg = getTipoConfig(tipo)
-  if (!cfg?.model_table) return []
+  if (!cfg) return []
   if (!(await requirePublicCategory(categoryId))) return []
 
   const mt = cfg.model_table
   const pt = cfg.product_table
   const productFields = cfg.product_select || 'id, ean, barcode_url, visibilidade'
-
-  const activeFilters = { ...filters }
-  if (filterField && filterValue) activeFilters[filterField] = filterValue
 
   let query = supabase
     .from(mt)
@@ -216,14 +160,14 @@ export async function catalogueModelsForTipo(tipo, categoryId, { filters = {}, f
     .eq('id_categoria', categoryId)
     .eq('visibilidade', true)
 
-  for (const [field, value] of Object.entries(activeFilters)) {
-    if (field && value) query = query.eq(field, value)
+  if (filterField && filterValue) {
+    query = query.eq(filterField, filterValue)
   }
 
   const { data, error } = await query.order('nome')
   if (error) throw new Error(error.message)
 
-  await attachModeloCores(data || [], tipo)
+  await attachModeloCores(data || [])
 
   const out = []
   for (const raw of data || []) {
@@ -233,33 +177,6 @@ export async function catalogueModelsForTipo(tipo, categoryId, { filters = {}, f
     if (finalized) out.push(finalized)
   }
   return out
-}
-
-export async function catalogueModelsForCategory(tipo, categoryId, { filters = {} } = {}) {
-  const cfg = getTipoConfig(tipo)
-  if (!cfg) return []
-
-  if (cfg.aggregated_tipos?.length) {
-    const family = filters._tipo_catalogo
-    const dbFilters = Object.fromEntries(
-      Object.entries(filters).filter(([key]) => !key.startsWith('_')),
-    )
-    const out = []
-    for (const physical of cfg.aggregated_tipos) {
-      if (family && physical !== family) continue
-      const rows = await catalogueModelsForTipo(physical, categoryId, { filters: dbFilters })
-      for (const row of rows) {
-        row._tipo_catalogo = physical
-        row._category_tipo = tipo
-        row._familia_label = getTipoConfig(physical)?.label || physical
-        out.push(row)
-      }
-    }
-    out.sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || '')))
-    return out
-  }
-
-  return catalogueModelsForTipo(tipo, categoryId, { filters })
 }
 
 export async function modelDetailForTipo(tipo, modelId) {
@@ -278,73 +195,16 @@ export async function modelDetailForTipo(tipo, modelId) {
     .maybeSingle()
 
   if (error) throw new Error(error.message)
-  return await finalizeModelDetailRow(data, cfg)
-}
-
-export async function modelDetailForSlugs(categorySlug, modelSlug, tipo = null) {
-  if (!supabaseConfigured) throw new Error('Supabase não configurado.')
-
-  const category = await resolveCategoryParam(categorySlug)
-  const resolvedTipo = tipo || category.tipo_catalogo
-  const cfg = getTipoConfig(resolvedTipo)
-  if (!cfg) return null
-
-  const modKey = String(modelSlug || '').trim()
-  if (!modKey) return null
-
-  if (cfg.aggregated_tipos?.length) {
-    const tipos = tipo ? [tipo] : cfg.aggregated_tipos
-    for (const physical of tipos) {
-      const physicalCfg = getTipoConfig(physical)
-      if (!physicalCfg?.model_table) continue
-      const data = await _lookupModelInTable(physicalCfg, category.id, modKey)
-      if (data) {
-        const row = await finalizeModelDetailRow(data, physicalCfg)
-        if (row) {
-          row._tipo_catalogo = physical
-          row._category_tipo = resolvedTipo
-          row._familia_label = physicalCfg.label || physical
-        }
-        return row
-      }
-    }
-    return null
-  }
-
-  const data = await _lookupModelInTable(cfg, category.id, modKey)
-  return await finalizeModelDetailRow(data, cfg)
-}
-
-async function _lookupModelInTable(cfg, categoryId, modKey) {
-  const mt = cfg.model_table
-  const pt = cfg.product_table
-  const isUuidKey = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(modKey)
-  const baseSelect = `*, categories(${CATEGORY_EMBED},visibilidade), ${pt}(*)`
-  const baseFilters = (q) => q.eq('id_categoria', categoryId).eq('visibilidade', true)
-
-  if (isUuidKey) {
-    const { data, error } = await baseFilters(supabase.from(mt).select(baseSelect)).eq('id', modKey).maybeSingle()
-    if (error) throw new Error(error.message)
-    return data
-  }
-
-  const { data: rows, error } = await baseFilters(supabase.from(mt).select(baseSelect))
-    .or(`slug.eq.${modKey},nome.ilike.${modKey}`)
-    .limit(1)
-  if (error) throw new Error(error.message)
-  return rows?.[0] || null
-}
-
-async function finalizeModelDetailRow(data, cfg) {
   if (!data || !isVisible(data)) return null
   if (data.categories && !isVisible(data.categories)) return null
 
+  // Não expor flag interna de categoria ao UI
   if (data.categories) {
     const { visibilidade: _v, ...publicCat } = data.categories
     data.categories = publicCat
   }
 
-  await attachModeloCores([data], cfg.tipo)
+  await attachModeloCores([data])
   const row = attachStorefrontFields({ ...data }, cfg)
   row.modelo_cores = modeloCores(row)
   return finalizeModelRow(row, cfg)
@@ -352,7 +212,6 @@ async function finalizeModelDetailRow(data, cfg) {
 
 export async function modelDetailAuto(modelId) {
   for (const cfg of CATALOG_META.catalog_types) {
-    if (!cfg.model_table) continue
     const data = await modelDetailForTipo(cfg.tipo, modelId)
     if (data) return data
   }

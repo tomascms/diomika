@@ -33,19 +33,4 @@ test.describe('Diomika critical flow', () => {
     })
     expect([401, 403, 404, 405]).toContain(r.status())
   })
-
-  test('status page e security.txt', async ({ request }) => {
-    const status = await request.get(`${site}/status.html`)
-    expect(status.ok()).toBeTruthy()
-    expect(await status.text()).toContain('Estado dos serviços')
-
-    const sec = await request.get(`${site}/.well-known/security.txt`)
-    expect(sec.ok()).toBeTruthy()
-    expect(await sec.text()).toContain('Contact:')
-
-    const root = await request.get(`${api}/`)
-    expect(root.ok()).toBeTruthy()
-    const body = await root.json()
-    expect(body.service).toBe('diomika-api')
-  })
 })

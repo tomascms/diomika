@@ -1,12 +1,6 @@
 import { loadSettings } from './settings'
 
 const TIMEOUT_MS = 30000
-const WRITE_TIMEOUT_MS = 90000
-const schemaCache = new Map()
-
-function timeoutFor(method) {
-  return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? WRITE_TIMEOUT_MS : TIMEOUT_MS
-}
 
 function baseUrl() {
   return (loadSettings().apiBaseUrl || '').replace(/\/+$/, '')
@@ -34,15 +28,15 @@ function parseDetail(body, status) {
   return `Erro HTTP ${status}`
 }
 
-async function request(method, path, { body, params, headers: extraHeaders } = {}) {
+async function request(method, path, { body, params } = {}) {
   let url = `${baseUrl()}${path}`
   if (params) url += `?${new URLSearchParams(params)}`
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutFor(method))
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
   try {
     const resp = await fetch(url, {
       method,
-      headers: { ...headers(body !== undefined), ...(extraHeaders || {}) },
+      headers: headers(body !== undefined),
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     })
@@ -68,7 +62,7 @@ async function uploadFile(table, field, file) {
   const fd = new FormData()
   fd.append('file', file)
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutFor('POST'))
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
   try {
     const resp = await fetch(url, { method: 'POST', headers: headers(false), body: fd, signal: controller.signal })
     if (!resp.ok) {
@@ -102,50 +96,33 @@ export const api = {
   logout: () => request('POST', '/admin/auth/logout'),
   me: () => request('GET', '/admin/auth/me'),
   workspace: () => request('GET', '/system/workspace'),
-  formSchema: (table) => {
-    if (schemaCache.has(table)) return schemaCache.get(table)
-    const pending = request('GET', `/system/schema/form/${table}`).then((data) => {
-      schemaCache.set(table, Promise.resolve(data))
-      return data
-    })
-    schemaCache.set(table, pending)
-    return pending
-  },
+  formSchema: (table) => request('GET', `/system/schema/form/${table}`),
   listRecords: async (table, params) => {
     const data = await request('GET', `/admin/crud/${table}`, { params })
     return Array.isArray(data) ? data : data?.items || []
   },
-  listModelColors: async (colorsTable, modelId) => {
-    if (!colorsTable || !modelId) return []
-    const params = {
+  listModelColors: async (modelId) => {
+    const data = await request('GET', '/admin/crud/modelo_cores', {
       id_modelo: modelId,
       visible_only: 'false',
       limit: '200',
-    }
-    const data = await request('GET', `/admin/crud/${colorsTable}`, { params })
+    })
     return Array.isArray(data) ? data : data?.items || []
   },
-  publishRecord: (table, id) => request('POST', `/admin/crud/${table}/${id}/publish`),
   setVisibility: (table, id, visibilidade) =>
     request('PATCH', `/admin/crud/${table}/${id}/visibility`, { body: { visibilidade } }),
   setLida: (table, id, lida) =>
     request('PATCH', `/admin/crud/${table}/${id}/lida`, { body: { lida } }),
   getRecord: (table, id) => request('GET', `/admin/crud/${table}/${id}`),
-  createRecord: (table, body, idempotencyKey = null) => {
-    const opts = { body }
-    if (idempotencyKey) {
-      opts.headers = { 'Idempotency-Key': idempotencyKey }
-    }
-    return request('POST', `/admin/crud/${table}`, opts)
-  },
+  createRecord: (table, body) => request('POST', `/admin/crud/${table}`, { body }),
   updateRecord: (table, id, body) => request('PUT', `/admin/crud/${table}/${id}`, { body }),
   deleteRecord: (table, id, hard = false) =>
     request('DELETE', `/admin/crud/${table}/${id}`, { params: { hard: String(hard) } }),
   uploadImage: (table, field, file) => uploadFile(table, field, file),
   createCategory: (body) => request('POST', '/system/categories/create', { body }),
-  mergedList: async (viewKey, params = {}) => {
+  mergedList: async (viewKey) => {
     const data = await request('GET', `/catalogo/admin/merged/${viewKey}`, {
-      params: { limit: '500', offset: '0', ...params },
+      params: { limit: '500', offset: '0' },
     })
     return Array.isArray(data) ? data : data?.items || []
   },
@@ -163,7 +140,7 @@ export const api = {
     const fd = new FormData()
     fd.append('file', file)
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutFor('POST'))
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
     try {
       const resp = await fetch(url, {
         method: 'POST',

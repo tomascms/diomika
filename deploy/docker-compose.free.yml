@@ -4,7 +4,7 @@
 # Uso:
 #   docker compose -f deploy/docker-compose.free.yml up -d --build
 #   docker compose -f deploy/docker-compose.free.yml --profile tunnel up -d --build
-# Guia: docs/INSTRUCOES.md
+# Guia: docs/FREE_STACK.md
 
 services:
   redis:
@@ -27,9 +27,6 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"
-    volumes:
-      # Persiste admin_users.json entre rebuilds/restarts do contentor
-      - ../backend-api/data:/app/backend-api/data
     env_file:
       - ../.env
     environment:

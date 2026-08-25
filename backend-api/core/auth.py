@@ -153,8 +153,6 @@ def role_can_use_dedicated(role: str, resource: str) -> bool:
 
 
 def role_can_access_table(role: str, table: str) -> bool:
-    from models.catalog_registry import all_colors_tables, all_model_tables, all_product_tables
-
     if table in CRUD_INFRA_BLOCKED:
         return False
     if role == "ops":
@@ -165,12 +163,9 @@ def role_can_access_table(role: str, table: str) -> bool:
         return role_can_use_dedicated(role, table)
     if role == "catalog":
         return (
-            table in ("categories", "modelos", "produtos")
+            table in ("categories", "modelos", "produtos", "modelo_cores")
             or table.startswith("modelos_")
             or table.startswith("produtos_")
-            or table in all_model_tables()
-            or table in all_product_tables()
-            or table in all_colors_tables()
         )
     if role == "pedidos":
         return table in ("pedidos_orcamento", "encomendas_internas")
@@ -190,13 +185,10 @@ def assert_table_action(table: str, action: Action, role: Role) -> None:
     if not role_can_access_table(role, table):
         raise HTTPException(status_code=403, detail=f"Role '{role}' sem acesso a '{table}'.")
     if action == "hard_delete":
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="Hard delete só para admin.")
         if table in SENSITIVE_BUSINESS_TABLES:
             raise HTTPException(status_code=403, detail="Hard delete bloqueado em tabelas sensíveis.")
-        if role == "admin":
-            return
-        if role == "catalog" and role_can_access_table(role, table):
-            return
-        raise HTTPException(status_code=403, detail="Hard delete só para admin ou catálogo.")
 
 
 def assert_dedicated_access(resource: str, role: Role) -> None:

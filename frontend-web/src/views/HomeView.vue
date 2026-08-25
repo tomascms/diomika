@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useCategories } from '@/composables/useCategories'
-import { categoryProductsRoute } from '@/lib/catalogRoutes'
 import LoadingState from '@/components/LoadingState.vue'
 
 const { categories, loading, error, load } = useCategories()
@@ -81,7 +80,7 @@ const previewCats = computed(() => categories.value.slice(0, 2))
           <RouterLink
             v-for="cat in previewCats"
             :key="cat.id"
-            :to="categoryProductsRoute(cat)"
+            :to="{ name: 'products', params: { categoryId: cat.id } }"
             class="preview-card"
           >
             <div class="preview-media">

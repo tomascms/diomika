@@ -98,15 +98,6 @@ def main() -> int:
     check("Header X-Frame-Options", header_value(headers, "X-Frame-Options") in ("DENY", "SAMEORIGIN"))
     check("Header X-Request-Id", bool(header_value(headers, "X-Request-Id")))
 
-    status, headers, body, _ = request("GET", f"{base}/")
-    check("GET /", status == 200 and "diomika-api" in body, f"status={status}")
-
-    status, _, body, _ = request("GET", f"{base}/robots.txt")
-    check("GET /robots.txt", status == 200 and "Disallow: /" in body, f"status={status}")
-
-    status, _, body, _ = request("GET", f"{base}/.well-known/security.txt")
-    check("GET /.well-known/security.txt", status == 200 and "Contact:" in body, f"status={status}")
-
     # /system e /admin: na edge pública o WAF pode devolver 403 HTML (preferível).
     # Em localhost a API responde 401/200 conforme chave.
     public_edge = base.startswith("https://")

@@ -1,30 +1,41 @@
-# Diomika Command Center
+# Monitor Hub (local)
 
-Painel de operações nativo — gráficos, alertas e CI/CD via APIs.
+App Electron **só na tua máquina**: sidebar de projectos + abas por serviço (Cloudflare, Sentry, Axiom, …).
 
-## Arranque (um clique)
+Cada aba é um browser embutido real (`WebContentsView`), não iframe — os dashboards SaaS bloqueiam iframe; aqui o login fica na sessão persistente do projecto.
 
-```
-monitor-hub/Diomika-Command-Center-1.1.0-windows.exe
-```
+## Arranque
 
-Configuração: `config.local.json` (mesma pasta).
-
-## Configurar / actualizar credenciais
-
-```powershell
+```bash
 cd monitor-hub
-node scripts/setup-from-env.cjs      # importa do .env do repo
-node scripts/sync-github-token.cjs   # depois de gh auth login
-```
-
-## Rebuild
-
-```powershell
 npm install
-npm run dist:win
+npm start
 ```
 
-Gera o `.exe` na raiz de `monitor-hub/` (e artefactos em `release/`).
+## Adicionar outro projecto
 
-Guia: [`docs/INSTRUCOES.md`](../docs/INSTRUCOES.md) §5.
+Edita `projects.json`:
+
+```json
+{
+  "projects": [
+    {
+      "id": "diomika",
+      "name": "Diomika",
+      "tabs": [ ... ]
+    },
+    {
+      "id": "outro",
+      "name": "Outro Cliente",
+      "tabs": [
+        { "id": "sentry", "label": "Sentry", "url": "https://...." },
+        { "id": "cloudflare", "label": "Cloudflare", "url": "https://dash.cloudflare.com/" }
+      ]
+    }
+  ]
+}
+```
+
+Reinicia a app. Sessões de login ficam separadas por `id` do projecto (`persist:monitor-<id>`).
+
+Não mete tokens nem passwords neste ficheiro — só URLs públicas dos painéis.

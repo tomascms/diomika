@@ -74,21 +74,21 @@ def test_assert_table_action_blocks_sensitive_hard_delete():
     assert_table_action("contact_messages", "read", "mensagens")
 
 
-def test_hard_delete_allowed_for_admin():
+def test_hard_delete_blocked_in_production(monkeypatch):
+    monkeypatch.setenv("DIOMIKA_ENV", "production")
+    monkeypatch.delenv("DIOMIKA_BETA", raising=False)
+    from core.config import get_settings
+
+    get_settings.cache_clear()
+
     from routes.admin_crud import delete_record
 
     class Req:
-        state = type("S", (), {"api_role": "admin", "request_id": "t", "api_actor": "test"})()
-        client = type("C", (), {"host": "127.0.0.1"})()
+        state = type("S", (), {"api_role": "admin", "request_id": "t"})()
 
-    db = MagicMock()
-    table = MagicMock()
-    db.table.return_value = table
-    table.delete.return_value = table
-    table.eq.return_value = table
-    table.execute.return_value = MagicMock(data=[])
+    with patch("routes.admin_crud._schema_for"), patch("routes.admin_crud.get_db"):
+        with pytest.raises(HTTPException) as exc:
+            delete_record(Req(), "categories", "00000000-0000-0000-0000-000000000001", hard=True)
+        assert exc.value.status_code == 403
 
-    with patch("routes.admin_crud._schema_for"), patch("routes.admin_crud.get_db", return_value=db):
-        with patch("routes.admin_crud._invalidate_catalog_cache"), patch("routes.admin_crud._audit"):
-            out = delete_record(Req(), "categories", "00000000-0000-0000-0000-000000000001", hard=True)
-    assert out == {"status": "deleted", "hard": True}
+    get_settings.cache_clear()

@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -11,6 +11,12 @@ const props = defineProps({
 })
 
 defineEmits(['navigate', 'logout'])
+const route = useRoute()
+
+const canSchema = computed(() => {
+  const role = props.user?.role
+  return !role || role === 'admin' || role === 'ops'
+})
 
 const displayName = computed(() => {
   const name = props.user?.username || ''
@@ -44,6 +50,16 @@ const displayName = computed(() => {
     </nav>
 
     <div class="sidebar-footer">
+      <RouterLink
+        v-if="canSchema"
+        to="/schema"
+        class="nav-item footer-link"
+        :class="{ active: route.name === 'schema' }"
+        @click="$emit('navigate')"
+      >
+        Schema & Sync
+      </RouterLink>
+
       <div v-if="user" class="user-box">
         <p class="user-line">
           <span>{{ displayName }}</span>

@@ -3,157 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Diomika Command Center</title>
+  <title>Monitor Hub</title>
   <link rel="stylesheet" href="styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <aside id="sidebar">
-    <div class="brand">
-      <span class="brand-dot" id="score-dot"></span>
-      Diomika Ops
-    </div>
-    <nav class="nav">
-      <button type="button" class="nav-btn active" data-view="overview">Visão geral</button>
-      <button type="button" class="nav-btn" data-view="alerts">Alertas <span class="badge" id="alert-badge">0</span></button>
-      <button type="button" class="nav-btn" data-view="analytics">Analytics</button>
-      <button type="button" class="nav-btn" data-view="metrics">Infra</button>
-      <button type="button" class="nav-btn" data-view="cicd">CI / CD</button>
-      <button type="button" class="nav-btn" data-view="setup">Configuração</button>
-    </nav>
-    <div class="sidebar-foot">
-      <div class="live" id="live-indicator">● A actualizar…</div>
-      <button type="button" id="refresh-btn" class="ghost-btn">Actualizar agora</button>
-      <button type="button" id="clear-all-btn" class="ghost-btn btn-sm">Limpar tudo</button>
-    </div>
+    <div class="brand">Monitor Hub</div>
+    <nav id="projects"></nav>
+    <p class="hint">Edita <code>projects.json</code> para novos projectos / abas.</p>
   </aside>
-
-  <main id="main">
-    <header id="topbar">
-      <div>
-        <h1 id="view-title">Visão geral</h1>
-        <p id="view-sub" class="muted">Monitorização em tempo real — sem logins repetidos</p>
-      </div>
-      <div id="kpi-strip" class="kpi-strip"></div>
+  <div id="main">
+    <header id="tabs-bar">
+      <div id="tabs"></div>
+      <button type="button" id="reload" title="Recarregar aba">↻</button>
     </header>
-
-    <section id="view-overview" class="view active">
-      <div class="panel-head-row">
-        <span class="muted">Avisos importantes</span>
-        <button type="button" class="ghost-btn btn-sm" data-clear-tab="overview">Limpar avisos</button>
-      </div>
-      <div class="recs" id="recommendations"></div>
-      <div class="grid-3" id="health-cards"></div>
-      <div class="grid-2">
-        <div class="panel">
-          <h2>Latência API (tempo real)</h2>
-          <canvas id="chart-latency"></canvas>
-        </div>
-        <div class="panel">
-          <h2>Erros por hora (Axiom)</h2>
-          <canvas id="chart-errors"></canvas>
-        </div>
-      </div>
-      <div class="grid-3" id="intel-cards"></div>
-    </section>
-
-    <section id="view-alerts" class="view">
-      <div class="panel">
-        <div class="panel-head-row">
-          <h2>Feed unificado de alertas</h2>
-          <button type="button" class="ghost-btn btn-sm" data-clear-tab="alerts">Limpar alertas</button>
-        </div>
-        <div id="alert-feed" class="alert-feed"></div>
-      </div>
-    </section>
-
-    <section id="view-analytics" class="view">
-      <p class="section-lead" id="analytics-lead">Visitas, pedidos e contactos — últimos 7 dias.</p>
-      <div class="grid-4" id="analytics-kpis"></div>
-      <div class="grid-2">
-        <div class="panel">
-          <h2>Visitas à loja (24 h)</h2>
-          <p class="panel-hint">PostHog — cada barra é uma hora.</p>
-          <canvas id="chart-visits"></canvas>
-        </div>
-        <div class="panel">
-          <h2>Actividade comercial (7 dias)</h2>
-          <p class="panel-hint">Orçamentos, mensagens e encomendas internas.</p>
-          <canvas id="chart-business"></canvas>
-        </div>
-      </div>
-      <div class="panel">
-        <h2>Resumo para decisão</h2>
-        <div id="analytics-insights" class="insight-list"></div>
-      </div>
-    </section>
-
-    <section id="view-metrics" class="view">
-      <div class="grid-2">
-        <div class="panel">
-          <h2>UptimeRobot — monitores</h2>
-          <div id="uptime-table"></div>
-        </div>
-        <div class="panel">
-          <h2>Edge & produto</h2>
-          <div id="edge-metrics" class="metric-list"></div>
-        </div>
-      </div>
-      <div class="panel">
-        <div class="panel-head-row">
-          <h2>Erros Sentry abertos</h2>
-          <button type="button" class="ghost-btn btn-sm" data-clear-tab="metrics">Limpar lista</button>
-        </div>
-        <div id="sentry-table"></div>
-      </div>
-      <div class="panel">
-        <h2>Monitor GitHub (Uptime)</h2>
-        <p class="panel-hint">Cron a cada 15 min — separado do CI de build/testes.</p>
-        <div id="uptime-gh-table"></div>
-      </div>
-    </section>
-
-    <section id="view-cicd" class="view">
-      <div class="panel" id="release-card"></div>
-      <div class="panel">
-        <div class="panel-head-row">
-          <h2>GitHub Actions — CI (build & testes)</h2>
-          <button type="button" class="ghost-btn btn-sm" data-clear-tab="cicd">Limpar falhas</button>
-        </div>
-        <p class="panel-hint">Só o workflow «CI». Monitorização Uptime corre à parte e não aparece aqui.</p>
-        <div id="ci-table"></div>
-      </div>
-    </section>
-
-    <section id="view-setup" class="view">
-      <div class="panel setup-panel">
-        <h2>Ligação automática GitHub</h2>
-        <p class="muted">Opção A (recomendada): instala <a href="#" id="gh-cli-link">GitHub CLI</a>, corre <code>gh auth login</code> uma vez — o hub lê o token sozinho.</p>
-        <div class="btn-row">
-          <button type="button" id="btn-gh-cli" class="primary">Detectar GitHub CLI</button>
-          <button type="button" id="btn-gh-device" class="secondary">Ligar via browser (Device Flow)</button>
-        </div>
-        <div id="gh-device-box" class="hidden device-box"></div>
-        <hr />
-        <h2>Importar credenciais</h2>
-        <p class="muted">Lê automaticamente o <code>.env</code> do repo Diomika (Axiom, Cloudflare, ntfy, PostHog…).</p>
-        <button type="button" id="btn-import-env" class="primary">Importar do .env</button>
-        <div id="integration-grid" class="integration-grid"></div>
-        <hr />
-        <h2>Tokens manuais</h2>
-        <form id="setup-form" class="setup-form">
-          <label>Sentry auth token<input name="sentryToken" type="password" autocomplete="off" /></label>
-          <label>UptimeRobot API key<input name="uptimeKey" type="password" autocomplete="off" /></label>
-          <label>PostHog personal API key<input name="posthogKey" type="password" autocomplete="off" /></label>
-          <label>API ops key (analytics negócio)<input name="opsKey" type="password" autocomplete="off" /></label>
-          <label>GitHub OAuth client ID (Device Flow)<input name="githubClientId" type="text" /></label>
-          <button type="submit" class="primary">Guardar</button>
-          <button type="button" id="btn-open-config" class="ghost-btn">Abrir config.local.json</button>
-        </form>
-      </div>
-    </section>
-  </main>
-  <div id="toast" class="toast hidden"></div>
-  <script src="dashboard.js"></script>
+    <div id="webview-slot" aria-hidden="true"></div>
+  </div>
+  <script src="app.js"></script>
 </body>
 </html>

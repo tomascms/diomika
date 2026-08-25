@@ -65,31 +65,19 @@ def build_catalog_table_map(catalog_types: dict) -> dict[str, dict]:
             "ui_filters": product_filters,
             "ui_catalog_tipo": tipo,
         }
-
-        ct = cfg.get("colors_table")
-        cs = cfg.get("colors_schema")
-        if ct and cs:
-            out[ct] = {
-                "schema": cs,
-                "label": f"Cores — {label}",
-                "icon": "palette",
-                "ui_sidebar": False,
-                "list_label_fields": ["numero", "nome"],
-                "ui_catalog_tipo": tipo,
-            }
-            out[mt]["ui_colors_table"] = ct
     return out
 
 
 def build_operations_table_map(
     *,
     categoria_schema,
+    modelo_cor_schema,
     pedido_schema,
     encomenda_schema,
     contact_schema,
     infra_schemas: dict[str, Any],
 ) -> dict[str, dict]:
-    """Tabelas fixas: categorias, operações, infra."""
+    """Tabelas fixas: categorias, cores, operações, infra."""
     out = {
         "categories": {
             "schema": categoria_schema,
@@ -97,6 +85,13 @@ def build_operations_table_map(
             "icon": "folder",
             "list_label_fields": ["nome", "tipo_catalogo"],
             "ui_no_filters": True,
+        },
+        "modelo_cores": {
+            "schema": modelo_cor_schema,
+            "label": "Cores do Modelo",
+            "icon": "palette",
+            "ui_sidebar": False,
+            "list_label_fields": ["numero", "nome"],
         },
         "pedidos_orcamento": {
             "schema": pedido_schema,
