@@ -13,6 +13,7 @@ from core.catalog_service import catalogue_for_category, model_detail_for_slugs,
 from core.database import get_db
 from models.catalog_registry import (
     CATALOG_TYPES,
+    admin_merged_select_query,
     all_model_tables,
     all_product_tables,
     catalog_metadata,
@@ -156,7 +157,7 @@ def _fetch_merged_table_page(
     modelo_id: str | None,
 ) -> list[dict]:
     db = get_db()
-    query = db.table(ptable).select(list_select_query(ptable))
+    query = db.table(ptable).select(admin_merged_select_query(ptable))
     if visible_only:
         query = query.eq("visibilidade", True)
     if categoria_id and view_key == "modelos":
@@ -223,8 +224,8 @@ async def admin_merged_list(
         raise HTTPException(status_code=400, detail="Vista inválida")
     limit = min(max(limit, 1), 200)
     offset = max(offset, 0)
-    # Buscar só o necessário por tabela (evita fan-out de 150×N em páginas pequenas).
-    per_table = min(max(limit + offset, limit), 120)
+    # Página pequena: cada tabela só precisa de `limit` linhas mais recentes para o merge.
+    per_table = min(max(limit, 20), 60) if offset == 0 else min(limit + offset, 100)
 
     if tipo_catalogo and aggregated_tipos_for_tipo(tipo_catalogo):
         tables = (

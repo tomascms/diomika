@@ -8,7 +8,7 @@ import { useWorkspace } from '@/composables/useWorkspace'
 import DataList from '@/components/DataList.vue'
 import CategoryCreatePanel from '@/components/CategoryCreatePanel.vue'
 
-const PAGE_SIZE = 80
+const PAGE_SIZE = 40
 
 const route = useRoute()
 const router = useRouter()
@@ -23,7 +23,6 @@ const message = ref('')
 const filterText = ref('')
 const filterCategoriaId = ref('')
 const filterModeloId = ref('')
-const filterTipoCatalogo = ref('')
 const showNewPicker = ref(false)
 const importInput = ref(null)
 const importBusy = ref(false)
@@ -32,6 +31,7 @@ const newCategoryId = ref('')
 const listOffset = ref(0)
 const hasMore = ref(false)
 const totalApprox = ref(null)
+let loadSeq = 0
 
 const table = computed(() => route.params.table)
 const isCategories = computed(() => table.value === 'categories')
@@ -128,7 +128,6 @@ const mergedListParams = computed(() => {
   const params = {}
   if (filterCategoriaId.value) params.categoria_id = filterCategoriaId.value
   if (filterModeloId.value) params.modelo_id = filterModeloId.value
-  if (filterTipoCatalogo.value) params.tipo_catalogo = filterTipoCatalogo.value
   return params
 })
 
@@ -149,6 +148,7 @@ const aggregatedTiposForCategory = (cat) => {
 const isAggregatedCategory = computed(() => Boolean(aggregatedTiposForCategory(selectedCategory.value)))
 
 const loadRows = async ({ append = false } = {}) => {
+  const seq = ++loadSeq
   if (append) loadingMore.value = true
   else {
     loading.value = true
@@ -166,6 +166,7 @@ const loadRows = async ({ append = false } = {}) => {
         limit: String(PAGE_SIZE),
         offset: String(offset),
       })
+      if (seq !== loadSeq) return
       const items = page.items || []
       rows.value = append ? [...rows.value, ...items] : items
       listOffset.value = offset + items.length
@@ -174,15 +175,20 @@ const loadRows = async ({ append = false } = {}) => {
         totalApprox.value == null || listOffset.value < totalApprox.value
       )
     } else {
-      rows.value = await api.listRecords(table.value, { visible_only: 'false', limit: '200' })
+      const data = await api.listRecords(table.value, { visible_only: 'false', limit: '200' })
+      if (seq !== loadSeq) return
+      rows.value = data
       hasMore.value = false
     }
   } catch (e) {
+    if (seq !== loadSeq) return
     error.value = e.message
     if (!append) rows.value = []
   } finally {
-    loading.value = false
-    loadingMore.value = false
+    if (seq === loadSeq) {
+      loading.value = false
+      loadingMore.value = false
+    }
   }
 }
 
@@ -243,7 +249,9 @@ const physicalTableForCategory = (categoryId, physicalTipo = null) => {
 
 const startNew = async () => {
   if (isMerged.value) {
-    categories.value = (await api.listCategories()).filter((c) => c.tipo_catalogo)
+    if (!categories.value.length) {
+      categories.value = (await api.listCategories()).filter((c) => c.tipo_catalogo)
+    }
     newCategoryId.value = ''
     newPhysicalTipo.value = ''
     showNewPicker.value = true
@@ -313,15 +321,6 @@ const onImportFile = async (event) => {
   }
 }
 
-watch(table, () => {
-  filterCategoriaId.value = ''
-  filterModeloId.value = ''
-  filterTipoCatalogo.value = ''
-  filterText.value = ''
-  loadRows()
-  loadPlan()
-}, { immediate: true })
-
 const filterModeloOptions = ref([])
 
 const loadModeloFilterOptions = async () => {
@@ -343,14 +342,6 @@ const loadModeloFilterOptions = async () => {
   }
 }
 
-watch([filterCategoriaId, filterModeloId, filterTipoCatalogo], () => {
-  if (isMerged.value) loadRows()
-})
-
-watch(filterCategoriaId, () => {
-  if (table.value === 'produtos') void loadModeloFilterOptions()
-})
-
 const ensureCategories = async () => {
   if (!isMerged.value || categories.value.length) return
   try {
@@ -360,9 +351,27 @@ const ensureCategories = async () => {
   }
 }
 
-onMounted(async () => {
-  await loadPlan()
-  await ensureCategories()
+watch(table, () => {
+  filterCategoriaId.value = ''
+  filterModeloId.value = ''
+  filterText.value = ''
+  filterModeloOptions.value = []
+  // Lista + filtros em paralelo — não esperar categorias para mostrar dados
+  void loadRows()
+  void loadPlan()
+  void ensureCategories()
+}, { immediate: true })
+
+watch([filterCategoriaId, filterModeloId], () => {
+  if (isMerged.value) void loadRows()
+})
+
+watch(filterCategoriaId, () => {
+  if (table.value === 'produtos') void loadModeloFilterOptions()
+})
+
+onMounted(() => {
+  void ensureCategories()
 })
 
 onActivated(() => {
@@ -388,15 +397,11 @@ onActivated(() => {
       <template v-if="isMerged">
         <select v-model="filterCategoriaId" class="input filter-mini">
           <option value="">Todas categorias</option>
-          <option v-for="c in categories.length ? categories : []" :key="c.id" :value="c.id">{{ c.nome }}</option>
+          <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.nome }}</option>
         </select>
         <select v-if="table === 'produtos'" v-model="filterModeloId" class="input filter-mini">
           <option value="">Todos modelos</option>
           <option v-for="m in filterModeloOptions" :key="m.id" :value="m.id">{{ m.label }}</option>
-        </select>
-        <select v-model="filterTipoCatalogo" class="input filter-mini">
-          <option value="">Todos tipos</option>
-          <option v-for="t in catalogTypes" :key="t.tipo" :value="t.tipo">{{ t.label || t.tipo }}</option>
         </select>
       </template>
       <button v-if="canShowNew" type="button" class="btn btn-primary" @click="startNew">Novo registo</button>
@@ -447,7 +452,7 @@ onActivated(() => {
       @delete="deleteRow"
     />
 
-    <div v-if="isMerged && !loading && rows.length" class="pager">
+    <div v-if="isMerged && rows.length" class="pager">
       <p class="pager-meta">
         A mostrar {{ rows.length }}{{ totalApprox != null ? ` de ~${totalApprox}` : '' }} registos
       </p>
@@ -455,7 +460,7 @@ onActivated(() => {
         v-if="hasMore"
         type="button"
         class="btn btn-ghost"
-        :disabled="loadingMore"
+        :disabled="loadingMore || loading"
         @click="loadMore"
       >
         {{ loadingMore ? 'A carregar…' : 'Carregar mais' }}

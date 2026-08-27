@@ -20,18 +20,29 @@ const subtitle = (row, columns) => {
   const main = String(primary(row, columns) ?? '').trim().toLowerCase()
   const sub = String(value ?? '').trim()
   if (!sub) return ''
-  // Evita "assento / assento" quando nome === slug
   if (sub.toLowerCase() === main) return ''
   return sub
 }
 </script>
 
 <template>
-  <div class="list" role="list">
-    <p v-if="loading" class="empty">A carregar…</p>
-    <p v-else-if="!rows.length" class="empty">Sem registos.</p>
+  <div class="list" role="list" :aria-busy="loading">
+    <p v-if="loading" class="loading-banner">
+      {{ rows.length ? 'A actualizar lista…' : 'A carregar registos…' }}
+    </p>
 
-    <article v-for="row in rows" :key="row.id" class="item" role="listitem">
+    <template v-if="loading && !rows.length">
+      <div v-for="n in 6" :key="`sk-${n}`" class="item skeleton" aria-hidden="true">
+        <div class="item-body">
+          <div class="sk-line sk-title" />
+          <div class="sk-line sk-sub" />
+        </div>
+      </div>
+    </template>
+
+    <p v-else-if="!loading && !rows.length" class="empty">Sem registos.</p>
+
+    <article v-for="row in rows" :key="row.id" class="item" role="listitem" :class="{ dimmed: loading }">
       <div class="item-body">
         <div class="title-row">
           <span
@@ -78,6 +89,16 @@ const subtitle = (row, columns) => {
   gap: 0.55rem;
 }
 
+.loading-banner {
+  margin: 0 0 0.35rem;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--accent-hover);
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm);
+}
+
 .item {
   padding: 0.95rem 1.1rem;
   display: flex;
@@ -89,7 +110,12 @@ const subtitle = (row, columns) => {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s;
+}
+
+.item.dimmed {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .item:hover {
@@ -156,5 +182,33 @@ const subtitle = (row, columns) => {
   background: var(--bg-panel);
   border: 1px dashed var(--border);
   border-radius: var(--radius);
+}
+
+.skeleton {
+  pointer-events: none;
+}
+
+.sk-line {
+  height: 0.72rem;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #e8ecef 0%, #f4f6f8 45%, #e8ecef 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.1s ease-in-out infinite;
+}
+
+.sk-title {
+  width: min(52%, 280px);
+  height: 0.9rem;
+}
+
+.sk-sub {
+  width: min(34%, 180px);
+  margin-top: 0.55rem;
+  opacity: 0.85;
+}
+
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
 }
 </style>

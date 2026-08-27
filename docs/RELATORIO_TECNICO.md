@@ -282,7 +282,7 @@ A Diomika tem **dois** frontends, o que é invulgar e vale a pena sublinhar.
 
 O primeiro é a **loja**, em `frontend-web/`. É construída com Vue, uma biblioteca de construção de interfaces. Os seus ecrãs estão em `frontend-web/src/views/` — `HomeView.vue` para a entrada, `CategoriesView.vue` para as categorias, `ProductsView.vue` para as listagens, `ProductDetailView.vue` para a ficha de um produto, `CartView.vue` para a lista de interesse, `ContactView.vue` para o formulário de contacto, `PrivacyView.vue` para a política de privacidade. As peças reutilizáveis estão em `frontend-web/src/components/`, e a lógica partilhada em `frontend-web/src/composables/` e `frontend-web/src/lib/`.
 
-O segundo é o **backoffice**, em `backoffice-desktop/src/`. É também construído com Vue — a mesma tecnologia, a mesma linguagem, competências reutilizáveis — mas embrulhado num programa instalável em vez de servido por um sítio na internet. Os seus ecrãs estão em `backoffice-desktop/src/views/`: `LoginView.vue`, `TableView.vue` para navegar registos, `RecordFormView.vue` para editar, `EncomendasView.vue` para encomendas, `ContactView.vue` para mensagens, `SchemaSyncView.vue` para operações de estrutura de dados.
+O segundo é o **backoffice**, em `backoffice-desktop/src/`. É também construído com Vue — a mesma tecnologia, a mesma linguagem, competências reutilizáveis — mas embrulhado num programa instalável em vez de servido por um sítio na internet. Os seus ecrãs estão em `backoffice-desktop/src/views/`: `LoginView.vue`, `TableView.vue` para navegar registos, `RecordFormView.vue` para editar, `EncomendasView.vue` para encomendas, `ContactView.vue` para mensagens.
 
 Uma característica notável do backoffice: os formulários de edição **não estão escritos à mão**. O componente `backoffice-desktop/src/components/SchemaForm.vue` recebe uma descrição da estrutura de dados vinda do backend e constrói o formulário adequado a partir dela. A consequência prática é que acrescentar um campo a um produto não obriga a reescrever o formulário de produtos — a descrição muda, e o formulário acompanha. Esta abordagem, que o projecto chama *schema-driven* (guiada pelo esquema), é uma das decisões estruturantes da Diomika e é tratada em detalhe em parte posterior.
 
@@ -9267,8 +9267,11 @@ Objectivo: o painel deixar de “pensar” em cada clique (arranque, navegação
 | Sessão | Cache de `/admin/auth/status` (~5 min) e `/me` (~10 min) — sem revalidar em cada rota |
 | Workspace API | `/system/workspace` leve (sidebar + meta; **sem** todos os schemas de formulário) |
 | Listas | Merged list paginada (80) + «Carregar mais»; filtro local só em campos de label |
-| UI | `KeepAlive` nas listas; formulário: schema + registo + relações em paralelo |
+| UI | `KeepAlive` nas listas; skeleton + manter linhas ao actualizar (sem ecrã em branco); formulário em paralelo |
 | Cores / imagens | Uploads e CRUD com concorrência limitada; SchemaForm sem deep-watch a cada tecla |
+| API merged | Select leve (sem `*`/imagens); página inicial 40; fan-out por tabela reduzido |
+
+Filtros na lista: texto local + categoria (+ modelo em produtos). Sem filtro «tipo de catálogo».
 
 **Entrega ao cliente:** instaladores actualizados em `cliente-backoffice/` via `python deploy/fetch_backoffice_release.py` (fonte: release `backoffice-cliente-latest`).
 
@@ -9312,8 +9315,16 @@ erDiagram
 
 | tipo_catalogo | Tabela modelo | Tabela produto |
 |---|---|---|
-| `almofada` | `modelos_almofadas` | `almofada` (variantes por dimensões; EAN único) |
-| `assento` | `modelos_assentos` | `assento` (um EAN por altura; EAN único) |
+| `almofada` | `modelos_almofadas` | `almofada` |
+| `assento` | `modelos_assentos` | `assento` |
+| `guarda_chuva` | `modelos_guarda_chuvas` | `guarda_chuva` |
+| `oculo` | `modelos_oculos` | `oculo` |
+| `toalha_mesa` | `modelos_toalhas_mesa` | `toalha_mesa` |
+| `avental` | `modelos_aventais` | `avental` |
+| `luva` | `modelos_luvas` | `luva` |
+| `pega` | `modelos_pegas` | `pega` |
+| `pano_cozinha` | `modelos_panos_cozinha` | `pano_cozinha` |
+| `regional` | `modelos_regionais` | `regional` |
 
 Nova família: editar `CATALOG_TYPES` + `CATEGORY_DEFINITIONS` em `schemas.py`.
 

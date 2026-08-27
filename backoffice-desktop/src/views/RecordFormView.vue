@@ -348,9 +348,15 @@ watch(() => route.fullPath, load, { immediate: true })
         {{ saving ? 'A publicar…' : 'Publicar na loja' }}
       </button>
     </div>
-    <p v-if="loading">A carregar…</p>
+    <p v-if="loading" class="loading-banner">A carregar formulário…</p>
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="message" class="ok">{{ message }}</p>
+    <div v-if="loading && !schema" class="form-card card form-skeleton" aria-hidden="true">
+      <div class="sk-line" style="width:40%" />
+      <div class="sk-line" style="width:100%" />
+      <div class="sk-line" style="width:100%" />
+      <div class="sk-line" style="width:70%" />
+    </div>
     <div v-if="!loading && schema" class="form-card card">
       <SchemaForm
         ref="schemaFormRef"
@@ -433,4 +439,25 @@ watch(() => route.fullPath, load, { immediate: true })
 }
 .error { color: var(--danger); font-weight: 600; }
 .ok { color: var(--success); font-weight: 600; }
+.loading-banner {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--accent-hover);
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm);
+}
+.form-skeleton { display: grid; gap: 0.85rem; padding: 1.35rem 1.4rem; }
+.form-skeleton .sk-line {
+  height: 2.2rem;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e8ecef 0%, #f4f6f8 45%, #e8ecef 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.1s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
 </style>

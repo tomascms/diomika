@@ -43,7 +43,6 @@ def workspace_config(request: Request, role=Depends(require_admin)):
             "icon": cfg.get("icon", "folder"),
             "ui_mode": cfg.get("ui_mode"),
             "ui_catalog_merged_list": cfg.get("ui_catalog_merged_list") or key in CATALOG_VIEWS,
-            "ui_filters": list(cfg.get("ui_filters") or cfg.get("ui_filters_base") or []),
         }
     sidebar = filter_sidebar_for_role(sidebar, str(role))
     tables = {}

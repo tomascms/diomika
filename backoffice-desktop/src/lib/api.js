@@ -216,13 +216,10 @@ export const api = {
   createCategory: (body) => request('POST', '/system/categories/create', { body }),
   mergedList: async (viewKey, params = {}) => {
     const data = await request('GET', `/catalogo/admin/merged/${viewKey}`, {
-      params: { limit: '80', offset: '0', ...params },
+      params: { limit: '40', offset: '0', ...params },
     })
     return normalizeMergedPage(data)
   },
-  schemaSync: (dryRun = false) => request('POST', `/system/schema/sync?dry_run=${dryRun}`),
-  schemaStatus: () => request('GET', '/system/schema/status'),
-  applyDeploySql: () => request('POST', '/system/apply-deploy-sql'),
   categoriesPlan: () => request('GET', '/system/categories/plan'),
   orderPicker: (categoryId) => request('GET', `/system/order-picker/${categoryId}`),
   createOrder: (body) => request('POST', '/encomendas-internas', { body }),

@@ -169,6 +169,22 @@ def list_select_query(table: str) -> str:
     return "*"
 
 
+def admin_merged_select_query(table: str) -> str:
+    """Select leve para listas merged do admin (sem * / imagens / JSON pesado)."""
+    tipo = tipo_for_table(table)
+    if not tipo:
+        return "id, visibilidade, created_at"
+    cfg = CATALOG_TYPES[tipo]
+    mt = cfg["model_table"]
+    if table == cfg["product_table"]:
+        return (
+            f"id, ean, dimensoes, altura, segmento, visibilidade, created_at, id_modelo, "
+            f"{mt}(nome, categories(nome))"
+        )
+    if table == mt:
+        return "id, nome, visibilidade, created_at, id_categoria, categories(nome)"
+    return "id, visibilidade, created_at"
+
 def infer_model_ptable(item: dict) -> str | None:
     if item.get("_ptable") in all_model_tables():
         return item["_ptable"]
