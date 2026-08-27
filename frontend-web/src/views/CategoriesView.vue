@@ -4,6 +4,7 @@ import { useCategories } from '@/composables/useCategories'
 import { categoryProductsRoute } from '@/lib/catalogRoutes'
 import Breadcrumbs from '@/components/Breadcrumbs.vue'
 import LoadingState from '@/components/LoadingState.vue'
+import SoftImage from '@/components/SoftImage.vue'
 
 const { categories, loading, error, load } = useCategories()
 
@@ -46,12 +47,11 @@ const breadcrumbItems = [
           class="cat-card"
         >
           <div class="cat-media">
-            <img
+            <SoftImage
               v-if="cat.imagem"
               :src="cat.imagem"
               :alt="pretty(cat.nome)"
-              class="cat-img"
-              loading="lazy"
+              img-class="cat-img"
             />
             <span v-else class="cat-placeholder">{{ pretty(cat.nome).charAt(0) || 'D' }}</span>
           </div>
@@ -129,14 +129,18 @@ const breadcrumbItems = [
   overflow: hidden;
 }
 
-.cat-img {
+.cat-media :deep(.soft-image),
+.cat-media :deep(.soft-image__img) {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  transition: transform 0.4s ease;
 }
 
-.cat-card:hover .cat-img {
+.cat-media :deep(.soft-image__img) {
+  object-fit: cover;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cat-card:hover :deep(.soft-image__img) {
   transform: scale(1.04);
 }
 

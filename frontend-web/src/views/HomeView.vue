@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { useCategories } from '@/composables/useCategories'
 import { categoryProductsRoute } from '@/lib/catalogRoutes'
 import LoadingState from '@/components/LoadingState.vue'
+import SoftImage from '@/components/SoftImage.vue'
 
 const { categories, loading, error, load } = useCategories()
 
@@ -85,12 +86,10 @@ const previewCats = computed(() => categories.value.slice(0, 2))
             class="preview-card"
           >
             <div class="preview-media">
-              <img
+              <SoftImage
                 v-if="cat.imagem"
                 :src="cat.imagem"
                 :alt="pretty(cat.nome)"
-                loading="lazy"
-                decoding="async"
                 width="640"
                 height="480"
               />
@@ -283,11 +282,17 @@ const previewCats = computed(() => categories.value.slice(0, 2))
 .preview-media {
   background: linear-gradient(145deg, #1b365d, #0b1f3a);
   min-height: 180px;
+  position: relative;
 }
 
-.preview-media img {
+.preview-media :deep(.soft-image),
+.preview-media :deep(.soft-image__img) {
   width: 100%;
   height: 100%;
+  min-height: 180px;
+}
+
+.preview-media :deep(.soft-image__img) {
   object-fit: cover;
 }
 

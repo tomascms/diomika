@@ -128,7 +128,11 @@ onUnmounted(() => {
 
     <main id="main-content" class="app-main">
       <AppErrorBoundary>
-        <RouterView />
+        <RouterView v-slot="{ Component, route }">
+          <Transition name="page-fade" mode="out-in">
+            <component :is="Component" :key="route.path" />
+          </Transition>
+        </RouterView>
       </AppErrorBoundary>
     </main>
 
@@ -442,5 +446,27 @@ onUnmounted(() => {
 
 @media (max-width: 560px) {
   .footer-grid { grid-template-columns: 1fr; }
+}
+
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.page-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.page-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-fade-enter-active,
+  .page-fade-leave-active {
+    transition: none;
+  }
 }
 </style>

@@ -4,7 +4,8 @@ import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 
 import { ensureSupabase, supabaseConfigured, subscribeRealtime } from '@/lib/supabase'
 
-import { resolveImageUrl, resolveImageUrls, PLACEHOLDER, safeCssUrl, IMG_CARD, IMG_HERO } from '@/lib/images'
+import { resolveImageUrl, resolveImageUrls, PLACEHOLDER, safeCssUrl } from '@/lib/images'
+import SoftImage from '@/components/SoftImage.vue'
 
 import { watchDynamicTitle } from '@/composables/usePageMeta'
 
@@ -148,7 +149,7 @@ const fetchProducts = async () => {
 
       ...cat,
 
-      imagem: await resolveImageUrl(cat.imagem, '', { transform: IMG_HERO }),
+      imagem: await resolveImageUrl(cat.imagem, PLACEHOLDER),
 
     }
 
@@ -208,12 +209,12 @@ const fetchProducts = async () => {
       }
     })
 
-    const covers = await resolveImageUrls(prepared.map((p) => p.coverPath), '', { transform: IMG_CARD })
+    const covers = await resolveImageUrls(prepared.map((p) => p.coverPath), PLACEHOLDER)
 
     products.value = prepared.map((p, i) => ({
       ...p.model,
       _tipo_catalogo: p.model._tipo_catalogo || tipo,
-      imagem_capa: covers[i] || '',
+      imagem_capa: covers[i] || PLACEHOLDER,
       galeria: [],
       _galleryPaths: p.galleryPaths,
       currentImgIdx: 0,
@@ -243,7 +244,7 @@ async function hydrateGalleries(list) {
   const pending = (list || []).filter((p) => (p._galleryPaths || []).length && !(p.galeria || []).length)
   if (!pending.length) return
   const flat = pending.flatMap((p) => p._galleryPaths)
-  const urls = await resolveImageUrls(flat, '', { transform: IMG_CARD })
+  const urls = await resolveImageUrls(flat, PLACEHOLDER)
   let offset = 0
   for (const product of pending) {
     const n = product._galleryPaths.length
@@ -341,6 +342,8 @@ onUnmounted(() => {
         alt=""
 
         aria-hidden="true"
+        decoding="async"
+        fetchpriority="high"
 
       />
 
@@ -407,17 +410,10 @@ onUnmounted(() => {
 
         <div class="card-image-container">
 
-          <img
-
+          <SoftImage
             :src="coverImage(product)"
-
             :alt="product.nome"
-
-            class="cover-image"
-
-            loading="lazy"
-            decoding="async"
-
+            img-class="cover-image"
           />
 
           <div v-if="hasGallery(product)" class="carousel-nav">
@@ -666,11 +662,7 @@ onUnmounted(() => {
 
   overflow: hidden;
 
-  content-visibility: auto;
-
-  contain-intrinsic-size: 360px;
-
-  transition: transform var(--transition), box-shadow var(--transition);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
 
 }
 
@@ -678,7 +670,7 @@ onUnmounted(() => {
 
 .product-card:hover {
 
-  transform: translateY(-5px);
+  transform: translateY(-4px);
 
   box-shadow: var(--shadow-lg);
 
@@ -722,16 +714,30 @@ onUnmounted(() => {
 
   object-fit: cover;
 
-  transition: transform 0.35s ease;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 
 }
 
 
 
-.product-card:hover .cover-image {
+.card-image-container :deep(.soft-image),
+.card-image-container :deep(.soft-image__img) {
+  width: 100%;
+  height: 100%;
+}
+
+.card-image-container :deep(.soft-image__img) {
+  object-fit: cover;
+}
+
+.product-card:hover :deep(.soft-image__img) {
 
   transform: scale(1.03);
 
+}
+
+.card-image-container :deep(.soft-image__img) {
+  transition: opacity 0.4s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 

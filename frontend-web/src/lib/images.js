@@ -2,14 +2,14 @@ import { getImageUrl, storageObjectPath } from '@/lib/supabaseConfig'
 
 export const PLACEHOLDER = '/placeholder.svg'
 
-/** Presets para Image Transformation (fallback automático se o plano não tiver). */
-export const IMG_THUMB = { width: 640, quality: 70, resize: 'contain' }
+/** Presets opcionais (só se VITE_IMAGE_TRANSFORM=1). Por omissão off — mais rápido e fiável. */
+export const IMG_THUMB = { width: 640, quality: 72, resize: 'contain' }
 export const IMG_CARD = { width: 720, quality: 75, resize: 'contain' }
 export const IMG_HERO = { width: 1200, quality: 78, resize: 'contain' }
 export const IMG_DETAIL = { width: 1400, quality: 80, resize: 'contain' }
 
 const signedMemo = new Map()
-const PERSIST_KEY = 'diomika_signed_v2'
+const PERSIST_KEY = 'diomika_signed_v5'
 const PERSIST_TTL_MS = 50 * 60 * 1000
 
 function storagePrivateEnabled() {
@@ -17,9 +17,32 @@ function storagePrivateEnabled() {
 }
 
 function transformEnabled() {
-  // default on — se o projecto não tiver Image Transformation, cai para full-size
-  const raw = String(import.meta.env.VITE_IMAGE_TRANSFORM ?? '1').trim()
+  const raw = String(import.meta.env.VITE_IMAGE_TRANSFORM ?? '0').trim()
   return /^(1|true|yes)$/i.test(raw)
+}
+
+function isReadyUrl(value) {
+  return (
+    typeof value === 'string' &&
+    (/^https?:\/\//i.test(value) || value.startsWith('data:') || value.startsWith('/'))
+  )
+}
+
+function isPlaceholderUrl(value) {
+  const v = String(value || '')
+  return v === PLACEHOLDER || v.endsWith('/placeholder.svg') || v.includes('placeholder.svg')
+}
+
+/**
+ * Precisa de signed URL fresca (bucket privado).
+ * URLs /object/sign/… gravadas na BD expiram — nunca usar o token antigo.
+ */
+export function needsPrivateSign(path) {
+  if (!path || !storagePrivateEnabled()) return false
+  const raw = String(path).trim()
+  if (!raw || /^data:/i.test(raw)) return false
+  if (isPlaceholderUrl(raw)) return false
+  return Boolean(storageObjectPath(raw))
 }
 
 function cacheKey(path, transform) {
@@ -29,6 +52,22 @@ function cacheKey(path, transform) {
   return `${base}::w${transform.width || ''}q${transform.quality || ''}`
 }
 
+function purgeLegacyCaches() {
+  if (typeof sessionStorage === 'undefined') return
+  try {
+    ;[
+      'diomika_signed_v1',
+      'diomika_signed_v2',
+      'diomika_signed_v3',
+      'diomika_signed_v4',
+    ].forEach((k) => sessionStorage.removeItem(k))
+  } catch {
+    /* ignore */
+  }
+}
+
+purgeLegacyCaches()
+
 function readPersist(key) {
   if (!key || typeof sessionStorage === 'undefined') return null
   try {
@@ -37,6 +76,11 @@ function readPersist(key) {
     const bag = JSON.parse(raw)
     const row = bag?.[key]
     if (!row?.url || !row?.exp || Date.now() > row.exp) return null
+    if (!isReadyUrl(row.url) || isPlaceholderUrl(row.url)) return null
+    // Só aceitar signed frescas em cache — nunca public nem tokens da BD
+    if (!/\/object\/sign\//i.test(row.url) && !/\/render\/image\/sign\//i.test(row.url)) {
+      return null
+    }
     return row.url
   } catch {
     return null
@@ -45,11 +89,12 @@ function readPersist(key) {
 
 function writePersist(key, url) {
   if (!key || !url || typeof sessionStorage === 'undefined') return
+  if (!isReadyUrl(url) || isPlaceholderUrl(url)) return
+  if (!/\/object\/sign\//i.test(url) && !/\/render\/image\/sign\//i.test(url)) return
   try {
     const raw = sessionStorage.getItem(PERSIST_KEY)
     const bag = raw ? JSON.parse(raw) : {}
     bag[key] = { url, exp: Date.now() + PERSIST_TTL_MS }
-    // Evita crescer sem limite
     const keys = Object.keys(bag)
     if (keys.length > 400) {
       keys
@@ -72,17 +117,9 @@ export function safeCssUrl(url) {
   return trimmed
 }
 
-function isReadyUrl(value) {
-  return (
-    /^https?:\/\//i.test(value) ||
-    value.startsWith('data:') ||
-    value.startsWith('/')
-  )
-}
-
 /**
  * Resolve vários paths em lote (1 request createSignedUrls quando privado).
- * options.transform — thumbnail Supabase (opcional).
+ * Paths, /object/public/ e /object/sign/ expirados na BD → signed fresca.
  */
 export async function resolveImageUrls(paths, placeholder = PLACEHOLDER, options = {}) {
   const input = Array.isArray(paths) ? paths : []
@@ -110,61 +147,70 @@ export async function resolveImageUrls(paths, placeholder = PLACEHOLDER, options
       out[i] = path.trim()
       continue
     }
-    const key = cacheKey(path, transform)
-    if (!key) continue
-    if (isReadyUrl(key.split('::')[0]) && /^https?:\/\//i.test(String(path).trim())) {
-      out[i] = String(path).trim()
+    const raw = String(path).trim()
+
+    if (needsPrivateSign(raw)) {
+      const key = cacheKey(raw, transform)
+      if (!key) continue
+      const mem = signedMemo.get(key)
+      if (mem) {
+        out[i] = mem
+        continue
+      }
+      const persisted = readPersist(key)
+      if (persisted) {
+        signedMemo.set(key, persisted)
+        out[i] = persisted
+        continue
+      }
+      needIdx.push(i)
+      needPaths.push(raw)
       continue
     }
-    const mem = signedMemo.get(key)
-    if (mem) {
-      out[i] = mem
-      continue
+
+    // URL externa (não storage Diomika)
+    if (/^https?:\/\//i.test(raw) && !isPlaceholderUrl(raw)) {
+      out[i] = raw
     }
-    const persisted = readPersist(key)
-    if (persisted) {
-      signedMemo.set(key, persisted)
-      out[i] = persisted
-      continue
-    }
-    needIdx.push(i)
-    needPaths.push(path)
   }
 
   if (needPaths.length) {
     const { getSignedImageUrls } = await import('@/lib/supabase')
     const signed = await getSignedImageUrls(needPaths, 3600, transform)
     for (let j = 0; j < needPaths.length; j++) {
-      const url = signed[j] || placeholder
+      const url = signed[j]
       const key = cacheKey(needPaths[j], transform)
-      if (key && url && url !== placeholder) {
+      if (
+        key &&
+        url &&
+        isReadyUrl(url) &&
+        (/\/object\/sign\//i.test(url) || /\/render\/image\/sign\//i.test(url))
+      ) {
         signedMemo.set(key, url)
         writePersist(key, url)
+        out[needIdx[j]] = url
+      } else {
+        out[needIdx[j]] = placeholder
       }
-      out[needIdx[j]] = url
     }
   }
 
   return out
 }
 
-/**
- * Resolve path de storage → URL utilizável.
- * Com VITE_STORAGE_PRIVATE=1 usa URL assinada (async).
- */
 export async function resolveImageUrl(path, placeholder = PLACEHOLDER, options = {}) {
   const [url] = await resolveImageUrls([path], placeholder, options)
   return url
 }
 
-/** Sync — só para paths já resolvidos (https) ou modo público. */
+/** Sync — só paths já signed frescos em memória, ou modo público. */
 export function formatImageUrl(path, placeholder = PLACEHOLDER) {
   if (!path) return placeholder
   if (storagePrivateEnabled()) {
     const value = typeof path === 'string' ? path.trim() : ''
-    if (isReadyUrl(value)) {
-      return value || placeholder
-    }
+    const key = cacheKey(value, null)
+    if (key && signedMemo.has(key)) return signedMemo.get(key)
+    // Não confiar em signed/public da BD (expiram / 403)
     return placeholder
   }
   const url = getImageUrl(path)

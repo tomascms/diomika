@@ -115,23 +115,30 @@ export async function getSignedImageUrls(paths, expiresIn = DEFAULT_EXPIRES, tra
   if (!storagePaths.length) return out
 
   const unique = [...new Set(storagePaths)]
+  // Sempre preferir batch createSignedUrls (1 request). Transforms por imagem
+  // são lentos e falham em muitos planos — só com VITE_IMAGE_TRANSFORM=1.
   const hasTransform =
     transform && typeof transform === 'object' && Object.keys(transform).length > 0
 
   if (hasTransform) {
     try {
       const signedByPath = new Map()
-      await mapPool(unique, 6, async (storagePath) => {
+      let transformOk = 0
+      await mapPool(unique, 8, async (storagePath) => {
         const { data, error } = await client.storage
           .from(storageBucket)
           .createSignedUrl(storagePath, expiresIn, { transform })
-        if (error || !data?.signedUrl) throw error || new Error('transform sign failed')
-        signedByPath.set(storagePath, data.signedUrl)
+        if (!error && data?.signedUrl) {
+          signedByPath.set(storagePath, data.signedUrl)
+          transformOk += 1
+        }
       })
-      for (let j = 0; j < storagePaths.length; j++) {
-        out[storageIdx[j]] = signedByPath.get(storagePaths[j]) || ''
+      if (transformOk >= Math.ceil(unique.length * 0.6)) {
+        for (let j = 0; j < storagePaths.length; j++) {
+          out[storageIdx[j]] = signedByPath.get(storagePaths[j]) || ''
+        }
+        if (out.every((u, i) => !storageIdx.includes(i) || u)) return out
       }
-      return out
     } catch {
       /* Image Transformation off → fallback */
     }
@@ -145,11 +152,24 @@ export async function getSignedImageUrls(paths, expiresIn = DEFAULT_EXPIRES, tra
 
   const byPath = new Map()
   for (const row of data) {
-    if (row?.path && row?.signedUrl) byPath.set(row.path, row.signedUrl)
+    const signed = row?.signedUrl || row?.signedURL || ''
+    if (row?.path && signed) byPath.set(row.path, signed)
   }
 
   for (let j = 0; j < storagePaths.length; j++) {
-    out[storageIdx[j]] = byPath.get(storagePaths[j]) || ''
+    const p = storagePaths[j]
+    out[storageIdx[j]] = byPath.get(p) || ''
+  }
+
+  // Fallback por índice se a API não devolver path alinhado
+  if (Array.isArray(data) && data.length === unique.length) {
+    const uniqueSigned = data.map((row) => row?.signedUrl || row?.signedURL || '')
+    const uniqueMap = new Map(unique.map((p, i) => [p, uniqueSigned[i]]))
+    for (let j = 0; j < storagePaths.length; j++) {
+      if (!out[storageIdx[j]]) {
+        out[storageIdx[j]] = uniqueMap.get(storagePaths[j]) || ''
+      }
+    }
   }
   return out
 }

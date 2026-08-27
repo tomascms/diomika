@@ -1,7 +1,8 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
-import { resolveImageUrls, PLACEHOLDER, IMG_DETAIL, IMG_THUMB } from '@/lib/images'
+import { resolveImageUrls, PLACEHOLDER } from '@/lib/images'
+import SoftImage from '@/components/SoftImage.vue'
 import { watchDynamicTitle } from '@/composables/usePageMeta'
 import { useCart, resolveCartQtyRules } from '@/composables/useCart'
 import { MIN_ORCAMENTO_MSG } from '@/lib/constants'
@@ -116,10 +117,8 @@ const fetchProduct = async () => {
     const rawColors = (modelData.modelo_cores || [])
       .filter((c) => c.visibilidade !== false)
       .sort((a, b) => a.numero - b.numero)
-    const colorUrls = await resolveImageUrls(rawColors.map((c) => c.imagem), PLACEHOLDER, {
-      transform: IMG_DETAIL,
-    })
-    colors.value = rawColors.map((c, i) => ({ ...c, imagem: colorUrls[i] }))
+    const colorUrls = await resolveImageUrls(rawColors.map((c) => c.imagem), PLACEHOLDER)
+    colors.value = rawColors.map((c, i) => ({ ...c, imagem: colorUrls[i] || PLACEHOLDER }))
 
     if (colors.value.length === 0) {
       throw new Error('Não existem cores disponíveis para este modelo.')
@@ -138,7 +137,7 @@ const fetchProduct = async () => {
       }
       const pt = storefrontCtx.value.product_table
       const [barcodeUrl] = product.barcode_url
-        ? await resolveImageUrls([product.barcode_url], '', { transform: IMG_THUMB })
+        ? await resolveImageUrls([product.barcode_url], '')
         : ['']
       model.value[pt] = {
         ...product,
@@ -146,7 +145,7 @@ const fetchProduct = async () => {
       }
     } else {
       const barcodePaths = pickerOptions.value.map((opt) => opt.value?.barcode_url || '')
-      const barcodeUrls = await resolveImageUrls(barcodePaths, '', { transform: IMG_THUMB })
+      const barcodeUrls = await resolveImageUrls(barcodePaths, '')
       pickerOptions.value = pickerOptions.value.map((opt, i) => ({
         ...opt,
         value: {
@@ -224,10 +223,12 @@ watch(() => route.fullPath, fetchProduct)
     >
       <section class="gallery">
         <div class="main-image-wrap">
-          <img
+          <SoftImage
             :src="displayImage"
             :alt="`${model.nome} — cor seleccionada`"
-            class="main-img"
+            img-class="main-img"
+            eager
+            fetchpriority="high"
           />
         </div>
 
@@ -246,7 +247,7 @@ watch(() => route.fullPath, fetchProduct)
               :title="c.nome || `Cor ${c.numero}`"
               @click="selectColor(c)"
             >
-              <img :src="c.imagem || PLACEHOLDER" :alt="c.nome || `Cor ${c.numero}`" />
+              <SoftImage :src="c.imagem || PLACEHOLDER" :alt="c.nome || `Cor ${c.numero}`" />
             </button>
           </div>
         </div>
@@ -355,9 +356,13 @@ watch(() => route.fullPath, fetchProduct)
   border: 1px solid var(--color-border);
 }
 
-.main-img {
+.main-image-wrap :deep(.soft-image),
+.main-image-wrap :deep(.soft-image__img) {
   width: 100%;
   height: 100%;
+}
+
+.main-image-wrap :deep(.soft-image__img) {
   object-fit: cover;
 }
 
@@ -398,9 +403,13 @@ watch(() => route.fullPath, fetchProduct)
   border-color: var(--color-ink-deep);
 }
 
-.color-thumb-btn img {
+.color-thumb-btn :deep(.soft-image),
+.color-thumb-btn :deep(.soft-image__img) {
   width: 100%;
   height: 100%;
+}
+
+.color-thumb-btn :deep(.soft-image__img) {
   object-fit: cover;
 }
 

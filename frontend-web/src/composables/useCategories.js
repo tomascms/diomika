@@ -7,10 +7,17 @@ const loading = ref(false)
 const error = ref('')
 let loadPromise = null
 
-const CACHE_KEY = 'diomika_cats_v1'
+const CACHE_KEY = 'diomika_cats_v4'
 const CACHE_TTL_MS = 5 * 60 * 1000
 
 function readCatCache() {
+  try {
+    ;['diomika_cats_v1', 'diomika_cats_v2', 'diomika_cats_v3'].forEach((k) =>
+      sessionStorage.removeItem(k),
+    )
+  } catch {
+    /* ignore */
+  }
   try {
     const raw = sessionStorage.getItem(CACHE_KEY)
     if (!raw) return null
@@ -30,29 +37,20 @@ function writeCatCache(data) {
   }
 }
 
-function scheduleIdle(fn) {
-  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-    window.requestIdleCallback(() => {
-      fn().catch(() => {})
-    }, { timeout: 2500 })
-  } else {
-    setTimeout(() => {
-      fn().catch(() => {})
-    }, 200)
-  }
-}
-
 async function hydrateCategoryImages(list) {
-  const need = (list || []).filter((c) => c && c.imagem && !/^https?:\/\//i.test(String(c.imagem)))
+  const { resolveImageUrls, PLACEHOLDER, needsPrivateSign } = await import('@/lib/images')
+  const need = (list || []).filter((c) => c && c.imagem && needsPrivateSign(c.imagem))
   if (!need.length) return list
-  const { resolveImageUrls, IMG_THUMB } = await import('@/lib/images')
   const urls = await resolveImageUrls(
     need.map((c) => c.imagem),
-    '',
-    { transform: IMG_THUMB },
+    PLACEHOLDER,
   )
   need.forEach((c, i) => {
-    c.imagem = urls[i] || c.imagem
+    const next = urls[i]
+    // Só substitui se obtivemos signed URL real — nunca gravar placeholder no cache
+    if (next && next !== PLACEHOLDER && !String(next).includes('placeholder')) {
+      c.imagem = next
+    }
   })
   categories.value = [...categories.value]
   writeCatCache(categories.value)
@@ -72,7 +70,8 @@ export function useCategories() {
       const cached = readCatCache()
       if (cached?.length) {
         categories.value = cached.map((c) => ({ ...c }))
-        scheduleIdle(() => hydrateCategoryImages(categories.value))
+        // Assinar URLs public→signed antes de pintar (bucket privado)
+        await hydrateCategoryImages(categories.value)
         return categories.value
       }
     }
@@ -91,9 +90,9 @@ export function useCategories() {
           raw = (Array.isArray(data) ? data : []).filter((c) => c.visibilidade !== false)
         }
         categories.value = raw.map((c) => ({ ...c }))
+        await hydrateCategoryImages(categories.value)
         writeCatCache(categories.value)
         loading.value = false
-        scheduleIdle(() => hydrateCategoryImages(categories.value))
         return categories.value
       } catch (e) {
         error.value = e.message || 'Erro ao carregar categorias.'
