@@ -32,19 +32,23 @@ Guia prático único. Manual técnico completo: [`RELATORIO_TECNICO.md`](RELATOR
 ## 3. Deploy produção
 
 ```powershell
-cd c:\Users\tommy\Desktop\diomika
+cd C:\Users\tcmso\Desktop\diomika
 python deploy/deploy_vm.py
+$env:PAGES_PRODUCTION="1"
 python deploy/deploy_pages.py --build --pages-deploy --api-url https://api.diomika.com
 python deploy/verify_production.py
 ```
 
+O token `CLOUDFLARE_API_TOKEN` usado no deploy da loja precisa de **Account → Cloudflare Pages → Edit**. Um token só de Analytics (hub) falha com `Authentication error [code: 10000]`. Alternativa: Cloudflare Dashboard → Pages → `diomika-loja` → Upload de `frontend-web/dist/`.
+
 | Script | Faz |
 |--------|-----|
 | `deploy_vm.py` | API na VM + Docker + Tunnel |
-| `deploy_pages.py` | Build + Cloudflare Pages |
+| `deploy_pages.py` | Build + Cloudflare Pages (`PAGES_PRODUCTION=1` = loja produção) |
 | `verify_production.py` | Uptime + smoke + segurança (+ e2e se Playwright instalado) |
 | `apply_production.py` | Schema Supabase + SQL infra (opcional `--seed-demo`) |
 | `monitor_check.py --alert` | Teste manual API+loja com alerta ntfy |
+| `security_audit_deep.py` | Auditoria de segurança expandida |
 
 **GitHub secrets (Actions):** `API_HEALTH_URL`, `ALERT_WEBHOOK_URL`, `SITE_URL` (opcional).
 
@@ -80,26 +84,64 @@ Mac/Linux `.dmg`/`.AppImage` — GitHub Actions (`backoffice-release.yml`) ou nu
 
 ---
 
-## 5. Monitor Hub (estado + alertas + painéis)
+## 5. Monitor Hub — Command Center (como ler em 30s)
 
 ```powershell
 cd monitor-hub
 npm install
-copy config.local.example.json config.local.json
-# Editar config.local.json — ntfyTopicJsonUrl com o teu tópico
+# Preferível: Importar do .env dentro da app (Ligações)
+# Ou: copy config.local.example.json config.local.json
 npm start
 ```
 
-**Aba «Estado & Alertas»** (primeira): API, loja, BD, `deploy/alerts.log`, stream ntfy.
+**Atalho:** `Abrir Command Center.vbs` / atalho no Ambiente de trabalho.
 
-Outras abas: Cloudflare, Sentry, Axiom, PostHog, UptimeRobot, GCP, Supabase, GitHub Actions.
+### O que vês na Visão geral (control tower)
 
-**Checklist matinal (2 min):**
+1. **Estado do cliente** — OK / Atenção / Crítico (linguagem clara, sem códigos)
+2. **Faixa de ligações** — verde = hub a ver dados; vermelho = cego nalguma API
+3. **4 números** — pedidos edge (Cloudflare), visitas PostHog, inbox por ler, uptime/SLO
+4. **O que precisa de ti** — só problemas accionáveis + «Ver o que fazer» / Prompt Cursor
+5. **O que mudou** — deltas desde o último poll + banner de regressão pós-deploy
 
-1. Hub → Estado & Alertas → tudo OK
-2. UptimeRobot → monitores Up
-3. Sentry → sem erro crítico novo
-4. Se houve deploy → `verify_production.py`
+**Ctrl+K** — command palette (ir a abas, health, relatório).
+
+### Abas
+
+| Aba | Serve para |
+|-----|------------|
+| Visão geral | Decisão em 30s |
+| Analytics | Edge + PostHog + negócio (hoje/7d/total) + insights |
+| Segurança | Postura 0–100, sintéticos, WAF/ataques |
+| Incidentes | Histórico, Ack/Resolver, playbooks, feed |
+| Infra | Latência, monitores, Sentry (detalhe) |
+| CI / CD | Releases e Actions |
+| Ligações | Importar `.env`, tokens |
+
+### Tokens / scopes necessários
+
+| Serviço | O que o hub precisa |
+|---------|---------------------|
+| PostHog | **Personal API Key `phx_`** com Query:Read + Project:Read (EU). Não uses `phc_`. Env: `POSTHOG_PERSONAL_API_KEY` |
+| Axiom | Token com **query/read** no dataset (não só ingest). Env: `AXIOM_TOKEN` |
+| Cloudflare | Token com Zone Read + **Analytics Read** (GraphQL). Env: `CLOUDFLARE_API_TOKEN` |
+| Supabase | URL + service/anon key para contagens de negócio. Env: `SUPABASE_URL`, `SUPABASE_KEY` |
+| Sentry | Auth token org/project. Env: `SENTRY_AUTH_TOKEN` |
+| GitHub | `gh auth login` ou Device Flow |
+
+### Checklist matinal (2 min)
+
+1. Visão geral → estado OK ou lista curta «precisa de ti»
+2. Segurança → postura alta; admin bloqueado; sintéticos OK
+3. Analytics → edge/visitas e inbox
+4. Se houve deploy → banner de regressão ou `python deploy/verify_production.py`
+5. Relatório mensal → botão «Relatório mensal» (Markdown sem PII)
+
+### Notas
+
+- Visitas PostHog = só tráfego **com consentimento** de cookies; edge Cloudflare = pedidos reais.
+- Erros técnicos de integração ficam em Ligações / detalhe — a home mostra frases humanas.
+- Notificação do Windows quando o score passa a Crítico.
 
 ---
 
@@ -114,7 +156,8 @@ SENTRY_DSN=
 AXIOM_TOKEN=
 AXIOM_DATASET=diomika
 AXIOM_API_URL=https://eu-central-1.aws.edge.axiom.co
-VITE_POSTHOG_KEY=          # build Pages
+POSTHOG_PERSONAL_API_KEY=   # hub Query API (phx_) — obrigatório para Analytics
+VITE_POSTHOG_KEY=          # build Pages (phc_) — não usar no hub
 VITE_POSTHOG_HOST=https://eu.i.posthog.com
 ALERT_WEBHOOK_URL=         # ntfy
 ALERT_LATENCY_MS=2000

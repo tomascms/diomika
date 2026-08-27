@@ -3,28 +3,34 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'" />
   <title>Diomika Command Center</title>
   <link rel="stylesheet" href="styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="vendor/chart.umd.min.js"></script>
 </head>
 <body>
   <aside id="sidebar">
     <div class="brand">
       <span class="brand-dot" id="score-dot"></span>
-      Diomika Ops
+      <div>
+        <div class="brand-name">Diomika Ops</div>
+        <div class="brand-ver" id="hub-ver">Command Center</div>
+      </div>
     </div>
     <nav class="nav">
       <button type="button" class="nav-btn active" data-view="overview">Visão geral</button>
-      <button type="button" class="nav-btn" data-view="alerts">Alertas <span class="badge" id="alert-badge">0</span></button>
       <button type="button" class="nav-btn" data-view="analytics">Analytics</button>
+      <button type="button" class="nav-btn" data-view="security">Segurança</button>
+      <button type="button" class="nav-btn" data-view="alerts">Incidentes <span class="badge" id="incident-badge">0</span></button>
       <button type="button" class="nav-btn" data-view="metrics">Infra</button>
       <button type="button" class="nav-btn" data-view="cicd">CI / CD</button>
-      <button type="button" class="nav-btn" data-view="setup">Configuração</button>
+      <button type="button" class="nav-btn" data-view="setup">Ligações</button>
     </nav>
     <div class="sidebar-foot">
       <div class="live" id="live-indicator">● A actualizar…</div>
-      <button type="button" id="refresh-btn" class="ghost-btn">Actualizar agora</button>
-      <button type="button" id="clear-all-btn" class="ghost-btn btn-sm">Limpar tudo</button>
+      <button type="button" id="refresh-btn" class="ghost-btn">Actualizar</button>
+      <button type="button" id="palette-btn" class="ghost-btn btn-sm">Comandos (Ctrl+K)</button>
+      <button type="button" id="export-report-btn" class="ghost-btn btn-sm">Relatório mensal</button>
     </div>
   </aside>
 
@@ -32,128 +38,245 @@
     <header id="topbar">
       <div>
         <h1 id="view-title">Visão geral</h1>
-        <p id="view-sub" class="muted">Monitorização em tempo real — sem logins repetidos</p>
+        <p id="view-sub" class="muted">Centro de comando — estado do cliente em 30 segundos</p>
       </div>
       <div id="kpi-strip" class="kpi-strip"></div>
     </header>
 
+    <!-- OVERVIEW: control tower — clean, human -->
     <section id="view-overview" class="view active">
-      <div class="panel-head-row">
-        <span class="muted">Avisos importantes</span>
-        <button type="button" class="ghost-btn btn-sm" data-clear-tab="overview">Limpar avisos</button>
-      </div>
-      <div class="recs" id="recommendations"></div>
-      <div class="grid-3" id="health-cards"></div>
+      <div class="tower-hero" id="tower-hero"></div>
+      <div class="int-strip" id="int-strip" title="Saúde das ligações do hub"></div>
+      <div class="grid-4" id="tower-nums"></div>
       <div class="grid-2">
         <div class="panel">
-          <h2>Latência API (tempo real)</h2>
-          <canvas id="chart-latency"></canvas>
+          <div class="panel-head-row">
+            <h2>Edge agora (24h)</h2>
+            <span class="muted" id="edge-ratio-label"></span>
+          </div>
+          <canvas id="chart-edge" height="110"></canvas>
         </div>
         <div class="panel">
-          <h2>Erros por hora (Axiom)</h2>
-          <canvas id="chart-errors"></canvas>
+          <h2>Funil rápido</h2>
+          <div id="funnel-strip" class="funnel-strip"></div>
+          <div id="ops-rail" class="ops-rail"></div>
         </div>
       </div>
-      <div class="grid-3" id="intel-cards"></div>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head-row">
+            <h2>O que precisa de ti</h2>
+            <button type="button" class="ghost-btn btn-sm" data-clear-tab="overview">Ocultar</button>
+          </div>
+          <div id="story-list" class="story-list"></div>
+        </div>
+        <div class="panel">
+          <h2>O que mudou</h2>
+          <div id="changes-list" class="change-list"></div>
+          <div id="deploy-banner" class="deploy-banner hidden"></div>
+        </div>
+      </div>
+      <div class="panel soft">
+        <div class="panel-head-row">
+          <h2>SLO &amp; error budget</h2>
+          <span class="muted" id="slo-target"></span>
+        </div>
+        <div id="slo-panel" class="slo-panel"></div>
+      </div>
+      <div class="grid-2">
+        <div class="panel" id="commercial-health"></div>
+        <div class="panel" id="morning-checklist"></div>
+      </div>
     </section>
 
+    <!-- ANALYTICS -->
+    <section id="view-analytics" class="view">
+      <p class="section-lead" id="analytics-lead"></p>
+      <div class="grid-4" id="analytics-kpis"></div>
+      <div class="grid-3" id="conversion-cards"></div>
+      <div class="grid-2">
+        <div class="panel">
+          <h2>Visitas (24 h)</h2>
+          <p class="panel-hint">PostHog (com consentimento) · barras por hora</p>
+          <canvas id="chart-visits" height="140"></canvas>
+        </div>
+        <div class="panel">
+          <h2>Tendência diária (14 d)</h2>
+          <p class="panel-hint">Pageviews por dia</p>
+          <canvas id="chart-daily" height="140"></canvas>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <h2>Negócio (7 dias)</h2>
+          <canvas id="chart-business" height="140"></canvas>
+        </div>
+        <div class="panel">
+          <h2>Top páginas (7 d)</h2>
+          <div id="top-pages"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Insights</h2>
+        <div id="analytics-insights" class="insight-list"></div>
+      </div>
+    </section>
+
+    <!-- SECURITY -->
+    <section id="view-security" class="view">
+      <div class="grid-3" id="security-kpis"></div>
+      <div class="grid-2">
+        <div class="panel">
+          <h2>Postura</h2>
+          <div id="posture-checks" class="check-list"></div>
+        </div>
+        <div class="panel">
+          <h2>Jornadas sintéticas</h2>
+          <p class="panel-hint">Home · API · catálogo · admin/system bloqueados</p>
+          <div id="synth-steps" class="check-list"></div>
+          <div class="btn-row">
+            <button type="button" class="secondary" id="btn-run-health">Correr agora</button>
+          </div>
+        </div>
+      </div>
+      <div class="grid-3" id="threat-breakdown"></div>
+      <div class="grid-2">
+        <div class="panel">
+          <h2>Ataques / WAF (24 h)</h2>
+          <div id="waf-panel"></div>
+        </div>
+        <div class="panel">
+          <h2>Eventos recentes</h2>
+          <div id="waf-events"></div>
+        </div>
+      </div>
+      <details class="tech-details">
+        <summary>Ver detalhe técnico</summary>
+        <div id="security-tech" class="muted"></div>
+      </details>
+    </section>
+
+    <!-- INCIDENTS / ALERTS -->
     <section id="view-alerts" class="view">
+      <div class="grid-3" id="incident-kpis"></div>
+      <div class="grid-2">
+        <div class="panel">
+          <h2>Abertos</h2>
+          <div id="incident-open" class="incident-list"></div>
+        </div>
+        <div class="panel">
+          <h2>Resolvidos</h2>
+          <div id="incident-closed" class="incident-list"></div>
+        </div>
+      </div>
       <div class="panel">
         <div class="panel-head-row">
-          <h2>Feed unificado de alertas</h2>
-          <button type="button" class="ghost-btn btn-sm" data-clear-tab="alerts">Limpar alertas</button>
+          <h2>Feed de alertas</h2>
+          <button type="button" class="ghost-btn btn-sm" data-clear-tab="alerts">Ocultar</button>
         </div>
         <div id="alert-feed" class="alert-feed"></div>
       </div>
     </section>
 
-    <section id="view-analytics" class="view">
-      <p class="section-lead" id="analytics-lead">Visitas, pedidos e contactos — últimos 7 dias.</p>
-      <div class="grid-4" id="analytics-kpis"></div>
-      <div class="grid-2">
-        <div class="panel">
-          <h2>Visitas à loja (24 h)</h2>
-          <p class="panel-hint">PostHog — cada barra é uma hora.</p>
-          <canvas id="chart-visits"></canvas>
-        </div>
-        <div class="panel">
-          <h2>Actividade comercial (7 dias)</h2>
-          <p class="panel-hint">Orçamentos, mensagens e encomendas internas.</p>
-          <canvas id="chart-business"></canvas>
-        </div>
-      </div>
-      <div class="panel">
-        <h2>Resumo para decisão</h2>
-        <div id="analytics-insights" class="insight-list"></div>
-      </div>
-    </section>
-
+    <!-- INFRA -->
     <section id="view-metrics" class="view">
+      <div class="grid-3" id="health-cards"></div>
       <div class="grid-2">
         <div class="panel">
-          <h2>UptimeRobot — monitores</h2>
+          <h2>Latência API</h2>
+          <canvas id="chart-latency" height="120"></canvas>
+        </div>
+        <div class="panel">
+          <h2>Erros por hora</h2>
+          <p class="panel-hint" id="errors-hint">Registo da API</p>
+          <canvas id="chart-errors" height="120"></canvas>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <h2>Monitores</h2>
           <div id="uptime-table"></div>
         </div>
         <div class="panel">
-          <h2>Edge & produto</h2>
+          <h2>Edge</h2>
           <div id="edge-metrics" class="metric-list"></div>
         </div>
       </div>
       <div class="panel">
         <div class="panel-head-row">
-          <h2>Erros Sentry abertos</h2>
-          <button type="button" class="ghost-btn btn-sm" data-clear-tab="metrics">Limpar lista</button>
+          <h2>Sentry</h2>
+          <button type="button" class="ghost-btn btn-sm" data-clear-tab="metrics">Ocultar</button>
         </div>
         <div id="sentry-table"></div>
       </div>
       <div class="panel">
-        <h2>Monitor GitHub (Uptime)</h2>
-        <p class="panel-hint">Cron a cada 15 min — separado do CI de build/testes.</p>
+        <h2>Uptime GitHub</h2>
         <div id="uptime-gh-table"></div>
       </div>
     </section>
 
+    <!-- CI -->
     <section id="view-cicd" class="view">
       <div class="panel" id="release-card"></div>
       <div class="panel">
         <div class="panel-head-row">
-          <h2>GitHub Actions — CI (build & testes)</h2>
-          <button type="button" class="ghost-btn btn-sm" data-clear-tab="cicd">Limpar falhas</button>
+          <h2>GitHub Actions — CI</h2>
+          <button type="button" class="ghost-btn btn-sm" data-clear-tab="cicd">Ocultar falhas</button>
         </div>
-        <p class="panel-hint">Só o workflow «CI». Monitorização Uptime corre à parte e não aparece aqui.</p>
         <div id="ci-table"></div>
       </div>
     </section>
 
+    <!-- SETUP -->
     <section id="view-setup" class="view">
       <div class="panel setup-panel">
-        <h2>Ligação automática GitHub</h2>
-        <p class="muted">Opção A (recomendada): instala <a href="#" id="gh-cli-link">GitHub CLI</a>, corre <code>gh auth login</code> uma vez — o hub lê o token sozinho.</p>
+        <h2>GitHub</h2>
+        <p class="muted">Instala <a href="#" id="gh-cli-link">GitHub CLI</a> e corre <code>gh auth login</code>.</p>
         <div class="btn-row">
-          <button type="button" id="btn-gh-cli" class="primary">Detectar GitHub CLI</button>
-          <button type="button" id="btn-gh-device" class="secondary">Ligar via browser (Device Flow)</button>
+          <button type="button" id="btn-gh-cli" class="primary">Detectar CLI</button>
+          <button type="button" id="btn-gh-device" class="secondary">Device Flow</button>
         </div>
         <div id="gh-device-box" class="hidden device-box"></div>
         <hr />
         <h2>Importar credenciais</h2>
-        <p class="muted">Lê automaticamente o <code>.env</code> do repo Diomika (Axiom, Cloudflare, ntfy, PostHog…).</p>
+        <p class="muted">Lê o <code>.env</code> do repo (PostHog phx_, Axiom query, Cloudflare, Supabase…).</p>
         <button type="button" id="btn-import-env" class="primary">Importar do .env</button>
         <div id="integration-grid" class="integration-grid"></div>
         <hr />
         <h2>Tokens manuais</h2>
         <form id="setup-form" class="setup-form">
-          <label>Sentry auth token<input name="sentryToken" type="password" autocomplete="off" /></label>
-          <label>UptimeRobot API key<input name="uptimeKey" type="password" autocomplete="off" /></label>
-          <label>PostHog personal API key<input name="posthogKey" type="password" autocomplete="off" /></label>
-          <label>API ops key (analytics negócio)<input name="opsKey" type="password" autocomplete="off" /></label>
-          <label>GitHub OAuth client ID (Device Flow)<input name="githubClientId" type="text" /></label>
+          <label>Sentry<input name="sentryToken" type="password" autocomplete="off" /></label>
+          <label>UptimeRobot<input name="uptimeKey" type="password" autocomplete="off" /></label>
+          <label>PostHog personal (phx_)<input name="posthogKey" type="password" autocomplete="off" /></label>
+          <label>API ops key<input name="opsKey" type="password" autocomplete="off" /></label>
+          <label>GitHub OAuth client ID<input name="githubClientId" type="text" /></label>
           <button type="submit" class="primary">Guardar</button>
-          <button type="button" id="btn-open-config" class="ghost-btn">Abrir config.local.json</button>
+          <button type="button" id="btn-open-config" class="ghost-btn">Abrir pasta config</button>
         </form>
       </div>
     </section>
   </main>
+
+  <!-- Incident drawer -->
+  <aside id="drawer" class="drawer hidden" aria-hidden="true">
+    <div class="drawer-head">
+      <h2 id="drawer-title">Incidente</h2>
+      <button type="button" class="ghost-btn btn-sm" id="drawer-close">Fechar</button>
+    </div>
+    <p id="drawer-detail" class="muted"></p>
+    <ol id="drawer-steps" class="playbook-steps"></ol>
+    <div class="btn-row" id="drawer-actions"></div>
+  </aside>
+
+  <!-- Command palette -->
+  <div id="palette" class="palette hidden" aria-hidden="true">
+    <input id="palette-input" type="text" placeholder="Comando… (health, analytics, relatório, incidente…)" autocomplete="off" />
+    <div id="palette-results" class="palette-results"></div>
+  </div>
+  <div id="palette-backdrop" class="palette-backdrop hidden"></div>
+
   <div id="toast" class="toast hidden"></div>
+  <div id="action-log" class="action-log hidden"><pre id="action-log-pre"></pre></div>
   <script src="dashboard.js"></script>
 </body>
 </html>

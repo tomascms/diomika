@@ -40,6 +40,7 @@ deploy/artifacts/
 deploy/backups/
 deploy/launch.state.json
 deploy/alerts.log
+deploy/.security_audit_latest.json
 deploy/proof/
 deploy/backups/
 *.sql.gz
@@ -87,4 +88,10 @@ deploy/.cf_token_tmp
 monitor-hub/config.local.json
 monitor-hub/release/
 monitor-hub/Diomika-Command-Center-*.exe
+monitor-hub/hub-*.json
+monitor-hub/incident-history.json
+monitor-hub/ui/_preview-snapshot.json
+monitor-hub/ui/preview.html
 .local-previews/
+deploy/_*.sql
+deploy/generated_*.sql

@@ -2,9 +2,9 @@
 
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 
-import { supabase, supabaseConfigured, subscribeRealtime } from '@/lib/supabase'
+import { ensureSupabase, supabaseConfigured, subscribeRealtime } from '@/lib/supabase'
 
-import { resolveImageUrl, PLACEHOLDER, safeCssUrl } from '@/lib/images'
+import { resolveImageUrl, resolveImageUrls, PLACEHOLDER, safeCssUrl, IMG_CARD, IMG_HERO } from '@/lib/images'
 
 import { watchDynamicTitle } from '@/composables/usePageMeta'
 
@@ -63,12 +63,12 @@ const heroImageUrl = computed(() => safeCssUrl(categoryData.value?.imagem) || ''
 
 
 const coverImage = (product) => {
-
   const imgs = [product.imagem_capa, ...(product.galeria || [])].filter(Boolean)
-
   return imgs[product.currentImgIdx] || PLACEHOLDER
-
 }
+
+const hasGallery = (product) =>
+  (product.galeria || []).length > 0 || (product._galleryPaths || []).length > 0
 
 
 
@@ -148,7 +148,7 @@ const fetchProducts = async () => {
 
       ...cat,
 
-      imagem: await resolveImageUrl(cat.imagem, ''),
+      imagem: await resolveImageUrl(cat.imagem, '', { transform: IMG_HERO }),
 
     }
 
@@ -194,39 +194,34 @@ const fetchProducts = async () => {
 
     const visible = models.filter((m) => m && m.visibilidade !== false)
 
-    products.value = await Promise.all(
+    // 1 request de assinatura em lote só para capas — galeria em background
+    const prepared = visible.map((m) => {
+      const cores = (m.modelo_cores || [])
+        .filter((c) => c.visibilidade !== false)
+        .sort((a, b) => a.numero - b.numero)
+      const firstCor = cores[0] || {}
+      return {
+        model: m,
+        coverPath: firstCor.imagem || '',
+        galleryPaths: cores.slice(1).map((c) => c.imagem).filter(Boolean),
+        colorCount: cores.length,
+      }
+    })
 
-      visible.map(async (m) => {
+    const covers = await resolveImageUrls(prepared.map((p) => p.coverPath), '', { transform: IMG_CARD })
 
-        const cores = (m.modelo_cores || []).filter((c) => c.visibilidade !== false)
+    products.value = prepared.map((p, i) => ({
+      ...p.model,
+      _tipo_catalogo: p.model._tipo_catalogo || tipo,
+      imagem_capa: covers[i] || '',
+      galeria: [],
+      _galleryPaths: p.galleryPaths,
+      currentImgIdx: 0,
+      _colorCount: p.colorCount,
+    }))
 
-        const firstCor = cores.sort((a, b) => a.numero - b.numero)[0] || {}
-
-        const galeria = (
-
-          await Promise.all(cores.slice(1).map((c) => resolveImageUrl(c.imagem, '')))
-
-        ).filter(Boolean)
-
-        return {
-
-          ...m,
-
-          _tipo_catalogo: m._tipo_catalogo || tipo,
-
-          imagem_capa: await resolveImageUrl(firstCor.imagem, ''),
-
-          galeria,
-
-          currentImgIdx: 0,
-
-          _colorCount: cores.length,
-
-        }
-
-      }),
-
-    )
+    // Galerias não bloqueiam o primeiro paint
+    void hydrateGalleries(products.value)
 
   } catch (err) {
 
@@ -244,34 +239,33 @@ const fetchProducts = async () => {
 
 
 
-const prevImg = (e, product) => {
-
-  e.preventDefault()
-
-  e.stopPropagation()
-
-  const imgs = [product.imagem_capa, ...(product.galeria || [])].filter((i) => i)
-
-  if (imgs.length === 0) return
-
-  product.currentImgIdx = (product.currentImgIdx - 1 + imgs.length) % imgs.length
-
+async function hydrateGalleries(list) {
+  const pending = (list || []).filter((p) => (p._galleryPaths || []).length && !(p.galeria || []).length)
+  if (!pending.length) return
+  const flat = pending.flatMap((p) => p._galleryPaths)
+  const urls = await resolveImageUrls(flat, '', { transform: IMG_CARD })
+  let offset = 0
+  for (const product of pending) {
+    const n = product._galleryPaths.length
+    product.galeria = urls.slice(offset, offset + n).filter(Boolean)
+    offset += n
+  }
 }
 
-
+const prevImg = (e, product) => {
+  e.preventDefault()
+  e.stopPropagation()
+  const imgs = [product.imagem_capa, ...(product.galeria || [])].filter((i) => i)
+  if (imgs.length === 0) return
+  product.currentImgIdx = (product.currentImgIdx - 1 + imgs.length) % imgs.length
+}
 
 const nextImg = (e, product) => {
-
   e.preventDefault()
-
   e.stopPropagation()
-
   const imgs = [product.imagem_capa, ...(product.galeria || [])].filter((i) => i)
-
   if (imgs.length === 0) return
-
   product.currentImgIdx = (product.currentImgIdx + 1) % imgs.length
-
 }
 
 
@@ -293,39 +287,25 @@ watch(selectedFilters, fetchProducts, { deep: true })
 
 
 onMounted(async () => {
-
   await fetchProducts()
-
-
-
   await catalog.loadMeta()
-
   if (supabaseConfigured) {
-
+    const supabase = await ensureSupabase()
+    if (!supabase) return
     const channel = supabase.channel('catalog_realtime')
-
     for (const table of catalog.realtimeTables()) {
-
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, fetchProducts)
-
     }
-
     productsSubscription = subscribeRealtime(channel)
-
   }
-
 })
 
-
-
 onUnmounted(() => {
-
   if (productsSubscription && supabaseConfigured) {
-
-    supabase.removeChannel(productsSubscription)
-
+    ensureSupabase().then((supabase) => {
+      if (supabase) supabase.removeChannel(productsSubscription)
+    })
   }
-
 })
 
 </script>
@@ -436,10 +416,11 @@ onUnmounted(() => {
             class="cover-image"
 
             loading="lazy"
+            decoding="async"
 
           />
 
-          <div v-if="product.galeria?.length" class="carousel-nav">
+          <div v-if="hasGallery(product)" class="carousel-nav">
 
             <button type="button" class="nav-btn" aria-label="Imagem anterior" @click="prevImg($event, product)">‹</button>
 
@@ -684,6 +665,10 @@ onUnmounted(() => {
   color: inherit;
 
   overflow: hidden;
+
+  content-visibility: auto;
+
+  contain-intrinsic-size: 360px;
 
   transition: transform var(--transition), box-shadow var(--transition);
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /** Verifica integrações sem imprimir secrets. */
+require('../electron/system-ca.cjs').applySystemCA()
 const cfg = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'config.local.json'), 'utf8'))
 const { fetchSentry } = require('../electron/services/sentry.cjs')
 const { fetchPosthog } = require('../electron/services/posthog.cjs')

@@ -15,9 +15,21 @@ const DEFAULTS = {
   axiom: { token: '', dataset: 'diomika', orgId: 'diomika-5pui' },
   uptimerobot: { apiKey: '' },
   cloudflare: { apiToken: '', accountId: '', zoneName: 'diomika.com' },
-  posthog: { apiKey: '', projectId: '248877', host: 'https://eu.i.posthog.com' },
+  posthog: { apiKey: '', projectId: '248877', host: 'https://eu.posthog.com' },
   ops: { apiKey: '' },
   supabase: { url: '', key: '' },
+  projectId: 'diomika',
+  projectName: 'Diomika',
+  /** Schema multi-projecto (Diomika first). Credenciais activas = bloco raiz; projects[] para futuros clientes. */
+  projects: [
+    {
+      id: 'diomika',
+      name: 'Diomika',
+      active: true,
+      apiUrl: 'https://api.diomika.com',
+      siteUrl: 'https://www.diomika.com',
+    },
+  ],
 }
 
 function parseEnvFile(content) {
@@ -61,11 +73,12 @@ function mergeFromEnv(cfg, env) {
     const m = env.ALERT_WEBHOOK_URL.match(/ntfy\.sh\/([^/?#]+)/i)
     if (m) next.ntfyTopicJsonUrl = `https://ntfy.sh/${m[1]}/json?poll=1`
   }
-  if (env.AXIOM_TOKEN && !next.axiom?.token) {
+  if (env.AXIOM_TOKEN) {
     next.axiom = { ...next.axiom, token: env.AXIOM_TOKEN }
   }
   if (env.AXIOM_DATASET && next.axiom) next.axiom.dataset = env.AXIOM_DATASET
-  if (env.CLOUDFLARE_API_TOKEN && !next.cloudflare?.apiToken) {
+  if (env.AXIOM_API_URL && next.axiom) next.axiom.apiUrl = env.AXIOM_API_URL
+  if (env.CLOUDFLARE_API_TOKEN) {
     next.cloudflare = { ...next.cloudflare, apiToken: env.CLOUDFLARE_API_TOKEN }
   }
   if (env.CLOUDFLARE_ACCOUNT_ID && next.cloudflare) {
@@ -73,9 +86,8 @@ function mergeFromEnv(cfg, env) {
   }
   if (env.POSTHOG_PERSONAL_API_KEY) {
     next.posthog = { ...next.posthog, apiKey: env.POSTHOG_PERSONAL_API_KEY }
-  } else if (env.VITE_POSTHOG_KEY && !next.posthog?.apiKey) {
-    next.posthog = { ...next.posthog, apiKey: env.VITE_POSTHOG_KEY }
   }
+  // Never use VITE_POSTHOG_KEY (phc_) for hub Query API
   if (env.VITE_POSTHOG_HOST && next.posthog) next.posthog.host = env.VITE_POSTHOG_HOST
   if (env.POSTHOG_PROJECT_ID && next.posthog) next.posthog.projectId = env.POSTHOG_PROJECT_ID
   if (env.SENTRY_AUTH_TOKEN && !next.sentry?.token) {

@@ -1,4 +1,7 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron')
+const { applySystemCA } = require('./system-ca.cjs')
+applySystemCA()
+
+const { app, BrowserWindow, ipcMain, shell, clipboard } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const {
@@ -27,15 +30,18 @@ const {
   pollDeviceToken,
   tryGhCliToken,
 } = require('./services/github.cjs')
+const { acknowledge, resolve, loadIncidents } = require('./incident-store.cjs')
+const { runWhitelisted } = require('./actions.cjs')
+const { buildMonthlyReport, buildMonthlyReportHtml } = require('./report.cjs')
+const { getPlaybook, buildCursorPrompt } = require('./playbooks.cjs')
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null
 let pollTimer = null
-let ntfyTimer = null
 let devicePollTimer = null
 
 async function pushSnapshot() {
-  if (!mainWindow) return
+  if (!mainWindow || mainWindow.isDestroyed()) return
   try {
     const snapshot = await buildSnapshot(app)
     mainWindow.webContents.send('snapshot', snapshot)
@@ -47,31 +53,22 @@ async function pushSnapshot() {
 function startPolling() {
   stopPolling()
   const cfg = loadHubConfig(app)
-  const sec = Math.max(15, Number(cfg.pollIntervalSeconds) || 30)
+  const sec = Math.max(20, Number(cfg.pollIntervalSeconds) || 30)
   pollTimer = setInterval(pushSnapshot, sec * 1000)
-  ntfyTimer = setInterval(pushSnapshot, 10000)
   pushSnapshot()
 }
 
 function stopPolling() {
   if (pollTimer) clearInterval(pollTimer)
-  if (ntfyTimer) clearInterval(ntfyTimer)
   pollTimer = null
-  ntfyTimer = null
-}
-
-async function showFirstRunDialog(setup) {
-  if (!setup.firstRun) return
-  const flag = path.join(getUserRoot(app), 'hub-welcome-seen')
-  if (!fs.existsSync(flag)) fs.writeFileSync(flag, new Date().toISOString(), 'utf8')
 }
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1480,
-    height: 920,
-    minWidth: 1100,
-    minHeight: 700,
+    width: 1520,
+    height: 940,
+    minWidth: 1180,
+    minHeight: 720,
     title: 'Diomika Command Center',
     backgroundColor: '#0a0e14',
     webPreferences: {
@@ -123,7 +120,7 @@ ipcMain.handle('import-env', () => {
       env: process.env,
     })
   } catch {
-    /* fallback: fundir .env no config ao lado do exe */
+    /* fallback below */
   }
   persistMergedSecrets(app)
   startPolling()
@@ -196,6 +193,14 @@ ipcMain.handle('open-config-file', () => {
   return p
 })
 
+ipcMain.handle('open-external', (_e, url) => {
+  if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
+    shell.openExternal(url)
+    return { ok: true }
+  }
+  return { ok: false }
+})
+
 ipcMain.handle('dismiss-tab', async (_e, { tab, items }) => {
   const store = loadDismissed(app)
   const map = { alerts: 'alerts', overview: 'recommendations', metrics: 'sentry', cicd: 'ci' }
@@ -208,20 +213,80 @@ ipcMain.handle('dismiss-tab', async (_e, { tab, items }) => {
   return { ok: true, snapshot: await buildSnapshot(app) }
 })
 
-ipcMain.handle('dismiss-all-tabs', async () => {
+ipcMain.handle('dismiss-all-tabs', async (_e, payload) => {
+  const store = loadDismissed(app)
+  const snap = payload?.snapshot
+  if (snap) {
+    for (const a of snap.alerts || []) store.alerts.push(alertKey(a))
+    for (const r of snap.recommendations || []) store.recommendations.push(recKey(r))
+    for (const i of snap.sentry?.issues || []) store.sentry.push(sentryKey(i))
+    for (const r of (snap.ci?.runs || []).filter((x) => x.conclusion === 'failure')) {
+      store.ci.push(ciKey(r))
+    }
+  }
+  store.alerts = [...new Set(store.alerts)]
+  store.recommendations = [...new Set(store.recommendations)]
+  store.sentry = [...new Set(store.sentry)]
+  store.ci = [...new Set(store.ci)]
+  saveDismissed(app, store)
+  return { ok: true, snapshot: await buildSnapshot(app) }
+})
+
+ipcMain.handle('restore-dismissed', async () => {
   saveDismissed(app, { alerts: [], recommendations: [], sentry: [], ci: [] })
   return { ok: true, snapshot: await buildSnapshot(app) }
 })
 
+ipcMain.handle('incident-ack', async (_e, key) => {
+  acknowledge(app, key)
+  return { ok: true, snapshot: await buildSnapshot(app) }
+})
+
+ipcMain.handle('incident-resolve', async (_e, key) => {
+  resolve(app, key)
+  return { ok: true, snapshot: await buildSnapshot(app) }
+})
+
+ipcMain.handle('get-incidents', () => loadIncidents(app))
+
+ipcMain.handle('run-action', async (_e, { actionId, payload }) => {
+  const result = await runWhitelisted(app, actionId, payload || {})
+  if (actionId === 'run-health' || actionId === 'run-verify' || actionId === 'run-monitor-check') {
+    return { ...result, snapshot: await buildSnapshot(app) }
+  }
+  return result
+})
+
+ipcMain.handle('get-playbook', (_e, action) => ({ ok: true, playbook: getPlaybook(action) }))
+
+ipcMain.handle('copy-prompt', (_e, { incident, snapshot }) => {
+  const text = buildCursorPrompt(incident || {}, snapshot || {})
+  clipboard.writeText(text)
+  return { ok: true, chars: text.length }
+})
+
+ipcMain.handle('export-report', async () => {
+  const snapshot = await buildSnapshot(app)
+  const md = buildMonthlyReport(snapshot)
+  const html = buildMonthlyReportHtml(snapshot)
+  const stamp = new Date().toISOString().slice(0, 10)
+  const root = getUserRoot(app)
+  const mdPath = path.join(root, `relatorio-diomika-${stamp}.md`)
+  const htmlPath = path.join(root, `relatorio-diomika-${stamp}.html`)
+  fs.writeFileSync(mdPath, md, 'utf8')
+  fs.writeFileSync(htmlPath, html, 'utf8')
+  shell.showItemInFolder(htmlPath)
+  return { ok: true, path: htmlPath, mdPath, markdown: md }
+})
+
 app.whenReady().then(async () => {
-  const setup = ensureLocalConfig(app)
+  ensureLocalConfig(app)
   persistMergedSecrets(app)
   const cfg = loadHubConfig(app)
   if (!cfg.github?.token) {
     const t = await tryGhCliToken()
     if (t) saveHubConfig(app, { github: { token: t } })
   }
-  await showFirstRunDialog(setup)
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

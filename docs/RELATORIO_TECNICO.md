@@ -1,6 +1,6 @@
 # Diomika — Relatório técnico exaustivo
 
-**Versão:** 2.1 (actualizado Agosto 2026)  
+**Versão:** 2.2 (actualizado 27 Agosto 2026)  
 **Audiência:** qualquer pessoa inteligente — **não** se assume conhecimento prévio de informática.  
 **Regra:** cada sigla é expandida e explicada na primeira aparição; o glossário da Parte I serve de dicionário permanente.  
 **Segurança:** este texto **não contém** passwords, tokens nem chaves. Esses vivem só em .env / pastas gitignored.
@@ -26,12 +26,12 @@
 | XI | Limitações honestas |
 | XII | Como estudar o código |
 | Apêndices A–C | Fluxos sequenciais, índice de ficheiros, FAQ |
-| **Apêndice D** | **Registo de actualizações (Ago 2026) — estado actual** |
+| **Apêndice D** | **Registo de actualizações (Ago 2026) — estado actual** (+ D.9 hub, D.10 performance loja, D.11 segurança) |
 | **Apêndice E** | **Diagrama BD comercial** |
 
 **Como ler:** podes saltar para a parte que precisas; se encontrares uma sigla desconhecida, volta ao glossário (Parte I.13). Para operar o sistema, usa [`INSTRUCOES.md`](INSTRUCOES.md).
 
-**Fontes:** volume único consolidado; partes I–XII redigidas em 2026; Apêndice D reflecte alterações até 16/08/2026.
+**Fontes:** volume único consolidado em `docs/RELATORIO_TECNICO.md` (não há pasta `deploy/relatorio_parts/`); Apêndice D reflecte o estado até **27/08/2026**.
 
 ---
 
@@ -54,7 +54,7 @@ Este relatório foi escrito para uma pessoa inteligente, curiosa e capaz de raci
 
 ### Estrutura em partes
 
-O relatório completo está dividido em vários ficheiros na pasta `deploy/relatorio_parts/`. Cada ficheiro é uma **parte** autónoma, que se pode ler sozinha, mas que assume que as partes anteriores foram lidas.
+O relatório completo está neste ficheiro único (`docs/RELATORIO_TECNICO.md`). Historicamente existiu uma pasta `deploy/relatorio_parts/` com partes separadas; foi consolidada. Cada «Parte» abaixo continua a poder ser lida de forma relativamente autónoma, assumindo o glossário da Parte I.
 
 Esta é a **Parte I — Fundamentos**. O objectivo desta parte não é descrever a Diomika em detalhe técnico (isso vem nas partes seguintes); é **construir o vocabulário e os modelos mentais** necessários para que as partes seguintes sejam legíveis. É a parte que se lê primeiro e à qual se volta sempre que uma sigla parecer opaca.
 
@@ -9072,9 +9072,11 @@ A Parte XII tem uma ordem de leitura em oito níveis. Resumo: [`INSTRUCOES.md`](
 ## Apêndice D — Registo de actualizações (Agosto 2026)
 
 **Data de consolidação:** 16 de Agosto de 2026  
-**Estado verificado:** `python deploy/verify_production.py` → VERIFY OK
+**Última actualização deste apêndice:** 27 de Agosto de 2026  
+**Estado verificado (16/08):** `python deploy/verify_production.py` → VERIFY OK  
+**Loja (27/08):** build de performance pronto em `frontend-web/dist/`; deploy Pages requer token Cloudflare com **Account → Cloudflare Pages → Edit** (o token de analytics/read do hub **não** chega).
 
-Este apêndice **prevalece** sobre secções anteriores do relatório que mencionem sessão de 15 minutos, uptime CI de 15 minutos, ou documentos que deixaram de existir como ficheiros separados.
+Este apêndice **prevalece** sobre secções anteriores do relatório que mencionem sessão de 15 minutos, uptime CI de 15 minutos, bundle monolítico da loja, ou documentos que deixaram de existir como ficheiros separados.
 
 ### D.1 Produção actual
 
@@ -9083,11 +9085,13 @@ Este apêndice **prevalece** sobre secções anteriores do relatório que mencio
 | API | `https://api.diomika.com` | v2.3.0, Docker na GCP e2-micro |
 | Loja | `https://www.diomika.com` | Cloudflare Pages |
 | Estado público | `https://www.diomika.com/status.html` | Auto-refresh 60s |
-| Supabase | projecto `ptvzctrutihcfknowbam` | Migração `material → composicao` aplicada |
+| Supabase | projecto `ptvzctrutihcfknowbam` | Storage privado + URLs assinadas; migração `material → composicao` aplicada |
 | Backoffice | `cliente-backoffice/` | Release GitHub `backoffice-cliente-latest` |
-| Monitor Hub | `monitor-hub/` (local) | Aba «Estado & Alertas» + painéis SaaS |
+| Monitor Hub | `monitor-hub/` (local Electron) | Command Center v1.4 — ver D.9 |
 
 **Cabeçalhos HTTP da API:** os cabeçalhos de **resposta** (`Strict-Transport-Security`, `Content-Security-Policy`, `X-Frame-Options`, etc.) são protecções públicas — não são segredos. Implementação: `backend-api/core/middleware.py`. Correctamente **não** expostos: tokens, OpenAPI, stack traces, `/api/docs`.
+
+**Cabeçalhos da loja (Pages):** `frontend-web/public/_headers.production` — CSP sem `unsafe-inline`, HSTS preload, COOP/CORP, cache imutável em `/assets/*`, `must-revalidate` no HTML.
 
 ### D.2 Catálogo e loja
 
@@ -9097,6 +9101,7 @@ Este apêndice **prevalece** sobre secções anteriores do relatório que mencio
 - **Labels** Decorativa / Dormir nos tipos de almofada.
 - **Assentos multi-altura:** alturas no modelo (`modelos_assentos.alturas` JSON).
 - **Performance admin/API:** cache de contagens, índices, queries optimizadas na listagem.
+- **Performance loja (Ago 2026):** ver **D.10**.
 
 ### D.3 Sessão administrativa (política actual)
 
@@ -9124,27 +9129,31 @@ Secções anteriores que descrevam 10–15 minutos reflectem a política **antig
 |---|---|---|
 | Check unificado | `deploy/monitor_check.py` | API + loja; `--alert` → ntfy |
 | CI uptime | `.github/workflows/uptime.yml` | Cada **5 min** |
-| Painel hub | `monitor-hub/ui/panel-status.html` | API, loja, BD, `deploy/alerts.log`, stream ntfy |
-| Config hub | `monitor-hub/config.local.json` | `ntfyTopicJsonUrl` (copiar de `.example`) |
+| Command Center | `monitor-hub/` (Electron) | UI `ui/index.html` + `ui/dashboard.js` |
+| Config hub | `monitor-hub/config.local.json` | Importa do `.env`; ver `TOKENS.md` |
 | Meta API | `backend-api/core/public_meta.py` | `GET /`, `/robots.txt`, `/.well-known/security.txt` |
 | Meta loja | `frontend-web/public/.well-known/security.txt` | Contacto segurança |
 | Latência | `LatencyAlertMiddleware` | Webhook se pedido > `ALERT_LATENCY_MS` |
+| Sentry noise | `backend-api/core/sentry_init.py` | Filtra health/IMAP/PGRST/4xx |
 
-**Stack observabilidade (sem duplicados):** Sentry (erros), Axiom EU (logs), PostHog EU (analytics pós-consentimento), UptimeRobot (uptime email), ntfy (alertas push). Removidos de propósito: Plausible, Grafana na VM, pageviews `/metrics/hit`.
+**Stack observabilidade (sem duplicados):** Sentry (erros), Axiom EU (logs), PostHog EU (analytics pós-consentimento), UptimeRobot (uptime email), ntfy (alertas push), Cloudflare Analytics (edge/ameaças). Removidos de propósito: Plausible, Grafana na VM, pageviews `/metrics/hit`.
 
-Operação diária: [`INSTRUCOES.md`](INSTRUCOES.md) §5–8.
+Operação diária: [`INSTRUCOES.md`](INSTRUCOES.md).
 
 ### D.6 Deploy e verificação
 
 ```powershell
 python deploy/deploy_vm.py
+$env:PAGES_PRODUCTION="1"
 python deploy/deploy_pages.py --build --pages-deploy --api-url https://api.diomika.com
 python deploy/verify_production.py
 python deploy/monitor_check.py --alert
 python deploy/security_test.py
 ```
 
-Testes novos/actualizados: `backend-api/tests/test_meta_routes.py`, `deploy/security_test.py` (meta routes), `frontend-web/e2e/critical.spec.js`.
+**Token Cloudflare para Pages:** precisa de permissão **Account → Cloudflare Pages → Edit** (e tipicamente Zone Read). Um token só com Analytics/Zone Read (hub) devolve `Authentication error [code: 10000]` no `wrangler pages deploy`.
+
+Testes: `backend-api/tests/`, `deploy/security_test.py`, `frontend-web/e2e/critical.spec.js`, `deploy/security_audit_deep.py` (auditoria expandida).
 
 ### D.7 Documentação consolidada
 
@@ -9155,7 +9164,7 @@ A partir de Agosto 2026 existem **dois** documentos em `docs/`:
 | [`INSTRUCOES.md`](INSTRUCOES.md) | Ligar, deploy, hub, incidentes, escala |
 | [`RELATORIO_TECNICO.md`](RELATORIO_TECNICO.md) | Manual pedagógico completo (este ficheiro) |
 
-Ficheiros absorvidos e removidos: `relatorio.md`, `MONITORIZACAO.md`, `OPS.md`, `FREE_STACK.md`, `SCALE.md`, `APRESENTACAO_CLIENTE.md`, `BD_COMERCIAL.md`, `docs/README.md`.
+Ficheiros absorvidos e removidos: `relatorio.md`, `MONITORIZACAO.md`, `OPS.md`, `FREE_STACK.md`, `SCALE.md`, `APRESENTACAO_CLIENTE.md`, `BD_COMERCIAL.md`, `docs/README.md`, pasta `deploy/relatorio_parts/`.
 
 ### D.8 Pendente (acção manual)
 
@@ -9163,6 +9172,49 @@ Ficheiros absorvidos e removidos: `relatorio.md`, `MONITORIZACAO.md`, `OPS.md`, 
 2. GitHub secret `SITE_URL` (opcional, default `https://www.diomika.com`)
 3. Certificado EV para assinar instaladores backoffice
 4. Restore drill Supabase — próximo: **2026-11-01** (calendário trimestral)
+5. Token Cloudflare com **Pages Edit** para deploy automático da loja (ou upload manual do `frontend-web/dist/`)
+6. Opcional: Firewall Services Read no token CF para feed WAF por path no hub
+
+### D.9 Command Center (monitor-hub) — Ago 2026
+
+Aplicação Electron local («Diomika Command Center») que agrega saúde da API/loja, Sentry, Axiom, Cloudflare, PostHog, CI, synthetics (incl. teste *admin bloqueado*), posture, playbooks e relatório.
+
+| Peça | Notas |
+|---|---|
+| Arranque | `monitor-hub/Abrir Command Center.vbs` / `npm start` |
+| Tokens | `monitor-hub/TOKENS.md` + import do `.env` |
+| TLS Windows | `electron/system-ca.cjs` (evita `fetch failed`) |
+| Edge vs WAF | Analytics OK mesmo sem Firewall Services Read |
+| Alerta WAF | `threats24h > 200` — em tráfego baixo costuma ser scanners; admin continua 403 |
+
+Ficheiros de runtime local (`hub-*.json`, `incident-history.json`) **não** vão para o git.
+
+### D.10 Performance da loja (27/08/2026)
+
+Objectivo: primeiro paint rápido e catálogo utilizável sem esperar dezenas de assinaturas de imagem.
+
+| Antes | Depois |
+|---|---|
+| JS inicial ~290 KB monolítico | Shell ~31 KB + Vue ~86 KB; rotas lazy |
+| `@supabase/supabase-js` no critical path | Lazy on-demand (`ensureSupabase`); sem modulepreload do SDK |
+| 4 pesos Arimo (all subsets) | latin 400+700 + preload woff2 |
+| N+1 `createSignedUrl` | `createSignedUrls` em lote + cache `sessionStorage` |
+| Listing assinava toda a galeria | Só capas primeiro; galeria em background |
+| Categorias via Supabase no boot | API `/categorias` + cache 5 min; imagens em idle |
+| Image full-size | Transform thumbnail (width/quality) com fallback se o plano não tiver Image Transformation |
+| CookieBanner síncrono | `defineAsyncComponent` |
+| Prefetch | Hover Categorias + idle warm de rotas quentes |
+
+Ficheiros-chave: `frontend-web/vite.config.js`, `src/lib/supabase.js`, `src/lib/supabaseConfig.js`, `src/lib/images.js`, `src/composables/useCategories.js`, `src/router/index.js`.
+
+**Nota sobre a Parte I.10 (SPA):** o texto pedagógico antigo descreve a loja a falar «sempre» com o Supabase no arranque. O comportamento **actual** é: listagens leves pela API quando possível; SDK Supabase só quando é preciso assinar imagens ou ler modelos detalhados.
+
+### D.11 Segurança — confirmações recentes
+
+- `/admin` e `/system` públicos → **403** Cloudflare (regra WAF + `PrivilegedPathMiddleware`).
+- Pico de «ameaças» edge (~4k/24h) ≠ admin exposto; WAF a trabalhar.
+- Issues Sentry de ruído resolvidas em lote; filtros no SDK para não voltarem.
+- Turnstile + honeypot + rate limits mantêm-se nos formulários públicos.
 
 ---
 

@@ -1,7 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { capturePageview, isPosthogReady } from '@/lib/posthog'
-import HomeView from '@/views/HomeView.vue'
-import ProductsView from '@/views/ProductsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -20,7 +18,7 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: HomeView,
+      component: () => import('@/views/HomeView.vue'),
     },
     {
       path: '/categorias',
@@ -30,7 +28,7 @@ const router = createRouter({
     {
       path: '/categoria/:categorySlug',
       name: 'products',
-      component: ProductsView,
+      component: () => import('@/views/ProductsView.vue'),
     },
     {
       path: '/categoria/:categorySlug/:modelSlug',
@@ -78,8 +76,43 @@ const router = createRouter({
   ],
 })
 
-router.afterEach(() => {
+/** Pré-carrega chunks de rotas quentes (hover / idle). */
+export function prefetchRoute(name) {
+  try {
+    const route = router.getRoutes().find((r) => r.name === name)
+    const loaders = route?.components
+      ? Object.values(route.components)
+      : route?.component
+        ? [route.component]
+        : []
+    for (const loader of loaders) {
+      if (typeof loader === 'function') {
+        const result = loader()
+        if (result && typeof result.then === 'function') {
+          result.catch(() => {})
+        }
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function warmCatalogRoutes(currentName) {
+  const warm = ['categories', 'products', 'product-detail', 'cart']
+  for (const name of warm) {
+    if (name !== currentName) prefetchRoute(name)
+  }
+}
+
+router.afterEach((to) => {
   if (isPosthogReady()) capturePageview()
+  const run = () => warmCatalogRoutes(to.name)
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(run, { timeout: 2500 })
+  } else {
+    setTimeout(run, 600)
+  }
 })
 
 export default router

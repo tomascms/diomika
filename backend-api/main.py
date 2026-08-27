@@ -192,7 +192,10 @@ def health_check():
 def health_ready():
     body = build_health(ready=True)
     if not body.get("database"):
-        raise HTTPException(status_code=503, detail=body)
+        # 503 para load balancers — não é excepção de aplicação (Sentry filtra /health).
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(status_code=503, content=body)
     return body
 
 

@@ -1,14 +1,45 @@
-import { createClient } from '@supabase/supabase-js'
+import {
+  supabaseConfigured,
+  supabaseUrl,
+  supabaseAnonKey,
+  storageBucket,
+  normalizeStorageUrl,
+  storageObjectPath,
+  getImageUrl,
+} from '@/lib/supabaseConfig'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-const storageBucket = import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'product-images'
+export {
+  supabaseConfigured,
+  storageBucket,
+  normalizeStorageUrl,
+  storageObjectPath,
+  getImageUrl,
+} from '@/lib/supabaseConfig'
 
-export const supabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
+/** Cliente lazy — só carrega @supabase/supabase-js on-demand. */
+let _client = null
+let _loading = null
 
-export const supabase = supabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null
+export async function ensureSupabase() {
+  if (_client) return _client
+  if (!supabaseConfigured) return null
+  if (!_loading) {
+    _loading = import('@supabase/supabase-js')
+      .then(({ createClient }) => {
+        _client = createClient(supabaseUrl, supabaseAnonKey)
+        return _client
+      })
+      .catch((err) => {
+        _loading = null
+        throw err
+      })
+  }
+  return _loading
+}
+
+export function getSupabaseSync() {
+  return _client
+}
 
 /** Subscreve Realtime sem derrubar a UI se WebSocket falhar. */
 export function subscribeRealtime(channel) {
@@ -32,108 +63,93 @@ export function subscribeRealtime(channel) {
   }
 }
 
-function normalizeStorageUrl(url) {
-  if (!url || !/^https?:\/\//i.test(url)) return url
+const DEFAULT_EXPIRES = 3600
 
-  let cleaned = url.replace('/object/public/public/', '/object/public/')
-  const marker = '/storage/v1/object/public/'
-  const idx = cleaned.indexOf(marker)
-  if (idx === -1) return cleaned
-
-  const prefix = cleaned.slice(0, idx + marker.length)
-  let path = cleaned.slice(idx + marker.length).replace(/^\/+/, '')
-  if (!path || path.startsWith(`${storageBucket}/`)) return cleaned
-
-  return `${prefix}${storageBucket}/${path}`
+export async function getSignedImageUrl(path, expiresIn = DEFAULT_EXPIRES, transform = null) {
+  const [url] = await getSignedImageUrls([path], expiresIn, transform)
+  return url
 }
 
-/** Extrai path interno a partir de URL pública/assinada do Storage. */
-export function storageObjectPath(path) {
-  if (!path) return ''
-  if (Array.isArray(path)) return storageObjectPath(path[0])
-  if (typeof path === 'object') {
-    if (path?.url) return storageObjectPath(path.url)
-    return ''
-  }
-  let value = String(path).trim()
-  if (!value) return ''
-  if (/^data:/i.test(value)) return ''
-
-  const markers = [
-    `/storage/v1/object/public/${storageBucket}/`,
-    `/storage/v1/object/sign/${storageBucket}/`,
-    `/storage/v1/object/authenticated/${storageBucket}/`,
-  ]
-  for (const marker of markers) {
-    const idx = value.indexOf(marker)
-    if (idx !== -1) {
-      let rest = value.slice(idx + marker.length)
-      rest = rest.split('?')[0]
-      return decodeURIComponent(rest.replace(/^\/+/, ''))
+async function mapPool(items, concurrency, fn) {
+  const out = new Array(items.length)
+  let next = 0
+  async function worker() {
+    while (next < items.length) {
+      const i = next++
+      out[i] = await fn(items[i], i)
     }
   }
+  const n = Math.min(concurrency, Math.max(1, items.length))
+  await Promise.all(Array.from({ length: n }, () => worker()))
+  return out
+}
 
-  if (/^https?:\/\//i.test(value)) return ''
+export async function getSignedImageUrls(paths, expiresIn = DEFAULT_EXPIRES, transform = null) {
+  const list = Array.isArray(paths) ? paths : []
+  if (!list.length || !supabaseConfigured) return list.map(() => '')
 
-  if (/^[\[{]/.test(value)) {
+  const client = await ensureSupabase()
+  if (!client) return list.map(() => '')
+
+  const out = new Array(list.length).fill('')
+  const storagePaths = []
+  const storageIdx = []
+
+  for (let i = 0; i < list.length; i++) {
+    const path = list[i]
+    if (!path) continue
+    if (typeof path === 'string' && /^data:/i.test(path.trim())) {
+      out[i] = path.trim()
+      continue
+    }
+    const storagePath = storageObjectPath(path)
+    if (!storagePath) {
+      const raw = String(Array.isArray(path) ? path[0] : path).trim()
+      out[i] = /^https?:\/\//i.test(raw) ? normalizeStorageUrl(raw) : ''
+      continue
+    }
+    storagePaths.push(storagePath)
+    storageIdx.push(i)
+  }
+
+  if (!storagePaths.length) return out
+
+  const unique = [...new Set(storagePaths)]
+  const hasTransform =
+    transform && typeof transform === 'object' && Object.keys(transform).length > 0
+
+  if (hasTransform) {
     try {
-      const parsed = JSON.parse(value)
-      if (Array.isArray(parsed)) return storageObjectPath(parsed[0])
-      if (typeof parsed === 'string') return storageObjectPath(parsed)
+      const signedByPath = new Map()
+      await mapPool(unique, 6, async (storagePath) => {
+        const { data, error } = await client.storage
+          .from(storageBucket)
+          .createSignedUrl(storagePath, expiresIn, { transform })
+        if (error || !data?.signedUrl) throw error || new Error('transform sign failed')
+        signedByPath.set(storagePath, data.signedUrl)
+      })
+      for (let j = 0; j < storagePaths.length; j++) {
+        out[storageIdx[j]] = signedByPath.get(storagePaths[j]) || ''
+      }
+      return out
     } catch {
-      // continua
+      /* Image Transformation off → fallback */
     }
   }
 
-  let storagePath = value.replace(/\\/g, '/').replace(/^\/+/, '')
-  if (storagePath.startsWith(`${storageBucket}/`)) {
-    storagePath = storagePath.slice(storageBucket.length + 1)
-  }
-  return storagePath
-}
-
-export function getImageUrl(path) {
-  if (!path) return ''
-
-  if (Array.isArray(path)) {
-    return getImageUrl(path[0])
-  }
-
-  if (typeof path === 'object') {
-    if (path?.url) return getImageUrl(path.url)
-    return ''
-  }
-
-  let value = String(path).trim()
-  if (!value) return ''
-
-  if (/^https?:\/\//i.test(value) || /^data:/i.test(value)) {
-    return normalizeStorageUrl(value)
-  }
-
-  if (!supabaseConfigured) return ''
-
-  const storagePath = storageObjectPath(value)
-  if (!storagePath) return ''
-
-  const { data } = supabase.storage.from(storageBucket).getPublicUrl(storagePath)
-  return data?.publicUrl || ''
-}
-
-/** URL assinada para bucket privado (cutover: ver deploy/storage_private_cutover.py). */
-export async function getSignedImageUrl(path, expiresIn = 3600) {
-  if (!path || !supabaseConfigured) return ''
-  if (typeof path === 'string' && /^data:/i.test(path.trim())) return path.trim()
-
-  const storagePath = storageObjectPath(path)
-  if (!storagePath) {
-    // URL externa (não Storage) — devolver como está
-    const raw = String(Array.isArray(path) ? path[0] : path).trim()
-    return /^https?:\/\//i.test(raw) ? normalizeStorageUrl(raw) : ''
-  }
-  const { data, error } = await supabase.storage
+  const { data, error } = await client.storage
     .from(storageBucket)
-    .createSignedUrl(storagePath, expiresIn)
-  if (error || !data?.signedUrl) return ''
-  return data.signedUrl
+    .createSignedUrls(unique, expiresIn)
+
+  if (error || !Array.isArray(data)) return out
+
+  const byPath = new Map()
+  for (const row of data) {
+    if (row?.path && row?.signedUrl) byPath.set(row.path, row.signedUrl)
+  }
+
+  for (let j = 0; j < storagePaths.length; j++) {
+    out[storageIdx[j]] = byPath.get(storagePaths[j]) || ''
+  }
+  return out
 }

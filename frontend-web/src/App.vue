@@ -1,12 +1,14 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
-import { supabase, supabaseConfigured, subscribeRealtime } from '@/lib/supabase'
+import { supabaseConfigured } from '@/lib/supabaseConfig'
 import AppErrorBoundary from '@/components/AppErrorBoundary.vue'
 import { useCart } from '@/composables/useCart'
 import { useCategories } from '@/composables/useCategories'
-import CookieBanner from '@/components/CookieBanner.vue'
 import { categoryProductsRoute } from '@/lib/catalogRoutes'
+import { prefetchRoute } from '@/router'
+
+const CookieBanner = defineAsyncComponent(() => import('@/components/CookieBanner.vue'))
 
 const isMenuOpen = ref(false)
 const { categories, load: loadCategories } = useCategories()
@@ -44,18 +46,37 @@ onMounted(async () => {
   window.addEventListener('keydown', onEscape)
 
   if (supabaseConfigured) {
-    const channel = supabase
-      .channel('categories_channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
-        loadCategories(true)
-      })
-    categoriesSubscription = subscribeRealtime(channel)
+    const startRealtime = async () => {
+      if (categoriesSubscription) return
+      const { ensureSupabase, subscribeRealtime } = await import('@/lib/supabase')
+      const supabase = await ensureSupabase()
+      if (!supabase) return
+      const channel = supabase
+        .channel('categories_channel')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
+          loadCategories(true)
+        })
+      categoriesSubscription = subscribeRealtime(channel)
+    }
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(() => {
+        startRealtime().catch(() => {})
+      }, { timeout: 4000 })
+    } else {
+      setTimeout(() => {
+        startRealtime().catch(() => {})
+      }, 2000)
+    }
   }
 })
 
 onUnmounted(() => {
   if (categoriesSubscription) {
-    supabase.removeChannel(categoriesSubscription)
+    import('@/lib/supabase').then(({ ensureSupabase }) =>
+      ensureSupabase().then((supabase) => {
+        if (supabase) supabase.removeChannel(categoriesSubscription)
+      }),
+    )
   }
   window.removeEventListener('storage', refreshCartCount)
   window.removeEventListener('diomika-cart-updated', refreshCartCount)
@@ -70,7 +91,7 @@ onUnmounted(() => {
     <header class="app-header">
       <div class="page-shell header-inner">
         <RouterLink to="/" class="logo-link" @click="closeMenu">
-          <img src="/brand/logo.svg" alt="Diomika" class="brand-logo" width="200" height="36" />
+          <img src="/brand/logo.svg" alt="Diomika" class="brand-logo" width="200" height="36" fetchpriority="high" decoding="async" />
         </RouterLink>
 
         <button
@@ -84,7 +105,11 @@ onUnmounted(() => {
         </button>
 
         <nav class="main-nav" :class="{ open: isMenuOpen }" aria-label="Principal">
-          <RouterLink to="/categorias" @click="closeMenu">Categorias</RouterLink>
+          <RouterLink
+            to="/categorias"
+            @click="closeMenu"
+            @pointerenter="prefetchRoute('categories')"
+          >Categorias</RouterLink>
           <RouterLink to="/sobre" @click="closeMenu">Sobre nós</RouterLink>
           <RouterLink
             to="/carrinho"

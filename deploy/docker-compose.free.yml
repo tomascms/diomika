@@ -47,8 +47,8 @@ services:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 120s
 
   # HTTPS público sem abrir portas — activar com: --profile tunnel
   # network_mode:host → origin http://127.0.0.1:8000 (igual ao hostname no Zero Trust)

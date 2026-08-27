@@ -1,7 +1,6 @@
-import '@fontsource/arimo/400.css'
-import '@fontsource/arimo/500.css'
-import '@fontsource/arimo/600.css'
-import '@fontsource/arimo/700.css'
+/* Latin 400+700 — cobre PT (Latin-1); evita latin-ext (~100KB) no critical path */
+import '@fontsource/arimo/latin-400.css'
+import '@fontsource/arimo/latin-700.css'
 import '@/assets/main.css'
 
 import { createApp } from 'vue'

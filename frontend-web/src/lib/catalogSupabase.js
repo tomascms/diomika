@@ -1,8 +1,15 @@
-import { supabase, supabaseConfigured } from '@/lib/supabase'
+import { ensureSupabase, supabaseConfigured } from '@/lib/supabase'
 import { CATALOG_META, getTipoConfig } from '@/lib/catalogMeta'
 
 const CATEGORY_FIELDS = 'id,nome,slug,imagem,tipo_catalogo,carrinho_step,carrinho_min'
 const CATEGORY_EMBED = 'id, nome, slug, carrinho_step, carrinho_min, tipo_catalogo'
+
+async function db() {
+  if (!supabaseConfigured) throw new Error('Supabase não configurado.')
+  const client = await ensureSupabase()
+  if (!client) throw new Error('Supabase não configurado.')
+  return client
+}
 
 function isVisible(row) {
   return row && row.visibilidade !== false
@@ -60,6 +67,7 @@ async function attachModeloCores(rows, tipo = null) {
   const colorsTable = cfg?.colors_table
   if (!colorsTable) return
 
+  const supabase = await db()
   const modelIds = rows.map((row) => String(row.id)).filter(Boolean)
   const coresByModel = Object.fromEntries(modelIds.map((id) => [id, []]))
 
@@ -122,7 +130,7 @@ export function getCatalogMeta() {
 }
 
 export async function listCategories() {
-  if (!supabaseConfigured) throw new Error('Supabase não configurado.')
+  const supabase = await db()
 
   const { data, error } = await supabase
     .from('categories')
@@ -135,7 +143,7 @@ export async function listCategories() {
 }
 
 export async function getCategoryById(id) {
-  if (!supabaseConfigured) throw new Error('Supabase não configurado.')
+  const supabase = await db()
 
   const { data, error } = await supabase
     .from('categories')
@@ -150,7 +158,7 @@ export async function getCategoryById(id) {
 }
 
 export async function getCategoryBySlug(slug) {
-  if (!supabaseConfigured) throw new Error('Supabase não configurado.')
+  const supabase = await db()
 
   const key = String(slug || '').trim()
   if (!key) throw new Error('Categoria não encontrada.')
@@ -187,6 +195,7 @@ export async function resolveCategoryParam(param) {
 }
 
 async function requirePublicCategory(categoryId) {
+  const supabase = await db()
   const { data, error } = await supabase
     .from('categories')
     .select('id,visibilidade')
@@ -197,7 +206,7 @@ async function requirePublicCategory(categoryId) {
 }
 
 export async function catalogueModelsForTipo(tipo, categoryId, { filters = {}, filterField = null, filterValue = null } = {}) {
-  if (!supabaseConfigured) throw new Error('Supabase não configurado.')
+  const supabase = await db()
 
   const cfg = getTipoConfig(tipo)
   if (!cfg?.model_table) return []
@@ -263,7 +272,7 @@ export async function catalogueModelsForCategory(tipo, categoryId, { filters = {
 }
 
 export async function modelDetailForTipo(tipo, modelId) {
-  if (!supabaseConfigured) throw new Error('Supabase não configurado.')
+  const supabase = await db()
 
   const cfg = getTipoConfig(tipo)
   if (!cfg) return null
@@ -316,6 +325,7 @@ export async function modelDetailForSlugs(categorySlug, modelSlug, tipo = null) 
 }
 
 async function _lookupModelInTable(cfg, categoryId, modKey) {
+  const supabase = await db()
   const mt = cfg.model_table
   const pt = cfg.product_table
   const isUuidKey = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(modKey)

@@ -129,8 +129,14 @@ def deploy_cloudflare_pages(dist: Path, project: str, env: dict[str, str]) -> st
         "NODE_OPTIONS": os.environ.get("NODE_OPTIONS", "--use-system-ca"),
     }
     print("\n=== Deploy Cloudflare Pages ===\n")
-    proc = subprocess.run(cmd, cwd=FE, capture_output=True, text=True, env=run_env, shell=os.name == "nt")
-    out = (proc.stdout or "") + (proc.stderr or "")
+    proc = subprocess.run(
+        cmd,
+        cwd=FE,
+        capture_output=True,
+        env=run_env,
+        shell=os.name == "nt",
+    )
+    out = ((proc.stdout or b"") + (proc.stderr or b"")).decode("utf-8", errors="replace")
     if proc.returncode != 0:
         print(out[:2000])
         return None

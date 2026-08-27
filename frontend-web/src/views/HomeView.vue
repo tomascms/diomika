@@ -20,7 +20,7 @@ const previewCats = computed(() => categories.value.slice(0, 2))
   <div class="home">
     <section class="hero">
       <div class="page-shell hero-inner">
-        <img src="/brand/logo.svg" alt="Diomika" class="hero-logo" width="320" height="57" />
+        <img src="/brand/logo.svg" alt="Diomika" class="hero-logo" width="320" height="57" fetchpriority="high" decoding="async" />
         <h1>Almofadas e assentos</h1>
         <p>Catálogo B2B — consulte modelos e peça orçamento online.</p>
         <div class="hero-actions">
@@ -90,6 +90,9 @@ const previewCats = computed(() => categories.value.slice(0, 2))
                 :src="cat.imagem"
                 :alt="pretty(cat.nome)"
                 loading="lazy"
+                decoding="async"
+                width="640"
+                height="480"
               />
               <span v-else class="preview-ph">{{ pretty(cat.nome).charAt(0) || 'D' }}</span>
             </div>

@@ -75,24 +75,27 @@ async function supabaseCountSince(supabase, table, sinceIsoStr, extra = {}) {
 async function fetchBusinessSupabase(supabase) {
   const since1 = sinceIso(1)
   const since7 = sinceIso(7)
-  const vis = { visibilidade: true }
-
+  const since30 = sinceIso(30)
+  // Commercial inbox: do not filter by visibilidade (that flag is catalog-oriented)
   const quotes = {
-    total: await supabaseCount(supabase, 'pedidos_orcamento', vis),
-    unread: await supabaseCount(supabase, 'pedidos_orcamento', { ...vis, lida: false }),
-    today: await supabaseCountSince(supabase, 'pedidos_orcamento', since1, vis),
-    last7d: await supabaseCountSince(supabase, 'pedidos_orcamento', since7, vis),
+    total: await supabaseCount(supabase, 'pedidos_orcamento', {}),
+    unread: await supabaseCount(supabase, 'pedidos_orcamento', { lida: false }),
+    today: await supabaseCountSince(supabase, 'pedidos_orcamento', since1, {}),
+    last7d: await supabaseCountSince(supabase, 'pedidos_orcamento', since7, {}),
+    last30d: await supabaseCountSince(supabase, 'pedidos_orcamento', since30, {}),
   }
   const contacts = {
-    total: await supabaseCount(supabase, 'contact_messages', vis),
-    unread: await supabaseCount(supabase, 'contact_messages', { ...vis, lida: false }),
-    today: await supabaseCountSince(supabase, 'contact_messages', since1, vis),
-    last7d: await supabaseCountSince(supabase, 'contact_messages', since7, vis),
+    total: await supabaseCount(supabase, 'contact_messages', {}),
+    unread: await supabaseCount(supabase, 'contact_messages', { lida: false }),
+    today: await supabaseCountSince(supabase, 'contact_messages', since1, {}),
+    last7d: await supabaseCountSince(supabase, 'contact_messages', since7, {}),
+    last30d: await supabaseCountSince(supabase, 'contact_messages', since30, {}),
   }
   const orders = {
-    total: await supabaseCount(supabase, 'encomendas_internas', vis),
-    today: await supabaseCountSince(supabase, 'encomendas_internas', since1, vis),
-    last7d: await supabaseCountSince(supabase, 'encomendas_internas', since7, vis),
+    total: await supabaseCount(supabase, 'encomendas_internas', {}),
+    today: await supabaseCountSince(supabase, 'encomendas_internas', since1, {}),
+    last7d: await supabaseCountSince(supabase, 'encomendas_internas', since7, {}),
+    last30d: await supabaseCountSince(supabase, 'encomendas_internas', since30, {}),
   }
 
   return {
@@ -104,9 +107,17 @@ async function fetchBusinessSupabase(supabase) {
     pipeline: {
       leads_7d: quotes.last7d + contacts.last7d,
       unread_total: quotes.unread + contacts.unread,
+      aging: unreadAgingLabel(quotes.unread + contacts.unread),
     },
     generatedAt: new Date().toISOString(),
   }
+}
+
+function unreadAgingLabel(n) {
+  if (!n) return 'limpo'
+  if (n <= 2) return 'leve'
+  if (n <= 8) return 'moderado'
+  return 'acumulado'
 }
 
 async function fetchBusinessApi(cfg) {

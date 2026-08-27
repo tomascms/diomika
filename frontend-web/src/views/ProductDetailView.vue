@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
-import { resolveImageUrl, PLACEHOLDER } from '@/lib/images'
+import { resolveImageUrls, PLACEHOLDER, IMG_DETAIL, IMG_THUMB } from '@/lib/images'
 import { watchDynamicTitle } from '@/composables/usePageMeta'
 import { useCart, resolveCartQtyRules } from '@/composables/useCart'
 import { MIN_ORCAMENTO_MSG } from '@/lib/constants'
@@ -116,9 +116,10 @@ const fetchProduct = async () => {
     const rawColors = (modelData.modelo_cores || [])
       .filter((c) => c.visibilidade !== false)
       .sort((a, b) => a.numero - b.numero)
-    colors.value = await Promise.all(
-      rawColors.map(async (c) => ({ ...c, imagem: await resolveImageUrl(c.imagem) })),
-    )
+    const colorUrls = await resolveImageUrls(rawColors.map((c) => c.imagem), PLACEHOLDER, {
+      transform: IMG_DETAIL,
+    })
+    colors.value = rawColors.map((c, i) => ({ ...c, imagem: colorUrls[i] }))
 
     if (colors.value.length === 0) {
       throw new Error('Não existem cores disponíveis para este modelo.')
@@ -136,22 +137,23 @@ const fetchProduct = async () => {
         throw new Error('Este modelo ainda não tem EAN registado.')
       }
       const pt = storefrontCtx.value.product_table
+      const [barcodeUrl] = product.barcode_url
+        ? await resolveImageUrls([product.barcode_url], '', { transform: IMG_THUMB })
+        : ['']
       model.value[pt] = {
         ...product,
-        barcode_url: product.barcode_url ? await resolveImageUrl(product.barcode_url, '') : '',
+        barcode_url: barcodeUrl,
       }
     } else {
-      pickerOptions.value = await Promise.all(
-        pickerOptions.value.map(async (opt) => ({
-          ...opt,
-          value: {
-            ...opt.value,
-            barcode_url: opt.value.barcode_url
-              ? await resolveImageUrl(opt.value.barcode_url, '')
-              : '',
-          },
-        })),
-      )
+      const barcodePaths = pickerOptions.value.map((opt) => opt.value?.barcode_url || '')
+      const barcodeUrls = await resolveImageUrls(barcodePaths, '', { transform: IMG_THUMB })
+      pickerOptions.value = pickerOptions.value.map((opt, i) => ({
+        ...opt,
+        value: {
+          ...opt.value,
+          barcode_url: barcodeUrls[i] || '',
+        },
+      }))
     }
 
     selectColor(colors.value[0])
