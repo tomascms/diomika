@@ -21,6 +21,14 @@ const ROUTE_META = {
     title: 'Pedido de orçamento',
     description: 'Revise o seu pedido e envie o orçamento.',
   },
+  about: {
+    title: 'Sobre nós',
+    description: 'Conheça a Diomika e o processo de pedido do catálogo B2B.',
+  },
+  search: {
+    title: 'Pesquisar catálogo',
+    description: 'Pesquise modelos e referências em todo o catálogo Diomika.',
+  },
   contact: {
     title: 'Contacto',
     description: 'Entre em contacto connosco.',
@@ -80,10 +88,9 @@ export function applyPageMeta({ title, description, image, path } = {}) {
   setMeta('twitter:card', 'summary_large_image')
   setMeta('twitter:title', fullTitle)
   setMeta('twitter:description', desc)
-  if (image) {
-    const img = image.startsWith('http') ? image : `${SITE_ORIGIN}${image.startsWith('/') ? '' : '/'}${image}`
-    setOg('og:image', img)
-  }
+  const metaImage = image || `${SITE_ORIGIN}/brand/logo.svg`
+  const img = metaImage.startsWith('http') ? metaImage : `${SITE_ORIGIN}${metaImage.startsWith('/') ? '' : '/'}${metaImage}`
+  setOg('og:image', img)
   if (path && SITE_ORIGIN) {
     setCanonical(`${SITE_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`)
   }

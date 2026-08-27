@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { apiPost } from '@/lib/api'
 import { useTurnstile } from '@/composables/useTurnstile'
 import Breadcrumbs from '@/components/Breadcrumbs.vue'
+import { COMPANY, whatsappUrl } from '@/lib/constants'
 
 const turnstile = useTurnstile()
 const {
@@ -84,6 +85,11 @@ const submitContact = async () => {
 
     <div class="page-shell contact-wrap">
       <h1 class="page-title">Contacto</h1>
+      <div class="direct-actions">
+        <a class="btn btn-secondary" :href="`tel:${COMPANY.phoneTel}`">Ligar {{ COMPANY.phoneDisplay }}</a>
+        <a class="btn btn-primary" :href="whatsappUrl('Olá! Gostaria de falar com a Diomika.')" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+      </div>
+
       <p class="privacy-note">
         Usamos estes dados só para responder ao pedido.
         <RouterLink to="/privacidade">Privacidade</RouterLink>.
@@ -147,6 +153,8 @@ const submitContact = async () => {
   max-width: 640px;
   padding-top: 2rem;
 }
+
+.direct-actions { display: flex; flex-wrap: wrap; gap: 0.65rem; margin: 0.75rem 0 1.25rem; }
 
 .privacy-note {
   font-size: 0.9rem;

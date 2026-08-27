@@ -7,6 +7,8 @@ import { useCart } from '@/composables/useCart'
 import { useCategories } from '@/composables/useCategories'
 import { categoryProductsRoute } from '@/lib/catalogRoutes'
 import { prefetchRoute } from '@/router'
+import { COMPANY } from '@/lib/constants'
+import WhatsAppFab from '@/components/WhatsAppFab.vue'
 
 const CookieBanner = defineAsyncComponent(() => import('@/components/CookieBanner.vue'))
 
@@ -110,6 +112,7 @@ onUnmounted(() => {
             @click="closeMenu"
             @pointerenter="prefetchRoute('categories')"
           >Categorias</RouterLink>
+          <RouterLink to="/pesquisa" @click="closeMenu">Pesquisar</RouterLink>
           <RouterLink to="/sobre" @click="closeMenu">Sobre nós</RouterLink>
           <RouterLink
             to="/carrinho"
@@ -150,6 +153,7 @@ onUnmounted(() => {
           <h3 class="footer-title">Navegação</h3>
           <ul class="footer-links">
             <li><RouterLink to="/categorias">Categorias</RouterLink></li>
+            <li><RouterLink to="/pesquisa">Pesquisar</RouterLink></li>
             <li><RouterLink to="/sobre">Sobre nós</RouterLink></li>
             <li><RouterLink to="/contact">Contacto</RouterLink></li>
             <li><RouterLink to="/carrinho">Pedido de orçamento</RouterLink></li>
@@ -175,10 +179,10 @@ onUnmounted(() => {
           <h3 class="footer-title">Contacto</h3>
           <ul class="footer-links footer-contact">
             <li>
-              <a href="tel:+351935745663">935 745 663</a>
+              <a :href="`tel:${COMPANY.phoneTel}`">{{ COMPANY.phoneDisplay }}</a>
             </li>
-            <li>Rua da Quintã, n.º 89<br />4805-116 Caldas das Taipas</li>
-            <li>NIF 508 651 557</li>
+            <li>{{ COMPANY.address }}<br />{{ COMPANY.postal }}</li>
+            <li>NIF {{ COMPANY.nif }}</li>
           </ul>
         </div>
 
@@ -197,6 +201,7 @@ onUnmounted(() => {
       </div>
     </footer>
 
+    <WhatsAppFab />
     <CookieBanner />
   </div>
 </template>

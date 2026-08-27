@@ -5,12 +5,14 @@ import { resolveImageUrls, PLACEHOLDER } from '@/lib/images'
 import SoftImage from '@/components/SoftImage.vue'
 import { watchDynamicTitle } from '@/composables/usePageMeta'
 import { useCart, resolveCartQtyRules } from '@/composables/useCart'
-import { MIN_ORCAMENTO_MSG } from '@/lib/constants'
+import { MIN_ORCAMENTO_MSG, whatsappUrl } from '@/lib/constants'
 import { isSingleProductMode } from '@/lib/storefrontFormat'
 import Breadcrumbs from '@/components/Breadcrumbs.vue'
 import LoadingState from '@/components/LoadingState.vue'
 import QtySelect from '@/components/QtySelect.vue'
 import ModelSpecs from '@/components/ModelSpecs.vue'
+import ImageLightbox from '@/components/ImageLightbox.vue'
+import ShareProduct from '@/components/ShareProduct.vue'
 import { useCatalog } from '@/composables/useCatalog'
 import { categoryProductsRoute, modelDetailRoute } from '@/lib/catalogRoutes'
 
@@ -31,11 +33,20 @@ const error = ref(null)
 const activeImage = ref('')
 const selectedQty = ref(6)
 const addedMsg = ref('')
+const lightboxOpen = ref(false)
 
 const singleProductMode = computed(() => isSingleProductMode(storefrontCtx.value))
 const qtyStep = computed(() => resolveCartQtyRules(category.value).step)
 const qtyMin = computed(() => resolveCartQtyRules(category.value).min)
 const badgeText = computed(() => catalog.badgeLabel(model.value, model.value?._tipo_catalogo))
+const specExtras = computed(() => {
+  const extras = []
+  if (Array.isArray(model.value?.dimensoes) && model.value.dimensoes.length) {
+    extras.push({ label: 'Tamanhos disponíveis', display: model.value.dimensoes.join(', ') })
+  }
+  extras.push({ label: 'Quantidade mínima no pedido', display: `${qtyMin.value} un. (incrementos de ${qtyStep.value})` })
+  return extras
+})
 const selectedProduct = computed(() =>
   catalog.activeProduct(model.value, storefrontCtx.value, selectedPicker.value),
 )
@@ -196,6 +207,7 @@ const addToCart = () => {
     corNome: selectedColor.value.nome,
     carrinhoStep: qtyStep.value,
     carrinhoMin: qtyMin.value,
+    imagem: selectedColor.value.imagem,
   })
 
   addedMsg.value = `${selectedQty.value} un. adicionadas ao pedido.`
@@ -222,7 +234,7 @@ watch(() => route.fullPath, fetchProduct)
       class="detail-layout page-shell"
     >
       <section class="gallery">
-        <div class="main-image-wrap">
+        <button type="button" class="main-image-wrap" aria-label="Ampliar imagem" @click="lightboxOpen = true">
           <SoftImage
             :src="displayImage"
             :alt="`${model.nome} — cor seleccionada`"
@@ -230,7 +242,7 @@ watch(() => route.fullPath, fetchProduct)
             eager
             fetchpriority="high"
           />
-        </div>
+        </button>
 
         <div v-if="colors.length > 1" class="color-picker">
           <p class="color-picker-label">
@@ -264,6 +276,7 @@ watch(() => route.fullPath, fetchProduct)
           </RouterLink>
           <span v-if="badgeText" class="badge-pill badge-soft">{{ badgeText }}</span>
           <h1>{{ model.nome }}</h1>
+          <ShareProduct :title="model.nome" />
           <p v-if="model.descricao" class="product-desc">{{ model.descricao }}</p>
           <p v-else class="product-desc">
             Seleccione a cor{{ storefrontCtx?.picker ? ` e a ${String(storefrontCtx.picker.label || 'variante').toLowerCase()}` : '' }},
@@ -287,7 +300,7 @@ watch(() => route.fullPath, fetchProduct)
           </div>
         </div>
 
-        <ModelSpecs :model="model" :specs="storefrontCtx?.specs || []" />
+        <ModelSpecs :model="model" :specs="storefrontCtx?.specs || []" :extras="specExtras" />
 
         <div class="buy-box">
           <h2 class="buy-title">Pedido de orçamento</h2>
@@ -322,10 +335,11 @@ watch(() => route.fullPath, fetchProduct)
 
         <p class="help-line">
           Dúvidas sobre este modelo?
-          <RouterLink to="/contact">Contacte-nos</RouterLink>
+          <a :href="whatsappUrl(`Olá! Tenho uma dúvida sobre o modelo ${model.nome}.`)" target="_blank" rel="noopener noreferrer">Fale connosco no WhatsApp</a>
         </p>
       </section>
     </article>
+    <ImageLightbox :open="lightboxOpen" :src="displayImage" :alt="model?.nome || 'Produto Diomika'" @close="lightboxOpen = false" />
   </div>
 </template>
 
@@ -349,11 +363,16 @@ watch(() => route.fullPath, fetchProduct)
 }
 
 .main-image-wrap {
+  display: block;
+  width: 100%;
+  padding: 0;
+  cursor: zoom-in;
+  border: none;
   border-radius: 16px;
   overflow: hidden;
-  background: var(--color-bg-soft);
+  background: transparent;
   aspect-ratio: 1;
-  border: 1px solid var(--color-border);
+  appearance: none;
 }
 
 .main-image-wrap :deep(.soft-image),

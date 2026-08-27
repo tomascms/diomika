@@ -38,6 +38,9 @@ const error = ref(null)
 const categoryData = ref(null)
 
 const selectedFilters = ref({})
+const localSearch = ref('')
+const sortBy = ref('az')
+const minColors = ref(0)
 
 const route = useRoute()
 
@@ -100,6 +103,39 @@ watchDynamicTitle(
 )
 
 
+
+function nestedEans(value, found = []) {
+  if (!value || typeof value !== 'object') return found
+  if (Array.isArray(value)) { value.forEach((entry) => nestedEans(entry, found)); return found }
+  for (const [key, entry] of Object.entries(value)) {
+    if (key === 'ean' && entry != null) found.push(String(entry))
+    else if (entry && typeof entry === 'object') nestedEans(entry, found)
+  }
+  return found
+}
+
+const displayedProducts = computed(() => {
+  const q = localSearch.value.trim().toLocaleLowerCase('pt')
+  const minimum = Number(minColors.value) || 0
+  const list = products.value.filter((product) => {
+    const matchesText = !q || [product.nome, product.slug, ...nestedEans(product)].filter(Boolean).join(' ').toLocaleLowerCase('pt').includes(q)
+    return matchesText && (product._colorCount || 0) >= minimum
+  })
+  return [...list].sort((a, b) => {
+    if (sortBy.value === 'za') return String(b.nome || '').localeCompare(String(a.nome || ''), 'pt')
+    if (sortBy.value === 'colors') return (b._colorCount || 0) - (a._colorCount || 0)
+    if (sortBy.value === 'recent') return Number(b.id || 0) - Number(a.id || 0)
+    return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt')
+  })
+})
+
+const hasActiveFilters = computed(() =>
+  Boolean(
+    localSearch.value.trim() ||
+    Number(minColors.value) ||
+    Object.values(selectedFilters.value).some((value) => String(value ?? '').trim()),
+  ),
+)
 
 const colorCount = (product) => {
 
@@ -351,7 +387,7 @@ onUnmounted(() => {
 
         <h1>{{ categoryData.nome }}</h1>
 
-        <p v-if="!loading" class="category-count">{{ products.length }} modelos</p>
+        <p v-if="!loading" class="category-count">{{ displayedProducts.length }} de {{ products.length }} modelos</p>
 
       </div>
 
@@ -376,7 +412,13 @@ onUnmounted(() => {
       </div>
     </div>
 
-
+    <div v-if="categoryData" class="catalog-tools">
+      <div class="page-shell tools-inner">
+        <label class="tool-search"><span class="field-label">Pesquisar nesta categoria</span><input v-model="localSearch" class="field-input" type="search" placeholder="Pesquisar modelo ou EAN…" /></label>
+        <label><span class="field-label">Ordenar</span><select v-model="sortBy" class="field-select"><option value="az">A–Z</option><option value="za">Z–A</option><option value="colors">Mais cores</option><option value="recent">Recentes</option></select></label>
+        <label><span class="field-label">Número de cores</span><select v-model.number="minColors" class="field-select"><option :value="0">Todas</option><option :value="2">2+</option><option :value="3">3+</option></select></label>
+      </div>
+    </div>
 
     <LoadingState v-if="loading" message="A carregar modelos…" />
 
@@ -386,11 +428,11 @@ onUnmounted(() => {
 
 
 
-    <div v-else-if="products.length > 0" class="page-shell page-shell--grid product-grid">
+    <div v-else-if="displayedProducts.length > 0" class="page-shell page-shell--grid product-grid">
 
       <RouterLink
 
-        v-for="product in products"
+        v-for="product in displayedProducts"
 
         :key="product.id"
 
@@ -448,9 +490,9 @@ onUnmounted(() => {
 
       <div class="empty-state-block surface-card empty-card">
 
-        <h2>Sem modelos nesta categoria</h2>
+        <h2>{{ hasActiveFilters ? 'Sem modelos para estes filtros' : 'Sem modelos nesta categoria' }}</h2>
 
-        <p>Ainda não existem modelos com produtos visíveis. Volte mais tarde ou escolha outra categoria.</p>
+        <p>{{ hasActiveFilters ? 'Ajuste a pesquisa ou os filtros para ver outros modelos.' : 'Ainda não existem modelos com produtos visíveis. Volte mais tarde ou escolha outra categoria.' }}</p>
 
         <RouterLink to="/categorias" class="btn btn-secondary">Ver categorias</RouterLink>
 
@@ -601,6 +643,12 @@ onUnmounted(() => {
 }
 
 
+
+.catalog-tools { background: #fff; border-bottom: 1px solid var(--color-border); padding: 1rem 0; }
+.tools-inner { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.8rem; }
+.tools-inner label { flex: 0 1 220px; }
+.tools-inner .tool-search { flex: 1 1 300px; }
+.tools-inner .field-input, .tools-inner .field-select { width: 100%; }
 
 .product-grid {
 

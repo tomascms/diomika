@@ -5,6 +5,7 @@ import { formatStorefrontValue } from '@/lib/storefrontFormat'
 const props = defineProps({
   model: { type: Object, default: null },
   specs: { type: Array, default: () => [] },
+  extras: { type: Array, default: () => [] },
 })
 
 const rows = computed(() =>
@@ -26,7 +27,7 @@ const rows = computed(() =>
 </script>
 
 <template>
-  <div v-if="rows.length" class="specs-panel">
+  <div v-if="rows.length || extras.length" class="specs-panel">
     <h3 class="specs-title">Especificações</h3>
     <dl class="specs-grid">
       <template v-for="row in rows" :key="row.field">
@@ -40,6 +41,10 @@ const rows = computed(() =>
           <dd v-else>{{ row.display }}</dd>
         </div>
       </template>
+      <div v-for="extra in extras" :key="`extra-${extra.label}`" class="spec-item">
+        <dt>{{ extra.label }}</dt>
+        <dd>{{ extra.display }}</dd>
+      </div>
     </dl>
   </div>
 </template>

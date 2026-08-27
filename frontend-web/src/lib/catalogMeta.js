@@ -209,9 +209,9 @@ export const CATALOG_META = {
       "storefront_picker": null,
       "storefront_specs": [
         {
-          "field": "material",
-          "label": "Material",
-          "widget": "text",
+          "field": "composicao",
+          "label": "Composicao",
+          "widget": "composition",
           "enum_labels": {}
         }
       ],
@@ -230,9 +230,9 @@ export const CATALOG_META = {
       "storefront_picker": null,
       "storefront_specs": [
         {
-          "field": "material",
-          "label": "Material",
-          "widget": "text",
+          "field": "composicao",
+          "label": "Composicao",
+          "widget": "composition",
           "enum_labels": {}
         }
       ],
@@ -251,9 +251,9 @@ export const CATALOG_META = {
       "storefront_picker": null,
       "storefront_specs": [
         {
-          "field": "material",
-          "label": "Material",
-          "widget": "text",
+          "field": "composicao",
+          "label": "Composicao",
+          "widget": "composition",
           "enum_labels": {}
         }
       ],
@@ -278,9 +278,9 @@ export const CATALOG_META = {
       },
       "storefront_specs": [
         {
-          "field": "material",
-          "label": "Material",
-          "widget": "text",
+          "field": "composicao",
+          "label": "Composicao",
+          "widget": "composition",
           "enum_labels": {}
         }
       ],
@@ -325,12 +325,6 @@ export const CATALOG_META = {
         "suffix": " cm"
       },
       "storefront_specs": [
-        {
-          "field": "material",
-          "label": "Material",
-          "widget": "text",
-          "enum_labels": {}
-        },
         {
           "field": "composicao",
           "label": "Composicao",
