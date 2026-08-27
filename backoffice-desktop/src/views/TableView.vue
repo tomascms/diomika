@@ -183,7 +183,7 @@ const loadRows = async ({ append = false } = {}) => {
   } catch (e) {
     if (seq !== loadSeq) return
     error.value = e.message
-    if (!append) rows.value = []
+    // Não limpar rows existentes — evita «Sem registos» falso em falhas transitórias
   } finally {
     if (seq === loadSeq) {
       loading.value = false
@@ -351,12 +351,16 @@ const ensureCategories = async () => {
   }
 }
 
-watch(table, () => {
+watch(table, (next, prev) => {
   filterCategoriaId.value = ''
   filterModeloId.value = ''
   filterText.value = ''
   filterModeloOptions.value = []
-  // Lista + filtros em paralelo — não esperar categorias para mostrar dados
+  if (prev !== undefined && next !== prev) {
+    rows.value = []
+    hasMore.value = false
+    totalApprox.value = null
+  }
   void loadRows()
   void loadPlan()
   void ensureCategories()

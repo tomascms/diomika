@@ -157,36 +157,46 @@ def _fetch_merged_table_page(
     modelo_id: str | None,
 ) -> list[dict]:
     db = get_db()
-    query = db.table(ptable).select(admin_merged_select_query(ptable))
-    if visible_only:
-        query = query.eq("visibilidade", True)
-    if categoria_id and view_key == "modelos":
-        query = query.eq("id_categoria", categoria_id)
-    if categoria_id and view_key == "produtos":
-        mt = model_table_for_tipo(tipo_for_table(ptable))
-        if mt:
-            model_rows = (
-                db.table(mt)
-                .select("id")
-                .eq("id_categoria", categoria_id)
-                .execute()
-                .data
-                or []
-            )
-            model_ids = [str(row["id"]) for row in model_rows if row.get("id")]
-            if not model_ids:
-                return []
-            query = query.in_("id_modelo", model_ids)
-    if modelo_id and view_key == "produtos":
-        query = query.eq("id_modelo", modelo_id)
+
+    def _run(select_q: str):
+        query = db.table(ptable).select(select_q)
+        if visible_only:
+            query = query.eq("visibilidade", True)
+        if categoria_id and view_key == "modelos":
+            query = query.eq("id_categoria", categoria_id)
+        if categoria_id and view_key == "produtos":
+            mt = model_table_for_tipo(tipo_for_table(ptable))
+            if mt:
+                model_rows = (
+                    db.table(mt)
+                    .select("id")
+                    .eq("id_categoria", categoria_id)
+                    .execute()
+                    .data
+                    or []
+                )
+                model_ids = [str(row["id"]) for row in model_rows if row.get("id")]
+                if not model_ids:
+                    return []
+                query = query.in_("id_modelo", model_ids)
+        if modelo_id and view_key == "produtos":
+            query = query.eq("id_modelo", modelo_id)
+        try:
+            return query.order("created_at", desc=True).limit(per_table).execute()
+        except TypeError:
+            return query.order("created_at", ascending=False).limit(per_table).execute()
+
     try:
         try:
-            res = query.order("created_at", desc=True).limit(per_table).execute()
-        except TypeError:
-            res = query.order("created_at", ascending=False).limit(per_table).execute()
+            res = _run(admin_merged_select_query(ptable))
+        except Exception as lean_exc:
+            # Fallback seguro: select completo (nunca devolver vazio por coluna em falta)
+            logger.warning("Merged lean select falhou %s/%s: %s — fallback *", view_key, ptable, lean_exc)
+            res = _run(list_select_query(ptable))
     except Exception as exc:
         logger.error("Merged list %s/%s: %s", view_key, ptable, exc)
         return []
+
     familia = tipo_label(tipo_for_table(ptable))
     mt = model_table_for_tipo(tipo_for_table(ptable))
     out: list[dict] = []

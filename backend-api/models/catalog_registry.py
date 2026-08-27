@@ -170,17 +170,25 @@ def list_select_query(table: str) -> str:
 
 
 def admin_merged_select_query(table: str) -> str:
-    """Select leve para listas merged do admin (sem * / imagens / JSON pesado)."""
+    """Select leve para listas merged do admin.
+
+    Colunas por família — pedir campos inexistentes (ex.: altura em almofada)
+    faz o PostgREST falhar e a lista merged ficar vazia.
+    """
     tipo = tipo_for_table(table)
     if not tipo:
         return "id, visibilidade, created_at"
     cfg = CATALOG_TYPES[tipo]
     mt = cfg["model_table"]
     if table == cfg["product_table"]:
-        return (
-            f"id, ean, dimensoes, altura, segmento, visibilidade, created_at, id_modelo, "
-            f"{mt}(nome, categories(nome))"
-        )
+        cols = ["id", "ean", "visibilidade", "created_at", "id_modelo"]
+        if tipo == "assento":
+            cols.append("altura")
+        elif tipo == "oculo":
+            cols.append("segmento")
+        elif tipo in ("almofada", "toalha_mesa", "pano_cozinha", "regional"):
+            cols.append("dimensoes")
+        return f"{', '.join(cols)}, {mt}(nome, categories(nome))"
     if table == mt:
         return "id, nome, visibilidade, created_at, id_categoria, categories(nome)"
     return "id, visibilidade, created_at"
