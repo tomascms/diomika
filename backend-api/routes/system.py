@@ -262,31 +262,46 @@ def seed_category_from_definition(request: Request, slug: str, role=Depends(requ
 @router.get("/order-picker/{category_id}", dependencies=[Depends(require_pedidos)])
 def order_picker_for_category(category_id: str):
     """Dados para criar linhas de encomenda — genérico por tipo de catálogo."""
-    from models.catalog_registry import CATALOG_TYPES, storefront_mode_for_tipo
+    from models.catalog_registry import CATALOG_TYPES, storefront_mode_for_tipo, tipo_label
+    from models.schemas import aggregated_tipos_for_tipo
 
     cat_res = get_db().table("categories").select("*").eq("id", category_id).execute()
     if not cat_res.data:
         raise HTTPException(status_code=404, detail="Categoria não encontrada")
     cat = cat_res.data[0]
     tipo = cat.get("tipo_catalogo")
-    if not tipo or tipo not in CATALOG_TYPES:
+    aggregated = aggregated_tipos_for_tipo(tipo) or []
+    if not tipo or (tipo not in CATALOG_TYPES and not aggregated):
         raise HTTPException(status_code=400, detail="Categoria sem tipo de catálogo válido")
-    cfg = CATALOG_TYPES[tipo]
-    mode = storefront_mode_for_tipo(tipo)
+
     step = cat.get("carrinho_step") or 6
     min_q = cat.get("carrinho_min") or step
-
     db = get_db()
-    if mode == "assento":
+
+    def _assento_lines(physical: str) -> list[dict]:
+        cfg = CATALOG_TYPES[physical]
         mt = cfg["model_table"]
         pt = cfg["product_table"]
-        models_res = db.table(mt).select("id, nome, alturas").eq("id_categoria", category_id).execute()
+        models_res = (
+            db.table(mt)
+            .select("id, nome, alturas")
+            .eq("id_categoria", category_id)
+            .eq("visibilidade", True)
+            .execute()
+        )
         lines = []
         for m in models_res.data or []:
-            prod = (
-                db.table(pt).select("ean").eq("id_modelo", m["id"]).limit(1).execute().data
-                or [{}]
-            )[0]
+            products = (
+                db.table(pt)
+                .select("ean, altura")
+                .eq("id_modelo", m["id"])
+                .eq("visibilidade", True)
+                .execute()
+                .data
+                or []
+            )
+            products = [p for p in products if str(p.get("ean") or "").strip()]
+            products.sort(key=lambda p: str(p.get("altura") or ""))
             cores = (
                 db.table(cfg.get("colors_table") or "modelo_assento_cores")
                 .select("numero, nome")
@@ -300,61 +315,94 @@ def order_picker_for_category(category_id: str):
                 {
                     "modelo_id": m["id"],
                     "modelo_nome": m["nome"],
-                    "ean": prod.get("ean"),
-                    "alturas": m.get("alturas") or [],
+                    "ean": (products[0].get("ean") if products else None),
+                    "products": [{"ean": p["ean"], "altura": p.get("altura")} for p in products],
+                    "alturas": [p.get("altura") for p in products if p.get("altura")] or (m.get("alturas") or []),
                     "cores": cores,
                 }
             )
-        return {"mode": "assento", "tipo": tipo, "carrinho_step": step, "carrinho_min": min_q, "models": lines}
+        return lines
 
-    pt = cfg["product_table"]
-    mt = cfg["model_table"]
-    models = (
-        db.table(mt)
-        .select("id, nome")
-        .eq("id_categoria", category_id)
-        .eq("visibilidade", True)
-        .execute()
-        .data
-        or []
-    )
-    model_by_id = {str(m["id"]): m for m in models}
-    model_ids = list(model_by_id.keys())
-    if not model_ids:
-        return {"mode": "variantes", "tipo": tipo, "carrinho_step": step, "carrinho_min": min_q, "products": []}
-
-    products = (
-        db.table(pt)
-        .select("ean, dimensoes, id_modelo")
-        .in_("id_modelo", model_ids)
-        .eq("visibilidade", True)
-        .execute()
-        .data
-        or []
-    )
-    cores_map: dict[str, list] = {}
-    colors_table = cfg.get("colors_table") or "modelo_almofada_cores"
-    cores_res = (
-        db.table(colors_table)
-        .select("id_modelo, numero, nome")
-        .in_("id_modelo", model_ids)
-        .eq("visibilidade", True)
-        .execute()
-    )
-    for c in cores_res.data or []:
-        mid = str(c["id_modelo"])
-        cores_map.setdefault(mid, []).append({"numero": c["numero"], "nome": c.get("nome") or ""})
-
-    enriched = []
-    for p in products:
-        mid = str(p.get("id_modelo") or "")
-        modelo = model_by_id.get(mid) or {}
-        enriched.append(
-            {
-                "ean": p["ean"],
-                "dimensoes": p.get("dimensoes"),
-                "modelo_nome": modelo.get("nome") or "",
-                "cores": cores_map.get(mid, []),
-            }
+    def _variant_products(physical: str) -> list[dict]:
+        cfg = CATALOG_TYPES[physical]
+        mt = cfg["model_table"]
+        pt = cfg["product_table"]
+        models = (
+            db.table(mt)
+            .select("id, nome")
+            .eq("id_categoria", category_id)
+            .eq("visibilidade", True)
+            .execute()
+            .data
+            or []
         )
-    return {"mode": "variantes", "tipo": tipo, "carrinho_step": step, "carrinho_min": min_q, "products": enriched}
+        model_by_id = {str(m["id"]): m for m in models}
+        model_ids = list(model_by_id.keys())
+        if not model_ids:
+            return []
+        products = (
+            db.table(pt)
+            .select("ean, dimensoes, segmento, id_modelo")
+            .in_("id_modelo", model_ids)
+            .eq("visibilidade", True)
+            .execute()
+            .data
+            or []
+        )
+        cores_map: dict[str, list] = {}
+        colors_table = cfg.get("colors_table")
+        if colors_table:
+            cores_res = (
+                db.table(colors_table)
+                .select("id_modelo, numero, nome")
+                .in_("id_modelo", model_ids)
+                .eq("visibilidade", True)
+                .execute()
+            )
+            for c in cores_res.data or []:
+                mid = str(c["id_modelo"])
+                cores_map.setdefault(mid, []).append({"numero": c["numero"], "nome": c.get("nome") or ""})
+        family = tipo_label(physical)
+        enriched = []
+        for p in products:
+            if not str(p.get("ean") or "").strip():
+                continue
+            mid = str(p.get("id_modelo") or "")
+            modelo = model_by_id.get(mid) or {}
+            dim = p.get("dimensoes") or p.get("segmento") or ""
+            enriched.append(
+                {
+                    "ean": p["ean"],
+                    "dimensoes": dim,
+                    "modelo_nome": modelo.get("nome") or "",
+                    "familia": family,
+                    "cores": cores_map.get(mid, []),
+                }
+            )
+        return enriched
+
+    if tipo == "assento" or (not aggregated and storefront_mode_for_tipo(tipo) == "assento"):
+        return {
+            "mode": "assento",
+            "tipo": tipo,
+            "carrinho_step": step,
+            "carrinho_min": min_q,
+            "models": _assento_lines("assento"),
+        }
+
+    physical_tipos = aggregated or [tipo]
+    products: list[dict] = []
+    for physical in physical_tipos:
+        if physical not in CATALOG_TYPES:
+            continue
+        if storefront_mode_for_tipo(physical) == "assento":
+            continue
+        products.extend(_variant_products(physical))
+
+    return {
+        "mode": "variantes",
+        "tipo": tipo,
+        "carrinho_step": step,
+        "carrinho_min": min_q,
+        "products": products,
+    }

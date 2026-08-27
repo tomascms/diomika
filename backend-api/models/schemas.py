@@ -36,23 +36,33 @@ CATEGORY_DEFINITIONS = {
     "guarda-chuvas": {
         "nome": "Guarda-chuvas",
         "tipo_catalogo": "guarda_chuva",
+        "carrinho_step": 6,
+        "carrinho_min": 6,
     },
     "oculos": {
         "nome": "Óculos",
         "tipo_catalogo": "oculo",
+        "carrinho_step": 6,
+        "carrinho_min": 6,
     },
     "toalhas-mesa": {
         "nome": "Toalhas de mesa",
         "tipo_catalogo": "toalha_mesa",
+        "carrinho_step": 6,
+        "carrinho_min": 6,
     },
     "material-cozinha": {
         "nome": "Material de cozinha",
         "tipo_catalogo": "material_cozinha",
         "aggregated_tipos": ["avental", "luva", "pega", "pano_cozinha"],
+        "carrinho_step": 6,
+        "carrinho_min": 6,
     },
     "regional": {
         "nome": "Regional",
         "tipo_catalogo": "regional",
+        "carrinho_step": 6,
+        "carrinho_min": 6,
     },
 }
 
@@ -149,7 +159,11 @@ MIN_ORCAMENTO_TEXTO = "Mínimo de encomenda: 500€ + IVA (sem preços no site �
 
 
 def generate_slug(text: str) -> str:
-    return re.sub(r"[-\s]+", "-", re.sub(r"[^\w\s-]", "", text.lower().strip()))
+    import unicodedata
+
+    normalized = unicodedata.normalize("NFD", str(text or "").lower().strip())
+    ascii_text = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    return re.sub(r"[-\s]+", "-", re.sub(r"[^\w\s-]", "", ascii_text)).strip("-")
 
 
 class Categoria(BaseModel):

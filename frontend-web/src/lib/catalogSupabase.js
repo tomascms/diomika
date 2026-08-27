@@ -1,5 +1,5 @@
 import { ensureSupabase, supabaseConfigured } from '@/lib/supabase'
-import { CATALOG_META, getTipoConfig } from '@/lib/catalogMeta'
+import { getCatalogMeta, getTipoConfig } from '@/lib/catalogMeta'
 
 const CATEGORY_FIELDS = 'id,nome,slug,imagem,tipo_catalogo,carrinho_step,carrinho_min'
 const CATEGORY_EMBED = 'id, nome, slug, carrinho_step, carrinho_min, tipo_catalogo'
@@ -15,9 +15,14 @@ function isVisible(row) {
   return row && row.visibilidade !== false
 }
 
+function hasEan(row) {
+  return Boolean(String(row?.ean || '').trim())
+}
+
 function visibleProducts(rows) {
   const list = Array.isArray(rows) ? rows : rows ? [rows] : []
-  return list.filter(isVisible)
+  // Sem EAN o produto não é encomendável — não conta para a loja.
+  return list.filter((row) => isVisible(row) && hasEan(row))
 }
 
 function normalizeStringList(value) {
@@ -102,6 +107,8 @@ function storefrontContext(cfg) {
 function finalizeModelRow(row, cfg) {
   const pt = cfg.product_table
   const mode = cfg.storefront_mode || 'variantes'
+  // Sem produtos com EAN ou sem cores → não aparece na loja (evita barcodes / ficha inválidos).
+  if (!modeloCores(row).length) return null
   const products = visibleProducts(row[pt])
 
   if (mode === 'unico') {
@@ -125,9 +132,7 @@ function finalizeModelRow(row, cfg) {
   return row
 }
 
-export function getCatalogMeta() {
-  return CATALOG_META
-}
+export { getCatalogMeta } from '@/lib/catalogMeta'
 
 export async function listCategories() {
   const supabase = await db()
@@ -361,7 +366,7 @@ async function finalizeModelDetailRow(data, cfg) {
 }
 
 export async function modelDetailAuto(modelId) {
-  for (const cfg of CATALOG_META.catalog_types) {
+  for (const cfg of getCatalogMeta().catalog_types || []) {
     if (!cfg.model_table) continue
     const data = await modelDetailForTipo(cfg.tipo, modelId)
     if (data) return data

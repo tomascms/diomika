@@ -109,7 +109,8 @@ def generate_catalog_infra_sql() -> str:
         lines.extend(
             [
                 f"CREATE INDEX IF NOT EXISTS idx_{pt}_modelo ON {pt} (id_modelo);",
-                f"CREATE INDEX IF NOT EXISTS idx_{pt}_ean ON {pt} (ean);",
+                # EAN único por família (NULL permitido se a coluna for nullable)
+                f"CREATE UNIQUE INDEX IF NOT EXISTS uq_{pt}_ean ON {pt} (ean) WHERE ean IS NOT NULL AND btrim(ean) <> '';",
                 "",
             ]
         )

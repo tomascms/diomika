@@ -49,16 +49,20 @@ const addVariantLine = () => {
 
 const addAssentoLine = () => {
   const m = picker.value?.models?.find((x) => x.modelo_id === assentoForm.value.modelo_id)
-  if (!m?.ean) {
-    error.value = 'Modelo sem EAN.'
+  const altura = assentoForm.value.altura
+  const product =
+    (m?.products || []).find((p) => String(p.altura || '') === String(altura || '')) || null
+  const ean = product?.ean || m?.ean
+  if (!ean) {
+    error.value = 'Modelo sem EAN para esta altura.'
     return
   }
   lines.value.push({
-    ean: m.ean,
+    ean,
     numero_cor: Number(assentoForm.value.numero_cor),
-    altura: assentoForm.value.altura,
+    altura,
     quantidade: Number(assentoForm.value.quantidade),
-    label: `${m.modelo_nome} · ${assentoForm.value.altura} · cor ${assentoForm.value.numero_cor}`,
+    label: `${m.modelo_nome} · ${altura} · cor ${assentoForm.value.numero_cor}`,
   })
   error.value = ''
 }
@@ -120,12 +124,12 @@ onMounted(loadCategories)
     </div>
 
     <div v-if="picker && mode === 'variantes'" class="card section">
-      <h3>Adicionar linha (almofadas)</h3>
+      <h3>Adicionar linha</h3>
       <label>Produto (EAN)</label>
       <select v-model="variantForm.ean" class="input">
         <option value="">—</option>
         <option v-for="p in picker.products" :key="p.ean" :value="p.ean">
-          {{ p.ean }} · {{ p.modelo_nome }} {{ p.dimensoes }}
+          {{ [p.familia, p.modelo_nome, p.dimensoes, p.ean].filter(Boolean).join(' · ') }}
         </option>
       </select>
       <label>Cor</label>

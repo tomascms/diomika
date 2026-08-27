@@ -21,7 +21,8 @@ python deploy/verify_production.py
 | `seed_catalog_demo.py` | Categorias + produtos `[TESTE]` + logo nas cores |
 | `apply_production.py` | Schema/SQL produção + seed (`--seed-demo`, `--images-only`) |
 | `gen_catalog_sql.py` | Regenera `generated_catalog_infra.sql` |
-| `supabase_pre_deploy.sql` | SQL / RLS |
+| `sql/unique_ean_product_tables.sql` | Índices UNIQUE EAN (P0) |
+| `supabase_pre_deploy.sql` | SQL / RLS (+ UNIQUE ean) |
 | `cloudflare/` | DNS + WAF |
 
 Documentação longa: [`docs/`](../docs/).

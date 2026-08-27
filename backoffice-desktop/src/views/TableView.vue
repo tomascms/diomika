@@ -60,10 +60,11 @@ const recordLabel = (row) => {
 }
 
 const categoryLabel = (row) => {
-  if (row._categoria_label) return row._categoria_label
   if (row.categories?.nome) return row.categories.nome
   const model = embeddedModel(row)
-  return model?.categories?.nome || '—'
+  if (model?.categories?.nome) return model.categories.nome
+  if (row._categoria_label) return row._categoria_label
+  return '—'
 }
 
 const columns = computed(() => {
@@ -74,20 +75,9 @@ const columns = computed(() => {
     ]
   }
   const fields = tableConfig(table.value)?.list_label_fields || ['nome']
-  // Preferir nome + contexto útil (evita slug duplicado quando igual ao nome)
+  // Categorias: só o nome humano — sem slug/tipo técnico por baixo
   if (isCategories.value) {
-    const pretty = (s) => {
-      const t = String(s || '').trim()
-      return t ? t.charAt(0).toUpperCase() + t.slice(1) : ''
-    }
-    return [
-      { key: 'nome', label: 'Nome', format: (row) => pretty(row.nome) || '—' },
-      {
-        key: 'tipo_catalogo',
-        label: 'Tipo',
-        format: (row) => pretty(row.tipo_catalogo) || (row.slug !== row.nome ? row.slug : ''),
-      },
-    ]
+    return [{ key: 'nome', label: 'Nome', format: (row) => String(row.nome || '').trim() || '—' }]
   }
   return fields.map((f) => ({ key: f, label: f.replace(/_/g, ' ') }))
 })
@@ -281,8 +271,29 @@ watch(table, () => {
   loadPlan()
 }, { immediate: true })
 
+const filterModeloOptions = ref([])
+
+const loadModeloFilterOptions = async () => {
+  filterModeloOptions.value = []
+  filterModeloId.value = ''
+  if (table.value !== 'produtos' || !filterCategoriaId.value) return
+  try {
+    const models = await api.mergedList('modelos', { categoria_id: filterCategoriaId.value })
+    filterModeloOptions.value = (Array.isArray(models) ? models : []).map((m) => ({
+      id: m.id,
+      label: m.nome || String(m.id).slice(0, 8),
+    }))
+  } catch {
+    filterModeloOptions.value = []
+  }
+}
+
 watch([filterCategoriaId, filterModeloId, filterTipoCatalogo], () => {
   if (isMerged.value) loadRows()
+})
+
+watch(filterCategoriaId, () => {
+  if (table.value === 'produtos') void loadModeloFilterOptions()
 })
 
 onMounted(async () => {
@@ -319,6 +330,7 @@ onMounted(async () => {
         </select>
         <select v-if="table === 'produtos'" v-model="filterModeloId" class="input filter-mini">
           <option value="">Todos modelos</option>
+          <option v-for="m in filterModeloOptions" :key="m.id" :value="m.id">{{ m.label }}</option>
         </select>
         <select v-model="filterTipoCatalogo" class="input filter-mini">
           <option value="">Todos tipos</option>

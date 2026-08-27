@@ -30,7 +30,15 @@ def is_valid_storefront_tipo(tipo: str | None) -> bool:
 def tipo_label(tipo: str | None) -> str:
     if not tipo:
         return ""
-    return CATALOG_TYPES.get(tipo, {}).get("label") or TIPO_CATALOGO_LABELS.get(tipo, tipo)
+    if tipo in CATALOG_TYPES:
+        return CATALOG_TYPES[tipo].get("label") or TIPO_CATALOGO_LABELS.get(tipo, tipo)
+    # Tipos virtuais (ex.: material_cozinha) — label vem das definições de categoria
+    from models.schemas import CATEGORY_DEFINITIONS
+
+    for definition in CATEGORY_DEFINITIONS.values():
+        if definition.get("tipo_catalogo") == tipo:
+            return str(definition.get("nome") or tipo)
+    return TIPO_CATALOGO_LABELS.get(tipo, tipo)
 
 
 def model_table_for_tipo(tipo: str | None) -> str | None:
@@ -155,7 +163,7 @@ def list_select_query(table: str) -> str:
         if disc:
             model_fields.append(disc)
         # Categoria via modelo — produtos não têm FK directo para categories
-        return f"*, {mt}({', '.join(model_fields)})"
+        return f"*, {mt}({', '.join(model_fields)}, categories(nome))"
     if table == mt:
         return "*, categories(nome)"
     return "*"
@@ -224,6 +232,17 @@ def catalog_metadata() -> dict:
     from models.schemas import CATEGORY_DEFINITIONS
     from models.storefront_meta import storefront_context_for_tipo
 
+    def _product_select(cfg: dict) -> str:
+        fields = ["id", "ean", "barcode_url", "visibilidade"]
+        schema = cfg.get("product_schema")
+        if schema is not None:
+            for fname in schema.model_fields:
+                if fname in fields or fname in ("id", "id_modelo", "barcode_url", "visibilidade", "created_at", "updated_at"):
+                    continue
+                if fname in ("dimensoes", "altura", "segmento"):
+                    fields.append(fname)
+        return ", ".join(fields)
+
     tipos = []
     for key, cfg in CATALOG_TYPES.items():
         ctx = storefront_context_for_tipo(cfg)
@@ -240,6 +259,7 @@ def catalog_metadata() -> dict:
                 "storefront_specs": ctx["specs"],
                 "storefront_badge": ctx["badge"],
                 "order_picker_mode": ctx["mode"],
+                "product_select": _product_select(cfg),
             }
         )
 

@@ -1,4 +1,4 @@
-/** Metadados estáticos do catálogo — espelham backend/models/schemas.py (CATALOG_TYPES). */
+/** Metadados do catálogo — fallback estático; em runtime a loja prefere GET /catalogo/meta. */
 export const CATALOG_META = {
   "catalog_types": [
     {
@@ -422,6 +422,21 @@ export const CATALOG_META = {
   }
 }
 
+let liveCatalogMeta = null
+
+/** Injecção a partir de GET /catalogo/meta (fonte de verdade do backend). */
+export function setLiveCatalogMeta(meta) {
+  if (meta?.catalog_types?.length) liveCatalogMeta = meta
+}
+
+export function getCatalogMeta() {
+  return liveCatalogMeta || CATALOG_META
+}
+
 export function getTipoConfig(tipo) {
-  return CATALOG_META.catalog_types.find((t) => t.tipo === tipo) || null
+  const meta = getCatalogMeta()
+  const fromPhysical = (meta.catalog_types || []).find((t) => t.tipo === tipo)
+  if (fromPhysical) return fromPhysical
+  const fromAgg = (meta.aggregated_categories || []).find((t) => t.tipo === tipo)
+  return fromAgg || null
 }

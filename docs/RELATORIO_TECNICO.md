@@ -1,6 +1,6 @@
 # Diomika — Relatório técnico exaustivo
 
-**Versão:** 2.2 (actualizado 27 Agosto 2026)  
+**Versão:** 2.3 (actualizado 27 Agosto 2026)  
 **Audiência:** qualquer pessoa inteligente — **não** se assume conhecimento prévio de informática.  
 **Regra:** cada sigla é expandida e explicada na primeira aparição; o glossário da Parte I serve de dicionário permanente.  
 **Segurança:** este texto **não contém** passwords, tokens nem chaves. Esses vivem só em .env / pastas gitignored.
@@ -26,7 +26,7 @@
 | XI | Limitações honestas |
 | XII | Como estudar o código |
 | Apêndices A–C | Fluxos sequenciais, índice de ficheiros, FAQ |
-| **Apêndice D** | **Registo de actualizações (Ago 2026) — estado actual** (+ D.9 hub, D.10 performance loja, D.11 segurança) |
+| **Apêndice D** | **Registo de actualizações (Ago 2026) — estado actual** (+ D.9 hub, D.10 performance, D.11 segurança, **D.12 catálogo**) |
 | **Apêndice E** | **Diagrama BD comercial** |
 
 **Como ler:** podes saltar para a parte que precisas; se encontrares uma sigla desconhecida, volta ao glossário (Parte I.13). Para operar o sistema, usa [`INSTRUCOES.md`](INSTRUCOES.md).
@@ -9216,6 +9216,47 @@ Ficheiros-chave: `frontend-web/vite.config.js`, `src/lib/supabase.js`, `src/lib/
 - Issues Sentry de ruído resolvidas em lote; filtros no SDK para não voltarem.
 - Turnstile + honeypot + rate limits mantêm-se nos formulários públicos.
 
+### D.12 Catálogo — integridade, publicação e meta (27/08/2026)
+
+Objectivo: o backoffice e a loja falarem a mesma língua (sem barcodes órfãos, sem modelos “publicados” invisíveis, sem EAN duplicados).
+
+#### P0 — EAN único
+
+| Camada | O quê |
+|---|---|
+| BD | Índices únicos parciais `uq_<tabela>_ean` em todas as tabelas de produto (`deploy/sql/unique_ean_product_tables.sql` + `supabase_pre_deploy.sql`) |
+| API | `_assert_ean_globally_unique` em `admin_crud` — o mesmo EAN não pode existir noutra família |
+| Gerador | `catalog_deploy_sql.py` passa a emitir `UNIQUE INDEX … WHERE ean IS NOT NULL` |
+
+#### P1 — Publicar vs rascunho
+
+| Regra | Detalhe |
+|---|---|
+| Modelo novo | Nunca nasce `visibilidade=true` — primeiro rascunho |
+| Publicar | Exige ≥1 cor com imagem + ≥1 produto com EAN (`_assert_model_publishable`) |
+| Backoffice | Botões **Guardar rascunho** e **Publicar na loja** (`RecordFormView`) |
+| Toggle Ocultar/Mostrar | Cascade filhos; Mostrar usa a mesma gate de publicação |
+| Loja | Finalize já exigia cor + EAN; agora o admin não mente ao marcar “publicado” |
+
+#### P2 — Meta do catálogo pela API
+
+| Antes | Depois |
+|---|---|
+| `catalogMeta.js` estático preferido com Supabase | `GET /catalogo/meta` é a fonte de verdade; estático só fallback offline |
+| Drift fácil schemas.py ↔ frontend | `setLiveCatalogMeta` injecta a resposta da API em runtime |
+| Meta sem `product_select` | API inclui `product_select` por tipo |
+
+#### Outras correcções do mesmo lote
+
+- Labels técnicos (`material_cozinha`) removidos da lista de categorias no backoffice.
+- Modelo↔categoria: validação de `tipo_catalogo` (incl. agregado `material_cozinha`).
+- Order picker: agregado + EAN por altura no assento.
+- Resolve EAN: ignora produtos/modelos ocultos.
+- CQRS morto (`create_almofada`, `list_almofadas`, …) removido — CRUD só via `admin_crud`.
+- Scripts deploy órfãos apagados: `fetch_backoffice_artifacts.py`, `gen_catalog_fks.py`, `gen_rls_*.py`.
+
+**Operação:** após pull, `python deploy/deploy_vm.py` (API) e rebuild do backoffice se entregar instalador; a loja já usa `/catalogo/meta` no boot.
+
 ---
 
 ## Apêndice E — Base de dados comercial
@@ -9230,10 +9271,10 @@ Fonte: `backend-api/models/schemas.py` (`CATALOG_TYPES` + `TABLE_MAP`).
 erDiagram
     categories ||--o{ modelos_almofadas : "tem modelos"
     categories ||--o{ modelos_assentos : "tem modelos"
-    modelos_almofadas ||--o{ modelo_cores : "cores do modelo"
-    modelos_almofadas ||--o{ almofada : "tamanhos/EAN"
-    modelos_assentos ||--o{ modelo_cores : "cores do modelo"
-    modelos_assentos ||--o{ assento : "um EAN por modelo"
+    modelos_almofadas ||--o{ modelo_almofada_cores : "cores do modelo"
+    modelos_almofadas ||--o{ almofada : "tamanhos/EAN único"
+    modelos_assentos ||--o{ modelo_assento_cores : "cores do modelo"
+    modelos_assentos ||--o{ assento : "EAN por altura"
     pedidos_orcamento ||--|{ pedido_linhas : "pedido no site"
     encomendas_internas ||--|{ encomenda_linhas : "criada no backoffice"
 ```
@@ -9245,17 +9286,19 @@ erDiagram
 | Regra | Detalhe |
 |---|---|
 | Categoria | Só em `categories` e modelos (`id_categoria`). Produtos não têm categoria directa. |
-| Cor | Só em `modelo_cores` com `id_modelo` obrigatório. Sem `paletas_cores`. |
+| Cor | Tabelas `modelo_*_cores` por família, com `id_modelo` obrigatório. |
 | Orçamento | `pedidos_orcamento` — pedido no **site**. |
 | Encomenda | `encomendas_internas` — criada no **backoffice**. |
 | Composição | JSON `composicao` em `modelos_almofadas` (substituiu `material`). |
+| **EAN** | **Único por tabela de produto** (`uq_<pt>_ean`) e **único entre famílias** (validação API). |
+| **Publicação** | Modelo só fica visível na loja com ≥1 cor (imagem) + ≥1 produto com EAN. |
 
 ### E.3 Famílias de catálogo
 
 | tipo_catalogo | Tabela modelo | Tabela produto |
 |---|---|---|
-| `almofada` | `modelos_almofadas` | `almofada` (variantes por dimensões) |
-| `assento` | `modelos_assentos` | `assento` (alturas no modelo) |
+| `almofada` | `modelos_almofadas` | `almofada` (variantes por dimensões; EAN único) |
+| `assento` | `modelos_assentos` | `assento` (um EAN por altura; EAN único) |
 
 Nova família: editar `CATALOG_TYPES` + `CATEGORY_DEFINITIONS` em `schemas.py`.
 

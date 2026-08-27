@@ -159,7 +159,15 @@ async function fetchProducts({ resetCategory = false } = {}) {
     if (seq !== fetchSeq) return
 
     const visible = Array.isArray(models)
-      ? models.filter((model) => model && model.visibilidade !== false)
+      ? models.filter((model) => {
+          if (!model || model.visibilidade === false) return false
+          const pt = model._storefront?.product_table || catalog.storefrontContext(tipo, model)?.product_table
+          if (!pt) return false
+          const rows = Array.isArray(model[pt]) ? model[pt] : model[pt] ? [model[pt]] : []
+          const hasEan = rows.some((p) => String(p?.ean || '').trim())
+          const hasColor = (model.modelo_cores || []).some((c) => c && c.visibilidade !== false)
+          return hasEan && hasColor
+        })
       : []
     const prepared = visible.map((model) => {
       const cores = (model.modelo_cores || [])

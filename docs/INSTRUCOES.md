@@ -82,6 +82,15 @@ Mac/Linux `.dmg`/`.AppImage` — GitHub Actions (`backoffice-release.yml`) ou nu
 
 **Uso:** duplo-clique → login admin → gere catálogo/pedidos. Liga a `https://api.diomika.com` (não precisa Python no PC do cliente).
 
+### Catálogo — rascunho vs loja
+
+1. **Guardar rascunho** — modelo fica oculto (`visibilidade=false`).
+2. Adicionar **cores com imagem** e **produtos com EAN**.
+3. **Publicar na loja** — a API recusa se faltar cor ou EAN.
+4. EAN é **único** em todo o catálogo (não repetir entre almofada/assento/…).
+
+Detalhe técnico: [`RELATORIO_TECNICO.md`](RELATORIO_TECNICO.md) Apêndice **D.12**.
+
 ---
 
 ## 5. Monitor Hub — Command Center (como ler em 30s)

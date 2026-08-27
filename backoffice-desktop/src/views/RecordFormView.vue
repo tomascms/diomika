@@ -142,7 +142,7 @@ const resolvePendingImages = async (payload) => {
   return out
 }
 
-const publish = async () => {
+const saveDraft = async () => {
   if (saving.value) return
   if (schemaFormRef.value && !schemaFormRef.value.validate()) {
     error.value = 'Preencha os campos obrigatórios.'
@@ -155,7 +155,7 @@ const publish = async () => {
     createIdempotencyKey.value = crypto.randomUUID()
   }
   try {
-    let payload = { ...formData.value, visibilidade: true }
+    let payload = { ...formData.value, visibilidade: false }
     payload = await resolvePendingImages(payload)
     if (typeof payload.composicao === 'string') {
       try {
@@ -175,12 +175,96 @@ const publish = async () => {
 
     if (embedColors.value && colorsPanel.value) {
       try {
-        await colorsPanel.value.save(String(savedId), { publish: true })
+        await colorsPanel.value.save(String(savedId), { publish: false })
       } catch (e) {
-        message.value = `Registo publicado, mas cores: ${e.message}`
+        message.value = `Rascunho guardado, mas cores: ${e.message}`
         saving.value = false
+        if (isNew.value && savedId) {
+          await router.replace({
+            name: 'record-edit',
+            params: { table: route.params.table, physicalTable: route.params.physicalTable, id: savedId },
+          })
+        }
         return
       }
+    }
+
+    formData.value.visibilidade = false
+    message.value = 'Rascunho guardado (oculto na loja).'
+    if (isNew.value && savedId) {
+      await router.replace({
+        name: 'record-edit',
+        params: {
+          table: route.params.table,
+          ...(route.params.physicalTable ? { physicalTable: route.params.physicalTable } : {}),
+          id: savedId,
+        },
+      })
+    }
+  } catch (e) {
+    error.value = e.message || 'Não foi possível guardar o rascunho.'
+  } finally {
+    saving.value = false
+  }
+}
+
+const publish = async () => {
+  if (saving.value) return
+  if (schemaFormRef.value && !schemaFormRef.value.validate()) {
+    error.value = 'Preencha os campos obrigatórios.'
+    return
+  }
+  saving.value = true
+  error.value = ''
+  message.value = ''
+  if (isNew.value && !createIdempotencyKey.value) {
+    createIdempotencyKey.value = crypto.randomUUID()
+  }
+  try {
+    // 1) Guardar sempre como rascunho primeiro (modelos novos nunca nascem públicos)
+    let payload = { ...formData.value, visibilidade: false }
+    payload = await resolvePendingImages(payload)
+    if (typeof payload.composicao === 'string') {
+      try {
+        payload.composicao = JSON.parse(payload.composicao)
+      } catch {
+        throw new Error('Composição inválida — use JSON válido (ex: {"algodao":60,"poliester":40}).')
+      }
+    }
+
+    let savedId = recordId.value
+    if (isNew.value) {
+      const created = await api.createRecord(table.value, payload, createIdempotencyKey.value)
+      savedId = created.id
+    } else {
+      await api.updateRecord(table.value, recordId.value, { ...payload, visibilidade: false })
+    }
+
+    if (embedColors.value && colorsPanel.value) {
+      try {
+        await colorsPanel.value.save(String(savedId), { publish: true })
+      } catch (e) {
+        message.value = `Dados guardados, mas cores: ${e.message}`
+        saving.value = false
+        if (isNew.value && savedId) {
+          await router.replace({
+            name: 'record-edit',
+            params: {
+              table: route.params.table,
+              ...(route.params.physicalTable ? { physicalTable: route.params.physicalTable } : {}),
+              id: savedId,
+            },
+          })
+        }
+        return
+      }
+    }
+
+    // 2) Publicar via endpoint que valida cor + EAN
+    if (isCatalogRecord.value) {
+      await api.publishRecord(table.value, savedId)
+    } else {
+      await api.updateRecord(table.value, savedId, { ...payload, visibilidade: true })
     }
 
     formData.value.visibilidade = true
@@ -194,7 +278,7 @@ const publish = async () => {
         'A API não respondeu a tempo, mas o registo pode ter sido criado. Verifique a lista antes de publicar outra vez.'
     } else if (isNew.value && /409|processamento/i.test(msg)) {
       error.value =
-        'Pedido ainda em processamento. Aguarde alguns segundos e clique «Publicar alterações» outra vez (não crie duplicado).'
+        'Pedido ainda em processamento. Aguarde alguns segundos e clique «Publicar» outra vez (não crie duplicado).'
     } else {
       error.value = msg
     }
@@ -244,12 +328,21 @@ onMounted(load)
       </span>
       <button
         v-if="!loading && schema"
-        class="btn btn-primary header-save"
+        class="btn btn-ghost header-save"
+        type="button"
+        :disabled="saving"
+        @click="saveDraft"
+      >
+        {{ saving ? 'A guardar…' : 'Guardar rascunho' }}
+      </button>
+      <button
+        v-if="!loading && schema"
+        class="btn btn-primary"
         type="button"
         :disabled="saving"
         @click="publish"
       >
-        {{ saving ? 'A publicar…' : 'Publicar alterações' }}
+        {{ saving ? 'A publicar…' : 'Publicar na loja' }}
       </button>
     </div>
     <p v-if="loading">A carregar…</p>
@@ -273,8 +366,11 @@ onMounted(load)
         :colors-table="colorsTable"
       />
       <div class="actions actions-sticky">
+        <button class="btn btn-ghost" type="button" :disabled="saving" @click="saveDraft">
+          {{ saving ? 'A guardar…' : 'Guardar rascunho' }}
+        </button>
         <button class="btn btn-primary" type="button" :disabled="saving" @click="publish">
-          {{ saving ? 'A publicar…' : 'Publicar alterações' }}
+          {{ saving ? 'A publicar…' : 'Publicar na loja' }}
         </button>
         <template v-if="!isNew">
           <button class="btn btn-ghost" type="button" @click="hideRecord">Ocultar</button>

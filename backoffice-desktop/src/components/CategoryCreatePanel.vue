@@ -20,11 +20,27 @@ const saving = ref(false)
 
 const selected = computed(() => props.plan.missing.find((m) => m.slug === selectedSlug.value) || props.plan.missing[0])
 
+const tipoLabel = computed(() => {
+  const tipo = selected.value?.tipo_catalogo
+  if (!tipo) return '—'
+  const map = {
+    almofada: 'Almofadas',
+    assento: 'Assentos',
+    guarda_chuva: 'Guarda-chuvas',
+    oculo: 'Óculos',
+    toalha_mesa: 'Toalhas de mesa',
+    material_cozinha: 'Material de cozinha',
+    regional: 'Regional',
+  }
+  return map[tipo] || String(tipo).replace(/_/g, ' ')
+})
+
 const fillFromSelection = () => {
   const item = selected.value
   if (!item) return
   selectedSlug.value = item.slug
   nome.value = item.nome || ''
+  // Slug canónico da definição — evita drift com o plano / URLs
   slug.value = item.slug || ''
   carrinhoStep.value = String(item.carrinho_step ?? '')
   carrinhoMin.value = String(item.carrinho_min ?? '')
@@ -55,7 +71,8 @@ const create = async () => {
     await api.createCategory({
       definition_slug: selected.value.slug,
       nome: nome.value.trim(),
-      slug_override: slug.value.trim(),
+      // Sempre o slug da definição — não permitir override livre
+      slug_override: selected.value.slug,
       imagem: imageUrl,
       carrinho_step: carrinhoStep.value ? Number(carrinhoStep.value) : undefined,
       carrinho_min: carrinhoMin.value ? Number(carrinhoMin.value) : undefined,
@@ -78,15 +95,15 @@ const create = async () => {
     <label>Categoria pendente</label>
     <select v-model="selectedSlug" class="input">
       <option v-for="item in plan.missing" :key="item.slug" :value="item.slug">
-        {{ item.nome }} ({{ item.slug }})
+        {{ item.nome }}
       </option>
     </select>
 
     <label>Nome</label>
     <input v-model="nome" class="input" />
 
-    <label>Slug</label>
-    <input v-model="slug" class="input" />
+    <label>Slug (URL)</label>
+    <input v-model="slug" class="input" readonly />
 
     <label>Imagem</label>
     <ImageField v-model="imagem" @file-selected="onImageFile" />
@@ -102,7 +119,7 @@ const create = async () => {
       </div>
     </div>
 
-    <p class="tipo">Tipo de catálogo: <strong>{{ selected?.tipo_catalogo || '—' }}</strong> (definido pelo schema)</p>
+    <p class="tipo">Família: <strong>{{ tipoLabel }}</strong></p>
 
     <button class="btn btn-primary" :disabled="saving" @click="create">
       {{ saving ? 'A criar…' : 'Criar categoria selecionada' }}

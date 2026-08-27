@@ -3,11 +3,11 @@ import { ref } from 'vue'
 import { apiGet } from '@/lib/api'
 import {
   catalogueModelsForCategory,
-  getCatalogMeta,
   modelDetailAuto,
   modelDetailForSlugs,
   modelDetailForTipo,
 } from '@/lib/catalogSupabase'
+import { getCatalogMeta, setLiveCatalogMeta } from '@/lib/catalogMeta'
 import { supabaseConfigured } from '@/lib/supabase'
 
 import {
@@ -24,9 +24,14 @@ const metaCache = ref(null)
 export function useCatalog() {
   const loadMeta = async (force = false) => {
     if (metaCache.value && !force) return metaCache.value
-    metaCache.value = supabaseConfigured
-      ? getCatalogMeta()
-      : await apiGet('/catalogo/meta')
+    try {
+      // Fonte de verdade: API (evita drift com catalogMeta.js estático)
+      const data = await apiGet('/catalogo/meta')
+      metaCache.value = data
+      setLiveCatalogMeta(data)
+    } catch {
+      metaCache.value = getCatalogMeta()
+    }
     return metaCache.value
   }
 
@@ -129,10 +134,14 @@ export function useCatalog() {
   const buildPickerOptions = (model, ctx) => {
     if (!model || !ctx) return []
 
+    const withEan = (rows) => {
+      const list = Array.isArray(rows) ? rows : rows ? [rows] : []
+      return list.filter((p) => p && String(p.ean || '').trim())
+    }
+
     if (ctx.mode === 'unico') {
       const pt = ctx.product_table
-      const products = Array.isArray(model[pt]) ? model[pt] : model[pt] ? [model[pt]] : []
-      const product = products[0]
+      const product = withEan(model[pt])[0]
       if (!product) return []
       return [
         {
@@ -147,8 +156,7 @@ export function useCatalog() {
 
     if (model.tipo_oculo === 'leitura') {
       const pt = ctx.product_table
-      const products = Array.isArray(model[pt]) ? model[pt] : model[pt] ? [model[pt]] : []
-      const product = products[0]
+      const product = withEan(model[pt])[0]
       if (!product) return []
       return [
         {
@@ -175,7 +183,7 @@ export function useCatalog() {
       }))
     }
 
-    const variants = Array.isArray(model[productTable]) ? model[productTable] : []
+    const variants = withEan(model[productTable])
     const options = variants
       .filter((product) => product[picker.field] != null && product[picker.field] !== '')
       .map((product) => ({

@@ -315,14 +315,14 @@ watch(() => route.fullPath, fetchProduct)
 
           <p v-if="addedMsg" class="added-msg" role="status">{{ addedMsg }}</p>
 
-          <div v-if="selectedProduct?.barcode_url || selectedProduct?.ean" class="ref-box">
+          <div v-if="selectedProduct?.ean" class="ref-box">
             <img
               v-if="selectedProduct?.barcode_url"
               :src="selectedProduct.barcode_url"
               alt="Código de barras EAN"
               class="barcode-img"
             />
-            <p v-if="selectedProduct?.ean" class="ean-line">EAN {{ selectedProduct.ean }}</p>
+            <p class="ean-line">EAN {{ selectedProduct.ean }}</p>
           </div>
         </div>
 

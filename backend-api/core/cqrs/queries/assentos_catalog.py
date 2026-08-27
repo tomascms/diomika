@@ -59,12 +59,18 @@ def catalogue_assento_models(q: AssentoCatalogueQuery):
     _attach_cores(rows)
     out = []
     for row in rows:
-        assento_rows = [a for a in (row.get("assento") or []) if a.get("visibilidade", True)]
+        assento_rows = [
+            a
+            for a in (row.get("assento") or [])
+            if a.get("visibilidade", True) and str(a.get("ean") or "").strip()
+        ]
         if not assento_rows:
+            continue
+        row["modelo_cores"] = _modelo_cores(row)
+        if not row["modelo_cores"]:
             continue
         assento_rows.sort(key=lambda a: str(a.get("altura") or ""))
         row["assento"] = assento_rows
-        row["modelo_cores"] = _modelo_cores(row)
         out.append(row)
     return out
 
@@ -84,10 +90,16 @@ def assento_model_detail(id_modelo: str):
     if not is_visible(data):
         return None
     _attach_cores([data])
-    assento_rows = [a for a in (data.get("assento") or []) if a.get("visibilidade", True)]
+    assento_rows = [
+        a
+        for a in (data.get("assento") or [])
+        if a.get("visibilidade", True) and str(a.get("ean") or "").strip()
+    ]
     assento_rows.sort(key=lambda a: str(a.get("altura") or ""))
     data["assento"] = assento_rows
     data["modelo_cores"] = _modelo_cores(data)
+    if not assento_rows or not data["modelo_cores"]:
+        return None
     alturas = data.get("alturas") or []
     if isinstance(alturas, str):
         try:

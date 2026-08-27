@@ -461,3 +461,15 @@ ALTER TABLE assento DROP CONSTRAINT IF EXISTS assento_id_modelo_key;
 
 CREATE INDEX IF NOT EXISTS idx_modelo_cores_tipo_modelo
   ON modelo_cores (tipo_catalogo, id_modelo);
+
+-- === P0 UNIQUE ean (Ago 2026) — ver também deploy/sql/unique_ean_product_tables.sql ===
+CREATE UNIQUE INDEX IF NOT EXISTS uq_almofada_ean ON almofada (ean) WHERE ean IS NOT NULL AND btrim(ean) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_assento_ean ON assento (ean) WHERE ean IS NOT NULL AND btrim(ean) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_guarda_chuva_ean ON guarda_chuva (ean) WHERE ean IS NOT NULL AND btrim(ean) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_oculo_ean ON oculo (ean) WHERE ean IS NOT NULL AND btrim(ean) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_toalha_mesa_ean ON toalha_mesa (ean) WHERE ean IS NOT NULL AND btrim(ean) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_avental_ean ON avental (ean) WHERE ean IS NOT NULL AND btrim(ean) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_luva_ean ON luva (ean) WHERE ean IS NOT NULL AND btrim(ean) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_pega_ean ON pega (ean) WHERE ean IS NOT NULL AND btrim(ean) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_pano_cozinha_ean ON pano_cozinha (ean) WHERE ean IS NOT NULL AND btrim(ean) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_regional_ean ON regional (ean) WHERE ean IS NOT NULL AND btrim(ean) <> '';

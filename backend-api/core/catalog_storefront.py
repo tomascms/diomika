@@ -18,9 +18,13 @@ from models.storefront_meta import attach_storefront_fields, storefront_context_
 
 
 
-def _visible_products(rows: list[dict] | None) -> list[dict]:
+def _has_ean(row: dict | None) -> bool:
+    return bool(str((row or {}).get("ean") or "").strip())
 
-    return [row for row in (rows or []) if is_visible(row)]
+
+def _visible_products(rows: list[dict] | None) -> list[dict]:
+    """Produtos publicáveis: visíveis e com EAN (sem EAN não entram na loja)."""
+    return [row for row in (rows or []) if is_visible(row) and _has_ean(row)]
 
 
 
@@ -230,7 +234,11 @@ def _require_public_category(id_categoria: str) -> bool:
 
 
 def _finalize_model_products(row: dict, cfg: dict, pt: str, mode: str) -> bool:
-    """Ordena variantes visíveis; devolve False se não houver produto publicável."""
+    """Ordena variantes visíveis; devolve False se não houver produto/cor publicáveis."""
+    # Sem cores o detalhe não tem imagem — não listar o modelo na loja.
+    if not _modelo_cores(row):
+        return False
+
     products = _visible_products(row.get(pt) if isinstance(row.get(pt), list) else [row.get(pt)] if row.get(pt) else [])
 
     if mode == "unico":
@@ -578,6 +586,10 @@ def resolve_product_line(ean: str, numero_cor: int, altura: str | None = None) -
 
             continue
 
+        if not is_visible(item):
+
+            continue
+
 
 
         modelo = item.get(mt) or {}
@@ -589,6 +601,10 @@ def resolve_product_line(ean: str, numero_cor: int, altura: str | None = None) -
         if not isinstance(modelo, dict):
 
             modelo = {}
+
+        if modelo and not is_visible(modelo):
+
+            continue
 
 
 

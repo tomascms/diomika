@@ -15,5 +15,5 @@ app.config.errorHandler = (err) => {
   console.error('[Diomika]', err)
 }
 // Bust stale module graph on custom domain after partial deploys.
-if (typeof window !== 'undefined') window.__DIOMIKA_BUILD__ = '2026-08-27e'
+if (typeof window !== 'undefined') window.__DIOMIKA_BUILD__ = '2026-08-27f'
 app.mount('#app')

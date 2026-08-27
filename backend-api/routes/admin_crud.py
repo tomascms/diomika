@@ -35,7 +35,7 @@ from models.catalog_registry import (
     list_select_query,
     tipo_for_table,
 )
-from models.schemas import TABLE_MAP
+from models.schemas import TABLE_MAP, aggregated_tipos_for_tipo
 from models.ui_schema import get_form_fields
 from utils.barcode_gen import apply_barcode_url
 from utils.image_urls import content_type_for_path, resolve_image_value
@@ -278,6 +278,81 @@ def _product_validation_table(table_name: str) -> bool:
     return table_name in all_product_tables()
 
 
+def _validate_unico_single_product(table_name: str, payload: dict, record_id: str | None = None) -> None:
+    """Modo unico: um único produto por modelo."""
+    tipo = tipo_for_table(table_name)
+    cfg = CATALOG_TYPES.get(tipo or "") or {}
+    if (cfg.get("storefront_mode") or "") != "unico":
+        return
+    if cfg.get("model_discriminator_field"):
+        return
+    id_modelo = payload.get("id_modelo")
+    if not id_modelo:
+        return
+    q = get_db().table(table_name).select("id").eq("id_modelo", str(id_modelo))
+    if record_id:
+        q = q.neq("id", record_id)
+    if q.limit(1).execute().data or []:
+        raise ValueError("Este modelo já tem um produto (modo único — uma referência por modelo).")
+
+
+def _assert_model_category_tipo(table_name: str, payload: dict) -> None:
+    """Garante que o modelo/cor/produto fica na categoria da família correcta."""
+    tipo = tipo_for_table(table_name)
+    if not tipo:
+        return
+    db = get_db()
+    id_categoria = payload.get("id_categoria")
+    id_modelo = payload.get("id_modelo")
+
+    if table_name in all_model_tables():
+        if not id_categoria:
+            return
+        cat = (
+            db.table("categories")
+            .select("id,nome,tipo_catalogo")
+            .eq("id", str(id_categoria))
+            .limit(1)
+            .execute()
+            .data
+            or [None]
+        )[0]
+        if not cat:
+            raise ValueError("Categoria não encontrada.")
+        cat_tipo = str(cat.get("tipo_catalogo") or "").strip()
+        allowed = {tipo}
+        aggregated = aggregated_tipos_for_tipo(cat_tipo) or []
+        if aggregated:
+            allowed = set(aggregated)
+        elif cat_tipo:
+            allowed = {cat_tipo}
+        if tipo not in allowed:
+            raise ValueError(
+                f"A categoria «{cat.get('nome') or cat_tipo}» não aceita modelos do tipo «{tipo}»."
+            )
+        return
+
+    if table_name in all_product_tables() or table_name in all_colors_tables():
+        if not id_modelo:
+            return
+        mt = CATALOG_TYPES.get(tipo, {}).get("model_table")
+        if not mt:
+            return
+        model = (
+            db.table(mt)
+            .select("id,id_categoria")
+            .eq("id", str(id_modelo))
+            .limit(1)
+            .execute()
+            .data
+            or [None]
+        )[0]
+        if not model:
+            raise ValueError("Modelo não encontrado.")
+        # Reusa a mesma regra via o modelo pai
+        _assert_model_category_tipo(mt, {"id_categoria": model.get("id_categoria")})
+
+
 def _validate_product_payload(table_name: str, payload: dict, record_id: str | None = None) -> None:
     if table_name == "assento":
         _validate_assento_altura(payload, record_id)
@@ -287,6 +362,7 @@ def _validate_product_payload(table_name: str, payload: dict, record_id: str | N
         _validate_regional_product(payload, record_id)
     elif _product_validation_table(table_name):
         _validate_model_discriminator(table_name, payload, record_id)
+    _validate_unico_single_product(table_name, payload, record_id)
 
 
 def _publish_catalog_children(table_name: str, record_id: str, *, tipo: str | None = None) -> None:
@@ -302,15 +378,100 @@ def _publish_catalog_children(table_name: str, record_id: str, *, tipo: str | No
             db.table(ct).update({"visibilidade": True}).eq("id_modelo", record_id).execute()
 
 
+def _hide_catalog_children(table_name: str, record_id: str, *, tipo: str | None = None) -> None:
+    """Oculta cores e produtos filhos quando o modelo é ocultado."""
+    db = get_db()
+    if table_name in all_model_tables():
+        cfg = CATALOG_TYPES.get(tipo or tipo_for_table(table_name) or "") or {}
+        pt = cfg.get("product_table")
+        ct = cfg.get("colors_table")
+        if pt:
+            db.table(pt).update({"visibilidade": False}).eq("id_modelo", record_id).execute()
+        if ct:
+            db.table(ct).update({"visibilidade": False}).eq("id_modelo", record_id).execute()
+
+
+def _assert_ean_globally_unique(table_name: str, payload: dict, record_id: str | None = None) -> None:
+    """EAN único em todas as tabelas de produto (além do UNIQUE por tabela na BD)."""
+    if table_name not in all_product_tables():
+        return
+    ean = str(payload.get("ean") or "").strip()
+    if not ean:
+        return
+    db = get_db()
+    for pt in all_product_tables():
+        q = db.table(pt).select("id").eq("ean", ean)
+        if record_id and pt == table_name:
+            q = q.neq("id", record_id)
+        if q.limit(1).execute().data or []:
+            if pt == table_name:
+                raise ValueError(f"Já existe um produto com EAN {ean} nesta família.")
+            raise ValueError(f"EAN {ean} já está registado noutro catálogo ({pt}).")
+
+
+def _assert_model_publishable(table_name: str, record_id: str) -> None:
+    """Loja só mostra modelos com ≥1 cor e ≥1 produto com EAN."""
+    if table_name not in all_model_tables():
+        return
+    tipo = tipo_for_table(table_name)
+    cfg = CATALOG_TYPES.get(tipo or "") or {}
+    pt = cfg.get("product_table")
+    ct = cfg.get("colors_table")
+    db = get_db()
+    if ct:
+        colors = (
+            db.table(ct)
+            .select("id,imagem")
+            .eq("id_modelo", record_id)
+            .eq("visibilidade", True)
+            .limit(5)
+            .execute()
+            .data
+            or []
+        )
+        if not any(str(c.get("imagem") or "").strip() for c in colors):
+            raise ValueError("Adicione pelo menos uma cor com imagem antes de publicar na loja.")
+    if pt:
+        products = (
+            db.table(pt)
+            .select("id,ean")
+            .eq("id_modelo", record_id)
+            .eq("visibilidade", True)
+            .limit(20)
+            .execute()
+            .data
+            or []
+        )
+        if not any(str(p.get("ean") or "").strip() for p in products):
+            raise ValueError("Adicione pelo menos um produto com EAN antes de publicar na loja.")
+
+
 def _enrich_create_payload(table_name: str, payload: dict) -> dict:
     out = dict(payload)
+    _assert_model_category_tipo(table_name, out)
+    _assert_ean_globally_unique(table_name, out)
     _validate_product_payload(table_name, out)
+    # Modelos novos começam sempre como rascunho — publicar só quando cor+EAN existirem
+    if table_name in all_model_tables() and out.get("visibilidade"):
+        out["visibilidade"] = False
     return out
 
 
 def _enrich_update_payload(table_name: str, payload: dict, record_id: str) -> dict:
     out = dict(payload)
     db = get_db()
+    if table_name in all_model_tables() and not out.get("id_categoria"):
+        row = (
+            db.table(table_name)
+            .select("id_categoria")
+            .eq("id", record_id)
+            .limit(1)
+            .execute()
+            .data
+            or [None]
+        )[0]
+        if row:
+            out.setdefault("id_categoria", row.get("id_categoria"))
     if _product_validation_table(table_name) or table_name in ("assento", "oculo", "regional"):
         if table_name == "assento" and (not out.get("altura") or not out.get("id_modelo")):
             row = (
@@ -324,7 +485,23 @@ def _enrich_update_payload(table_name: str, payload: dict, record_id: str) -> di
             if row:
                 out.setdefault("altura", row[0].get("altura"))
                 out.setdefault("id_modelo", row[0].get("id_modelo"))
+        if not out.get("id_modelo"):
+            row = (
+                db.table(table_name)
+                .select("id_modelo")
+                .eq("id", record_id)
+                .limit(1)
+                .execute()
+                .data
+                or [None]
+            )[0]
+            if row:
+                out.setdefault("id_modelo", row.get("id_modelo"))
         _validate_product_payload(table_name, out, record_id)
+        _assert_ean_globally_unique(table_name, out, record_id)
+    _assert_model_category_tipo(table_name, out)
+    if table_name in all_model_tables() and out.get("visibilidade"):
+        _assert_model_publishable(table_name, record_id)
     return out
 
 
@@ -541,9 +718,21 @@ def patch_visibility(request: Request, table_name: str, record_id: str, body: di
     if "visibilidade" not in body:
         raise HTTPException(status_code=400, detail="Campo visibilidade em falta")
     vis = bool(body["visibilidade"])
+    if vis and table_name in all_model_tables():
+        try:
+            _assert_model_publishable(table_name, record_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     res = get_db().table(table_name).update({"visibilidade": vis}).eq("id", record_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Registo não encontrado")
+    cfg = TABLE_MAP.get(table_name, {})
+    tipo = cfg.get("ui_catalog_tipo") or tipo_for_table(table_name)
+    if table_name in all_model_tables():
+        if vis:
+            _publish_catalog_children(table_name, record_id, tipo=tipo)
+        else:
+            _hide_catalog_children(table_name, record_id, tipo=tipo)
     _invalidate_catalog_cache()
     _audit(request, "visibility", table_name, resource_id=record_id, visibilidade=vis)
     return (res.data or [{"id": record_id, "visibilidade": vis}])[0]
@@ -556,6 +745,11 @@ def publish_record(request: Request, table_name: str, record_id: str):
     if not cfg:
         raise HTTPException(status_code=404, detail="Categoria não mapeada")
     assert_table_action(table_name, "update", _role(request))
+    if table_name in all_model_tables():
+        try:
+            _assert_model_publishable(table_name, record_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     db = get_db()
     res = db.table(table_name).update({"visibilidade": True}).eq("id", record_id).execute()
     if not res.data:

@@ -186,12 +186,21 @@ def _fetch_merged_table_page(
     except Exception as exc:
         logger.error("Merged list %s/%s: %s", view_key, ptable, exc)
         return []
-    categoria_label = tipo_label(tipo_for_table(ptable))
+    familia = tipo_label(tipo_for_table(ptable))
+    mt = model_table_for_tipo(tipo_for_table(ptable))
     out: list[dict] = []
     for item in res.data or []:
         item["_ptable"] = ptable
-        item["_categoria_label"] = categoria_label
         item["_tipo_catalogo"] = tipo_for_table(ptable)
+        item["_familia_label"] = familia
+        cat_nome = None
+        if isinstance(item.get("categories"), dict):
+            cat_nome = item["categories"].get("nome")
+        elif mt and isinstance(item.get(mt), dict):
+            emb_cat = item[mt].get("categories")
+            if isinstance(emb_cat, dict):
+                cat_nome = emb_cat.get("nome")
+        item["_categoria_label"] = cat_nome or familia
         out.append(item)
     return out
 
