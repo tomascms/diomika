@@ -1,125 +1,86 @@
 <script setup>
-
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
-
-import { ensureSupabase, supabaseConfigured, subscribeRealtime } from '@/lib/supabase'
-
-import { resolveImageUrl, resolveImageUrls, PLACEHOLDER, safeCssUrl } from '@/lib/images'
-import SoftImage from '@/components/SoftImage.vue'
-
-import { watchDynamicTitle } from '@/composables/usePageMeta'
-
-import Breadcrumbs from '@/components/Breadcrumbs.vue'
-
-import LoadingState from '@/components/LoadingState.vue'
-
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
-import { resolveCategoryParam } from '@/lib/catalogSupabase'
-
-import { categoryProductsRoute, modelDetailRoute } from '@/lib/catalogRoutes'
-
-import { apiGet } from '@/lib/api'
-
+import Breadcrumbs from '@/components/Breadcrumbs.vue'
+import LoadingState from '@/components/LoadingState.vue'
+import SoftImage from '@/components/SoftImage.vue'
 import { useCatalog } from '@/composables/useCatalog'
+import { watchDynamicTitle } from '@/composables/usePageMeta'
+import { apiGet } from '@/lib/api'
+import { resolveCategoryParam } from '@/lib/catalogSupabase'
+import { modelDetailRoute } from '@/lib/catalogRoutes'
+import { PLACEHOLDER, resolveImageUrl, resolveImageUrls, safeCssUrl } from '@/lib/images'
+import { ensureSupabase, subscribeRealtime, supabaseConfigured } from '@/lib/supabase'
 
-
-
+const route = useRoute()
 const catalog = useCatalog()
 
-
-
 const products = ref([])
-
 const loading = ref(true)
-
 const error = ref(null)
-
 const categoryData = ref(null)
-
 const selectedFilters = ref({})
 const localSearch = ref('')
 const sortBy = ref('az')
-
-const route = useRoute()
-
-
-
 const breadcrumbItems = ref([{ label: 'Início', to: { name: 'home' } }])
 
-
-
 const catalogTipo = computed(() => categoryData.value?.tipo_catalogo || '')
+const filterDefs = computed(() => catalog.filterDefinitionsForTipo(catalogTipo.value) || [])
+const heroImageUrl = computed(() => safeCssUrl(categoryData.value?.imagem) || '')
+const tipoLabel = (product) => catalog.badgeLabel(product, catalogTipo.value)
 
-const filterDefs = computed(() => catalog.filterDefinitionsForTipo(catalogTipo.value))
-
-const showFilters = computed(() => filterDefs.value.length > 0)
+let fetchSeq = 0
+let productsSubscription = null
 
 function blankFilters(defs = filterDefs.value) {
-  const next = {}
-  for (const def of defs || []) {
-    if (def?.field) next[def.field] = ''
-  }
-  return next
+  return Object.fromEntries(
+    (defs || []).filter((def) => def?.field).map((def) => [def.field, '']),
+  )
 }
 
-function resetFilters() {
-  selectedFilters.value = blankFilters()
+function resetPageControls() {
+  selectedFilters.value = {}
   localSearch.value = ''
   sortBy.value = 'az'
 }
 
-
-
-const tipoLabel = (product) => catalog.badgeLabel(product, catalogTipo.value)
-
-
-
-const heroImageUrl = computed(() => safeCssUrl(categoryData.value?.imagem) || '')
-
-
+function onFilterChange(field, value) {
+  selectedFilters.value = {
+    ...selectedFilters.value,
+    [field]: value ?? '',
+  }
+  void fetchProducts()
+}
 
 const coverImage = (product) => {
-  const imgs = [product.imagem_capa, ...(product.galeria || [])].filter(Boolean)
-  return imgs[product.currentImgIdx] || PLACEHOLDER
+  const images = [product.imagem_capa, ...(product.galeria || [])].filter(Boolean)
+  return images[product.currentImgIdx] || PLACEHOLDER
 }
 
 const hasGallery = (product) =>
   (product.galeria || []).length > 0 || (product._galleryPaths || []).length > 0
 
-
-
 watchDynamicTitle(
-
   () => [categoryData.value?.nome, route.params.categorySlug],
-
   () => {
-
     const nome = categoryData.value?.nome
-
     if (!nome) return null
-
     return {
-
       title: nome,
-
       description: `Modelos ${nome} — explore variantes e peça orçamento online.`,
-
       image: categoryData.value?.imagem || PLACEHOLDER,
-
       path: route.fullPath,
-
     }
-
   },
-
 )
-
-
 
 function nestedEans(value, found = []) {
   if (!value || typeof value !== 'object') return found
-  if (Array.isArray(value)) { value.forEach((entry) => nestedEans(entry, found)); return found }
+  if (Array.isArray(value)) {
+    value.forEach((entry) => nestedEans(entry, found))
+    return found
+  }
   for (const [key, entry] of Object.entries(value)) {
     if (key === 'ean' && entry != null) found.push(String(entry))
     else if (entry && typeof entry === 'object') nestedEans(entry, found)
@@ -128,13 +89,20 @@ function nestedEans(value, found = []) {
 }
 
 const displayedProducts = computed(() => {
-  const q = localSearch.value.trim().toLocaleLowerCase('pt')
-  const list = products.value.filter((product) => {
-    if (!q) return true
-    return [product.nome, product.slug, ...nestedEans(product)].filter(Boolean).join(' ').toLocaleLowerCase('pt').includes(q)
+  const query = localSearch.value.trim().toLocaleLowerCase('pt')
+  const filtered = products.value.filter((product) => {
+    if (!query) return true
+    return [product.nome, product.slug, ...nestedEans(product)]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase('pt')
+      .includes(query)
   })
-  return [...list].sort((a, b) => {
-    if (sortBy.value === 'za') return String(b.nome || '').localeCompare(String(a.nome || ''), 'pt')
+
+  return [...filtered].sort((a, b) => {
+    if (sortBy.value === 'za') {
+      return String(b.nome || '').localeCompare(String(a.nome || ''), 'pt')
+    }
     if (sortBy.value === 'recent') return Number(b.id || 0) - Number(a.id || 0)
     return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt')
   })
@@ -143,151 +111,117 @@ const displayedProducts = computed(() => {
 const hasActiveFilters = computed(() =>
   Boolean(
     localSearch.value.trim() ||
-    Object.values(selectedFilters.value).some((value) => String(value ?? '').trim()),
+      Object.values(selectedFilters.value).some((value) => String(value ?? '').trim()),
   ),
 )
 
+async function fetchProducts({ resetCategory = false } = {}) {
+  const seq = ++fetchSeq
+  const categorySlug = route.params.categorySlug
 
+  loading.value = true
+  error.value = null
 
-const fetchProducts = async () => {
+  if (resetCategory) {
+    categoryData.value = null
+    products.value = []
+    resetPageControls()
+  }
 
   try {
-
-    loading.value = true
-
-    error.value = null
-
-    products.value = []
-
-    categoryData.value = null
-
-
-
-    if (!route.params.categorySlug) {
-
-      loading.value = false
-
-      return
-
-    }
-
-
+    if (!categorySlug) return
 
     await catalog.loadMeta()
+    if (seq !== fetchSeq) return
 
+    let category = categoryData.value
+    if (resetCategory || !category) {
+      const rawCategory = supabaseConfigured
+        ? await resolveCategoryParam(categorySlug)
+        : await apiGet(`/categorias/slug/${encodeURIComponent(categorySlug)}`)
+      if (seq !== fetchSeq) return
 
+      category = {
+        ...rawCategory,
+        imagem: await resolveImageUrl(rawCategory.imagem, PLACEHOLDER),
+      }
+      if (seq !== fetchSeq) return
 
-    const cat = supabaseConfigured
+      categoryData.value = category
+      breadcrumbItems.value = [
+        { label: 'Início', to: { name: 'home' } },
+        { label: category.nome },
+      ]
 
-      ? await resolveCategoryParam(route.params.categorySlug)
-
-      : await apiGet(`/categorias/slug/${encodeURIComponent(route.params.categorySlug)}`)
-
-    categoryData.value = {
-
-      ...cat,
-
-      imagem: await resolveImageUrl(cat.imagem, PLACEHOLDER),
-
+      // Quiet initialization: every type filter starts visibly on "Todos".
+      selectedFilters.value = blankFilters(
+        catalog.filterDefinitionsForTipo(category.tipo_catalogo) || [],
+      )
     }
 
+    const tipo = category.tipo_catalogo
+    if (!tipo) throw new Error('Categoria sem tipo de catálogo.')
 
+    const filters = filterDefs.value.length ? { ...selectedFilters.value } : null
+    const models = await catalog.fetchCategoryModels(tipo, category.id, filters)
+    if (seq !== fetchSeq) return
 
-    breadcrumbItems.value = [
-
-      { label: 'Início', to: { name: 'home' } },
-
-      { label: categoryData.value.nome },
-
-    ]
-
-
-
-    const tipo = categoryData.value.tipo_catalogo
-
-    if (!tipo) {
-
-      throw new Error('Categoria sem tipo de catálogo.')
-
-    }
-
-
-
-    const models = await catalog.fetchCategoryModels(
-      tipo,
-      categoryData.value.id,
-      showFilters.value ? selectedFilters.value : null,
-    )
-
-
-
-    if (!Array.isArray(models)) {
-
-      products.value = []
-
-      return
-
-    }
-
-
-
-    const visible = models.filter((m) => m && m.visibilidade !== false)
-
-    // 1 request de assinatura em lote só para capas — galeria em background
-    const prepared = visible.map((m) => {
-      const cores = (m.modelo_cores || [])
-        .filter((c) => c.visibilidade !== false)
+    const visible = Array.isArray(models)
+      ? models.filter((model) => model && model.visibilidade !== false)
+      : []
+    const prepared = visible.map((model) => {
+      const cores = (model.modelo_cores || [])
+        .filter((cor) => cor.visibilidade !== false)
         .sort((a, b) => a.numero - b.numero)
-      const firstCor = cores[0] || {}
       return {
-        model: m,
-        coverPath: firstCor.imagem || '',
-        galleryPaths: cores.slice(1).map((c) => c.imagem).filter(Boolean),
-        colorCount: cores.length,
+        model,
+        coverPath: cores[0]?.imagem || '',
+        galleryPaths: cores.slice(1).map((cor) => cor.imagem).filter(Boolean),
       }
     })
 
-    const covers = await resolveImageUrls(prepared.map((p) => p.coverPath), PLACEHOLDER)
+    const covers = await resolveImageUrls(
+      prepared.map((entry) => entry.coverPath),
+      PLACEHOLDER,
+    )
+    if (seq !== fetchSeq) return
 
-    products.value = prepared.map((p, i) => ({
-      ...p.model,
-      _tipo_catalogo: p.model._tipo_catalogo || tipo,
-      imagem_capa: covers[i] || PLACEHOLDER,
+    const nextProducts = prepared.map((entry, index) => ({
+      ...entry.model,
+      _tipo_catalogo: entry.model._tipo_catalogo || tipo,
+      imagem_capa: covers[index] || PLACEHOLDER,
       galeria: [],
-      _galleryPaths: p.galleryPaths,
+      _galleryPaths: entry.galleryPaths,
       currentImgIdx: 0,
-      _colorCount: p.colorCount,
     }))
-
-    // Galerias não bloqueiam o primeiro paint
-    void hydrateGalleries(products.value)
-
+    products.value = nextProducts
+    void hydrateGalleries(nextProducts, seq)
   } catch (err) {
-
-    error.value = 'Erro ao carregar produtos: ' + err.message
-
+    if (seq !== fetchSeq) return
+    error.value = `Erro ao carregar produtos: ${err.message}`
     console.error(err)
-
   } finally {
-
-    loading.value = false
-
+    if (seq === fetchSeq) loading.value = false
   }
-
 }
 
-
-
-async function hydrateGalleries(list) {
-  const pending = (list || []).filter((p) => (p._galleryPaths || []).length && !(p.galeria || []).length)
+async function hydrateGalleries(list, seq) {
+  const pending = list.filter(
+    (product) => (product._galleryPaths || []).length && !(product.galeria || []).length,
+  )
   if (!pending.length) return
-  const flat = pending.flatMap((p) => p._galleryPaths)
-  const urls = await resolveImageUrls(flat, PLACEHOLDER)
+
+  const urls = await resolveImageUrls(
+    pending.flatMap((product) => product._galleryPaths),
+    PLACEHOLDER,
+  )
+  if (seq !== fetchSeq || products.value !== list) return
+
   let offset = 0
   for (const product of pending) {
-    const n = product._galleryPaths.length
-    product.galeria = urls.slice(offset, offset + n).filter(Boolean)
-    offset += n
+    const count = product._galleryPaths.length
+    product.galeria = urls.slice(offset, offset + count).filter(Boolean)
+    offset += count
   }
 }
 
@@ -309,54 +243,20 @@ const nextImg = (e, product) => {
 
 
 
-let productsSubscription = null
-
-
-
 watch(
   () => route.params.categorySlug,
-  () => {
-    resetFilters()
-    fetchProducts()
-  },
+  () => void fetchProducts({ resetCategory: true }),
 )
-
-watch(
-  filterDefs,
-  (defs) => {
-    const next = blankFilters(defs)
-    let changed = false
-    for (const field of Object.keys(next)) {
-      if (!(field in selectedFilters.value) || selectedFilters.value[field] == null) {
-        selectedFilters.value[field] = ''
-        changed = true
-      }
-    }
-    // Drop stale fields from previous category
-    for (const field of Object.keys(selectedFilters.value)) {
-      if (!(field in next)) {
-        delete selectedFilters.value[field]
-        changed = true
-      }
-    }
-    if (changed && !Object.keys(next).length) selectedFilters.value = {}
-  },
-  { immediate: true },
-)
-
-watch(selectedFilters, fetchProducts, { deep: true })
-
-
-
 onMounted(async () => {
-  await fetchProducts()
-  await catalog.loadMeta()
+  await fetchProducts({ resetCategory: true })
   if (supabaseConfigured) {
     const supabase = await ensureSupabase()
     if (!supabase) return
     const channel = supabase.channel('catalog_realtime')
     for (const table of catalog.realtimeTables()) {
-      channel.on('postgres_changes', { event: '*', schema: 'public', table }, fetchProducts)
+      channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => {
+        void fetchProducts()
+      })
     }
     productsSubscription = subscribeRealtime(channel)
   }
@@ -442,11 +342,12 @@ onUnmounted(() => {
           <select
             class="field-select"
             :value="selectedFilters[filterDef.field] ?? ''"
-            @change="selectedFilters[filterDef.field] = $event.target.value"
+            @change="onFilterChange(filterDef.field, $event.target.value)"
           >
+            <option value="">Todos</option>
             <option
-              v-for="opt in catalog.filterOptionsForField(filterDef)"
-              :key="opt.value || 'all'"
+              v-for="opt in catalog.filterOptionsForField(filterDef).filter((item) => item.value !== '')"
+              :key="opt.value"
               :value="opt.value"
             >
               {{ opt.label }}
@@ -456,7 +357,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <LoadingState v-if="loading" message="A carregar modelos…" />
+    <LoadingState v-if="loading && !products.length" message="A carregar modelos…" />
 
 
 
