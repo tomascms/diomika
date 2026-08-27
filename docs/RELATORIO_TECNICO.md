@@ -26,7 +26,7 @@
 | XI | Limitações honestas |
 | XII | Como estudar o código |
 | Apêndices A–C | Fluxos sequenciais, índice de ficheiros, FAQ |
-| **Apêndice D** | **Registo de actualizações (Ago 2026) — estado actual** (+ D.9 hub, D.10 performance, D.11 segurança, **D.12 catálogo**) |
+| **Apêndice D** | **Registo de actualizações (Ago 2026) — estado actual** (+ D.9 hub, D.10 performance loja, D.11 segurança, D.12 catálogo, **D.13 fluidez backoffice**) |
 | **Apêndice E** | **Diagrama BD comercial** |
 
 **Como ler:** podes saltar para a parte que precisas; se encontrares uma sigla desconhecida, volta ao glossário (Parte I.13). Para operar o sistema, usa [`INSTRUCOES.md`](INSTRUCOES.md).
@@ -9256,6 +9256,21 @@ Objectivo: o backoffice e a loja falarem a mesma língua (sem barcodes órfãos,
 - Scripts deploy órfãos apagados: `fetch_backoffice_artifacts.py`, `gen_catalog_fks.py`, `gen_rls_*.py`.
 
 **Operação:** após pull, `python deploy/deploy_vm.py` (API) e rebuild do backoffice se entregar instalador; a loja já usa `/catalogo/meta` no boot.
+
+### D.13 Backoffice — fluidez e performance (27/08/2026)
+
+Objectivo: o painel deixar de “pensar” em cada clique (arranque, navegação, listas, formulários).
+
+| Camada | Mudança |
+|---|---|
+| Electron | Janela abre de imediato (health em background); proxy com gzip + descompressão local |
+| Sessão | Cache de `/admin/auth/status` (~5 min) e `/me` (~10 min) — sem revalidar em cada rota |
+| Workspace API | `/system/workspace` leve (sidebar + meta; **sem** todos os schemas de formulário) |
+| Listas | Merged list paginada (80) + «Carregar mais»; filtro local só em campos de label |
+| UI | `KeepAlive` nas listas; formulário: schema + registo + relações em paralelo |
+| Cores / imagens | Uploads e CRUD com concorrência limitada; SchemaForm sem deep-watch a cada tecla |
+
+**Entrega ao cliente:** instaladores actualizados em `cliente-backoffice/` via `python deploy/fetch_backoffice_release.py` (fonte: release `backoffice-cliente-latest`).
 
 ---
 

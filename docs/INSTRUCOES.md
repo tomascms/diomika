@@ -82,6 +82,12 @@ Mac/Linux `.dmg`/`.AppImage` — GitHub Actions (`backoffice-release.yml`) ou nu
 
 **Uso:** duplo-clique → login admin → gere catálogo/pedidos. Liga a `https://api.diomika.com` (não precisa Python no PC do cliente).
 
+Após um release CI, actualizar a pasta de entrega:
+
+```powershell
+python deploy/fetch_backoffice_release.py
+```
+
 ### Catálogo — rascunho vs loja
 
 1. **Guardar rascunho** — modelo fica oculto (`visibilidade=false`).
