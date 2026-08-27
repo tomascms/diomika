@@ -40,7 +40,6 @@ const categoryData = ref(null)
 const selectedFilters = ref({})
 const localSearch = ref('')
 const sortBy = ref('az')
-const minColors = ref(0)
 
 const route = useRoute()
 
@@ -116,14 +115,12 @@ function nestedEans(value, found = []) {
 
 const displayedProducts = computed(() => {
   const q = localSearch.value.trim().toLocaleLowerCase('pt')
-  const minimum = Number(minColors.value) || 0
   const list = products.value.filter((product) => {
-    const matchesText = !q || [product.nome, product.slug, ...nestedEans(product)].filter(Boolean).join(' ').toLocaleLowerCase('pt').includes(q)
-    return matchesText && (product._colorCount || 0) >= minimum
+    if (!q) return true
+    return [product.nome, product.slug, ...nestedEans(product)].filter(Boolean).join(' ').toLocaleLowerCase('pt').includes(q)
   })
   return [...list].sort((a, b) => {
     if (sortBy.value === 'za') return String(b.nome || '').localeCompare(String(a.nome || ''), 'pt')
-    if (sortBy.value === 'colors') return (b._colorCount || 0) - (a._colorCount || 0)
     if (sortBy.value === 'recent') return Number(b.id || 0) - Number(a.id || 0)
     return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt')
   })
@@ -132,18 +129,9 @@ const displayedProducts = computed(() => {
 const hasActiveFilters = computed(() =>
   Boolean(
     localSearch.value.trim() ||
-    Number(minColors.value) ||
     Object.values(selectedFilters.value).some((value) => String(value ?? '').trim()),
   ),
 )
-
-const colorCount = (product) => {
-
-  const n = (product.modelo_cores || []).filter((c) => c.visibilidade !== false).length
-
-  return n > 0 ? n : null
-
-}
 
 
 
@@ -395,28 +383,38 @@ onUnmounted(() => {
 
 
 
-    <div v-if="categoryData && showFilters" class="filters-bar">
-      <div class="page-shell page-shell--bar filters-inner filters-inner--multi">
-        <div v-for="filterDef in filterDefs" :key="filterDef.field" class="filter-field">
-          <label :for="`filter-${filterDef.field}`" class="field-label">{{ filterDef.label }}</label>
+    <div v-if="categoryData" class="catalog-tools">
+      <div class="page-shell tools-inner">
+        <label class="tool-search">
+          <span class="field-label">Pesquisar</span>
+          <input v-model="localSearch" class="field-input" type="search" placeholder="Modelo ou EAN…" />
+        </label>
+        <label>
+          <span class="field-label">Ordenar</span>
+          <select v-model="sortBy" class="field-select">
+            <option value="az">A–Z</option>
+            <option value="za">Z–A</option>
+            <option value="recent">Recentes</option>
+          </select>
+        </label>
+        <label
+          v-for="filterDef in filterDefs"
+          :key="filterDef.field"
+        >
+          <span class="field-label">{{ filterDef.label }}</span>
           <select
-            :id="`filter-${filterDef.field}`"
             v-model="selectedFilters[filterDef.field]"
-            class="field-select filter-select"
+            class="field-select"
           >
-            <option v-for="opt in catalog.filterOptionsForField(filterDef)" :key="opt.value || 'all'" :value="opt.value">
+            <option
+              v-for="opt in catalog.filterOptionsForField(filterDef)"
+              :key="opt.value || 'all'"
+              :value="opt.value"
+            >
               {{ opt.label }}
             </option>
           </select>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="categoryData" class="catalog-tools">
-      <div class="page-shell tools-inner">
-        <label class="tool-search"><span class="field-label">Pesquisar nesta categoria</span><input v-model="localSearch" class="field-input" type="search" placeholder="Pesquisar modelo ou EAN…" /></label>
-        <label><span class="field-label">Ordenar</span><select v-model="sortBy" class="field-select"><option value="az">A–Z</option><option value="za">Z–A</option><option value="colors">Mais cores</option><option value="recent">Recentes</option></select></label>
-        <label><span class="field-label">Número de cores</span><select v-model.number="minColors" class="field-select"><option :value="0">Todas</option><option :value="2">2+</option><option :value="3">3+</option></select></label>
+        </label>
       </div>
     </div>
 

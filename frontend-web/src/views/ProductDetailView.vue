@@ -5,14 +5,13 @@ import { resolveImageUrls, PLACEHOLDER } from '@/lib/images'
 import SoftImage from '@/components/SoftImage.vue'
 import { watchDynamicTitle } from '@/composables/usePageMeta'
 import { useCart, resolveCartQtyRules } from '@/composables/useCart'
-import { MIN_ORCAMENTO_MSG, whatsappUrl } from '@/lib/constants'
+import { MIN_ORCAMENTO_MSG } from '@/lib/constants'
 import { isSingleProductMode } from '@/lib/storefrontFormat'
 import Breadcrumbs from '@/components/Breadcrumbs.vue'
 import LoadingState from '@/components/LoadingState.vue'
 import QtySelect from '@/components/QtySelect.vue'
 import ModelSpecs from '@/components/ModelSpecs.vue'
 import ImageLightbox from '@/components/ImageLightbox.vue'
-import ShareProduct from '@/components/ShareProduct.vue'
 import { useCatalog } from '@/composables/useCatalog'
 import { categoryProductsRoute, modelDetailRoute } from '@/lib/catalogRoutes'
 
@@ -39,14 +38,9 @@ const singleProductMode = computed(() => isSingleProductMode(storefrontCtx.value
 const qtyStep = computed(() => resolveCartQtyRules(category.value).step)
 const qtyMin = computed(() => resolveCartQtyRules(category.value).min)
 const badgeText = computed(() => catalog.badgeLabel(model.value, model.value?._tipo_catalogo))
-const specExtras = computed(() => {
-  const extras = []
-  if (Array.isArray(model.value?.dimensoes) && model.value.dimensoes.length) {
-    extras.push({ label: 'Tamanhos disponíveis', display: model.value.dimensoes.join(', ') })
-  }
-  extras.push({ label: 'Quantidade mínima no pedido', display: `${qtyMin.value} un. (incrementos de ${qtyStep.value})` })
-  return extras
-})
+const specExtras = computed(() => [
+  { label: 'Quantidade mínima no pedido', display: `${qtyMin.value} un. (incrementos de ${qtyStep.value})` },
+])
 const selectedProduct = computed(() =>
   catalog.activeProduct(model.value, storefrontCtx.value, selectedPicker.value),
 )
@@ -276,7 +270,6 @@ watch(() => route.fullPath, fetchProduct)
           </RouterLink>
           <span v-if="badgeText" class="badge-pill badge-soft">{{ badgeText }}</span>
           <h1>{{ model.nome }}</h1>
-          <ShareProduct :title="model.nome" />
           <p v-if="model.descricao" class="product-desc">{{ model.descricao }}</p>
           <p v-else class="product-desc">
             Seleccione a cor{{ storefrontCtx?.picker ? ` e a ${String(storefrontCtx.picker.label || 'variante').toLowerCase()}` : '' }},
@@ -335,7 +328,7 @@ watch(() => route.fullPath, fetchProduct)
 
         <p class="help-line">
           Dúvidas sobre este modelo?
-          <a :href="whatsappUrl(`Olá! Tenho uma dúvida sobre o modelo ${model.nome}.`)" target="_blank" rel="noopener noreferrer">Fale connosco no WhatsApp</a>
+          <RouterLink to="/contact">Contacte-nos</RouterLink>
         </p>
       </section>
     </article>
