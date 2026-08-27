@@ -53,14 +53,6 @@ function onFilterChange(field, value) {
   void fetchProducts()
 }
 
-const coverImage = (product) => {
-  const images = [product.imagem_capa, ...(product.galeria || [])].filter(Boolean)
-  return images[product.currentImgIdx] || PLACEHOLDER
-}
-
-const hasGallery = (product) =>
-  (product.galeria || []).length > 0 || (product._galleryPaths || []).length > 0
-
 watchDynamicTitle(
   () => [categoryData.value?.nome, route.params.categorySlug],
   () => {
@@ -215,30 +207,53 @@ async function hydrateGalleries(list, seq) {
     pending.flatMap((product) => product._galleryPaths),
     PLACEHOLDER,
   )
-  if (seq !== fetchSeq || products.value !== list) return
+  if (seq !== fetchSeq) return
 
   let offset = 0
+  let changed = false
   for (const product of pending) {
     const count = product._galleryPaths.length
-    product.galeria = urls.slice(offset, offset + count).filter(Boolean)
+    const galeria = urls.slice(offset, offset + count).filter(Boolean)
     offset += count
+    const live = products.value.find((row) => row.id === product.id)
+    if (!live) continue
+    live.galeria = galeria
+    changed = true
   }
+  // Garante re-render do SoftImage / setas após hydrate assíncrono
+  if (changed) products.value = products.value.map((row) => ({ ...row }))
+}
+
+function galleryImages(product) {
+  return [product.imagem_capa, ...(product.galeria || [])].filter(Boolean)
+}
+
+const hasGallery = (product) =>
+  galleryImages(product).length > 1 || (product._galleryPaths || []).length > 0
+
+const coverImage = (product) => {
+  const images = galleryImages(product)
+  if (!images.length) return PLACEHOLDER
+  const idx = ((product.currentImgIdx || 0) % images.length + images.length) % images.length
+  return images[idx] || PLACEHOLDER
 }
 
 const prevImg = (e, product) => {
   e.preventDefault()
   e.stopPropagation()
-  const imgs = [product.imagem_capa, ...(product.galeria || [])].filter((i) => i)
-  if (imgs.length === 0) return
-  product.currentImgIdx = (product.currentImgIdx - 1 + imgs.length) % imgs.length
+  const live = products.value.find((row) => row.id === product.id) || product
+  const imgs = galleryImages(live)
+  if (imgs.length < 2) return
+  live.currentImgIdx = ((live.currentImgIdx || 0) - 1 + imgs.length) % imgs.length
 }
 
 const nextImg = (e, product) => {
   e.preventDefault()
   e.stopPropagation()
-  const imgs = [product.imagem_capa, ...(product.galeria || [])].filter((i) => i)
-  if (imgs.length === 0) return
-  product.currentImgIdx = (product.currentImgIdx + 1) % imgs.length
+  const live = products.value.find((row) => row.id === product.id) || product
+  const imgs = galleryImages(live)
+  if (imgs.length < 2) return
+  live.currentImgIdx = ((live.currentImgIdx || 0) + 1) % imgs.length
 }
 
 
@@ -388,11 +403,18 @@ onUnmounted(() => {
           />
 
           <div v-if="hasGallery(product)" class="carousel-nav">
-
-            <button type="button" class="nav-btn" aria-label="Imagem anterior" @click="prevImg($event, product)">‹</button>
-
-            <button type="button" class="nav-btn" aria-label="Próxima imagem" @click="nextImg($event, product)">›</button>
-
+            <button
+              type="button"
+              class="nav-btn"
+              aria-label="Imagem anterior"
+              @click.prevent.stop="prevImg($event, product)"
+            >‹</button>
+            <button
+              type="button"
+              class="nav-btn"
+              aria-label="Próxima imagem"
+              @click.prevent.stop="nextImg($event, product)"
+            >›</button>
           </div>
 
           <span v-if="tipoLabel(product)" class="type-chip">{{ tipoLabel(product) }}</span>
@@ -736,59 +758,42 @@ onUnmounted(() => {
 
 
 .carousel-nav {
-
   position: absolute;
-
   inset: 0;
-
+  z-index: 3;
   display: flex;
-
   justify-content: space-between;
-
   align-items: center;
-
   opacity: 0;
-
   transition: opacity var(--transition);
-
   pointer-events: none;
-
 }
 
-
-
-.card-image-container:hover .carousel-nav {
-
+.card-image-container:hover .carousel-nav,
+.card-image-container:focus-within .carousel-nav {
   opacity: 1;
-
 }
-
-
 
 .nav-btn {
-
   pointer-events: auto;
-
+  z-index: 4;
   width: 2.25rem;
-
   height: 2.25rem;
-
   margin: 0 0.4rem;
-
   border: none;
-
   border-radius: var(--radius-pill);
-
-  background: rgba(255, 255, 255, 0.88);
-
+  background: rgba(255, 255, 255, 0.92);
   color: var(--color-ink);
-
   font-size: 1.25rem;
-
   cursor: pointer;
-
   line-height: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
 
+@media (hover: none) {
+  .carousel-nav {
+    opacity: 1;
+  }
 }
 
 
