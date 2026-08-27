@@ -442,14 +442,6 @@ onUnmounted(() => {
 
       >
 
-        <span v-if="tipoLabel(product)" class="badge-pill badge-accent card-badge">
-
-          {{ tipoLabel(product) }}
-
-        </span>
-
-
-
         <div class="card-image-container">
 
           <SoftImage
@@ -466,7 +458,7 @@ onUnmounted(() => {
 
           </div>
 
-          <span v-if="colorCount(product)" class="color-count">{{ colorCount(product) }} cores</span>
+          <span v-if="tipoLabel(product)" class="type-chip">{{ tipoLabel(product) }}</span>
 
         </div>
 
@@ -726,20 +718,6 @@ onUnmounted(() => {
 
 
 
-.card-badge {
-
-  position: absolute;
-
-  top: 0.75rem;
-
-  right: 0.75rem;
-
-  z-index: 2;
-
-}
-
-
-
 .card-image-container {
 
   position: relative;
@@ -790,7 +768,7 @@ onUnmounted(() => {
 
 
 
-.color-count {
+.type-chip {
 
   position: absolute;
 
@@ -798,7 +776,7 @@ onUnmounted(() => {
 
   bottom: 0.75rem;
 
-  padding: 0.3rem 0.6rem;
+  padding: 0.3rem 0.65rem;
 
   background: rgba(26, 37, 47, 0.78);
 
@@ -810,7 +788,11 @@ onUnmounted(() => {
 
   font-weight: 600;
 
+  letter-spacing: 0.02em;
+
   backdrop-filter: blur(4px);
+
+  z-index: 2;
 
 }
 

@@ -15,6 +15,7 @@ import {
   formatPickerLabel,
   isSingleProductMode,
   storefrontContextForModel,
+  prettyCatalogLabel,
 } from '@/lib/storefrontFormat'
 import { parseDimensions } from '@/lib/images'
 
@@ -213,7 +214,7 @@ export function useCatalog() {
       { value: '', label: 'Todos' },
       ...(filterDef.options || []).map((v) => ({
         value: v,
-        label: filterDef.labels?.[v] || v,
+        label: filterDef.labels?.[v] || prettyCatalogLabel(v),
       })),
     ]
   }

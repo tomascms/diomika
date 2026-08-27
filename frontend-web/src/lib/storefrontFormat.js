@@ -30,11 +30,24 @@ export function formatPickerLabel(picker, rawValue) {
   return String(rawValue)
 }
 
+function prettyCatalogLabel(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  return raw
+    .split(/[\s_]+/)
+    .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : ''))
+    .filter(Boolean)
+    .join(' ')
+}
+
+export { prettyCatalogLabel }
+
 export function formatBadgeLabel(badge, model) {
   if (!badge || !model) return ''
   const val = model[badge.field]
   if (!val) return ''
-  return badge.labels?.[val] || val
+  const mapped = badge.labels?.[val]
+  return mapped || prettyCatalogLabel(val)
 }
 
 export function storefrontContextForModel(model, tipoConfig) {

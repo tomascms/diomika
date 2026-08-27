@@ -17,8 +17,8 @@ export const CATALOG_META = {
             "dormir"
           ],
           "labels": {
-            "decorativa": "decorativa",
-            "dormir": "dormir"
+            "decorativa": "Decorativa",
+            "dormir": "Dormir"
           }
         }
       ],
@@ -32,7 +32,7 @@ export const CATALOG_META = {
       "storefront_specs": [
         {
           "field": "composicao",
-          "label": "Composicao",
+          "label": "Composição",
           "widget": "composition",
           "enum_labels": {}
         }
@@ -40,8 +40,8 @@ export const CATALOG_META = {
       "storefront_badge": {
         "field": "tipo",
         "labels": {
-          "decorativa": "decorativa",
-          "dormir": "dormir"
+          "decorativa": "Decorativa",
+          "dormir": "Dormir"
         }
       },
       "order_picker_mode": "variantes",
