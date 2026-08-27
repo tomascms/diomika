@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { api } from '@/lib/api'
+import { api, clearApiCaches } from '@/lib/api'
 import {
   mapApiError,
   saveSettings,
@@ -34,6 +34,7 @@ onMounted(async () => {
         await api.me()
         router.replace({ name: 'workspace', params: { table: 'categories' } })
       } catch {
+        clearApiCaches()
         clearSession()
       }
     }
@@ -51,6 +52,7 @@ async function completeLogin(res) {
   }
   saveSettings({ accessToken: res.access_token })
   writeSessionUser({ username: res.username, role: res.role })
+  clearApiCaches()
   await router.replace({ name: 'workspace', params: { table: 'categories' } })
 }
 

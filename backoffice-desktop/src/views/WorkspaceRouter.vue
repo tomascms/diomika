@@ -1,4 +1,6 @@
 <script setup>
+defineOptions({ name: 'WorkspaceRouter' })
+
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useWorkspace } from '@/composables/useWorkspace'
@@ -22,5 +24,7 @@ const component = computed(() => {
 </script>
 
 <template>
-  <component :is="component" :key="table" />
+  <KeepAlive :max="8">
+    <component :is="component" :key="table" />
+  </KeepAlive>
 </template>

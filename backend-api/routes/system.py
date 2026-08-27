@@ -19,7 +19,7 @@ from core.schema_engine import sync_schema
 from models.catalog_registry import catalog_metadata
 from models.catalog_views import CATALOG_VIEWS
 from models.schemas import TABLE_MAP, sidebar_tables
-from models.ui_schema import build_schema_snapshot, get_form_fields, snapshot_hash
+from models.ui_schema import get_form_fields
 
 logger = logging.getLogger("diomika-api")
 
@@ -32,7 +32,10 @@ router = APIRouter(
 
 @router.get("/workspace")
 def workspace_config(request: Request, role=Depends(require_admin)):
-    """Config completa do backoffice — sidebar, vistas, schemas (filtrado por role)."""
+    """Config leve do backoffice — sidebar + meta de tabelas (sem campos de formulário).
+
+    Schemas de formulário vêm de GET /system/schema/form/{table} sob pedido.
+    """
     sidebar = {}
     for key, cfg in sidebar_tables().items():
         sidebar[key] = {
@@ -54,7 +57,6 @@ def workspace_config(request: Request, role=Depends(require_admin)):
             continue
         tables[name] = {
             "label": cfg.get("label", name),
-            "fields": get_form_fields(schema, cfg, name),
             "ui_embed_colors": bool(cfg.get("ui_embed_colors")),
             "ui_list_formatter": cfg.get("ui_list_formatter"),
             "list_label_fields": cfg.get("list_label_fields"),
@@ -72,7 +74,6 @@ def workspace_config(request: Request, role=Depends(require_admin)):
         "sidebar": sidebar,
         "tables": tables,
         "catalog": catalog_metadata(),
-        "schema_hash": snapshot_hash(build_schema_snapshot(TABLE_MAP)),
         "actor": getattr(request.state, "api_actor", None),
         "role": role,
     }

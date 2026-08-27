@@ -5,8 +5,8 @@ import {
   clearSession,
   readSessionToken,
 } from '@/lib/settings'
-import { loadWorkspace } from '@/composables/useWorkspace'
-import { api } from '@/lib/api'
+import { loadWorkspace, workspace } from '@/composables/useWorkspace'
+import { api, clearApiCaches } from '@/lib/api'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -64,16 +64,20 @@ router.beforeEach(async (to) => {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
 
+  // /me só quando a cache está fria — não em cada clique do menu
   if (loginRequired && readSessionToken()) {
     try {
       await api.me()
     } catch {
+      clearApiCaches()
       clearSession()
       return { name: 'login' }
     }
   }
 
-  await loadWorkspace().catch(() => {})
+  if (!workspace.value) {
+    await loadWorkspace().catch(() => {})
+  }
 })
 
 export default router

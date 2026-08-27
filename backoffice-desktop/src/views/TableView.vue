@@ -1,10 +1,14 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+defineOptions({ name: 'TableView' })
+
+import { ref, computed, watch, onMounted, onActivated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/lib/api'
 import { useWorkspace } from '@/composables/useWorkspace'
 import DataList from '@/components/DataList.vue'
 import CategoryCreatePanel from '@/components/CategoryCreatePanel.vue'
+
+const PAGE_SIZE = 80
 
 const route = useRoute()
 const router = useRouter()
@@ -13,6 +17,7 @@ const { tableConfig, workspace } = useWorkspace()
 const plan = ref(null)
 const rows = ref([])
 const loading = ref(true)
+const loadingMore = ref(false)
 const error = ref('')
 const message = ref('')
 const filterText = ref('')
@@ -24,6 +29,9 @@ const importInput = ref(null)
 const importBusy = ref(false)
 const categories = ref([])
 const newCategoryId = ref('')
+const listOffset = ref(0)
+const hasMore = ref(false)
+const totalApprox = ref(null)
 
 const table = computed(() => route.params.table)
 const isCategories = computed(() => table.value === 'categories')
@@ -67,6 +75,24 @@ const categoryLabel = (row) => {
   return '—'
 }
 
+const rowSearchText = (row) => {
+  const model = embeddedModel(row)
+  const parts = [
+    row.nome,
+    row.ean,
+    row.dimensoes,
+    row.altura,
+    row.segmento,
+    row.slug,
+    row._categoria_label,
+    row.categories?.nome,
+    model?.nome,
+    model?.categories?.nome,
+    row._ptable,
+  ]
+  return parts.filter(Boolean).join(' ').toLowerCase()
+}
+
 const columns = computed(() => {
   if (isMerged.value) {
     return [
@@ -75,7 +101,6 @@ const columns = computed(() => {
     ]
   }
   const fields = tableConfig(table.value)?.list_label_fields || ['nome']
-  // Categorias: só o nome humano — sem slug/tipo técnico por baixo
   if (isCategories.value) {
     return [{ key: 'nome', label: 'Nome', format: (row) => String(row.nome || '').trim() || '—' }]
   }
@@ -85,7 +110,7 @@ const columns = computed(() => {
 const filteredRows = computed(() => {
   const q = filterText.value.trim().toLowerCase()
   if (!q) return rows.value
-  return rows.value.filter((r) => JSON.stringify(r).toLowerCase().includes(q))
+  return rows.value.filter((r) => rowSearchText(r).includes(q))
 })
 
 const loadPlan = async () => {
@@ -123,22 +148,47 @@ const aggregatedTiposForCategory = (cat) => {
 
 const isAggregatedCategory = computed(() => Boolean(aggregatedTiposForCategory(selectedCategory.value)))
 
-const loadRows = async () => {
-  loading.value = true
+const loadRows = async ({ append = false } = {}) => {
+  if (append) loadingMore.value = true
+  else {
+    loading.value = true
+    listOffset.value = 0
+    hasMore.value = false
+    totalApprox.value = null
+  }
   error.value = ''
   try {
     if (isMerged.value) {
       const viewKey = table.value === 'produtos' ? 'produtos' : 'modelos'
-      rows.value = await api.mergedList(viewKey, mergedListParams.value)
+      const offset = append ? listOffset.value : 0
+      const page = await api.mergedList(viewKey, {
+        ...mergedListParams.value,
+        limit: String(PAGE_SIZE),
+        offset: String(offset),
+      })
+      const items = page.items || []
+      rows.value = append ? [...rows.value, ...items] : items
+      listOffset.value = offset + items.length
+      totalApprox.value = page.total_approx ?? null
+      hasMore.value = items.length >= PAGE_SIZE && (
+        totalApprox.value == null || listOffset.value < totalApprox.value
+      )
     } else {
-      rows.value = await api.listRecords(table.value, { visible_only: 'false' })
+      rows.value = await api.listRecords(table.value, { visible_only: 'false', limit: '200' })
+      hasMore.value = false
     }
   } catch (e) {
     error.value = e.message
-    rows.value = []
+    if (!append) rows.value = []
   } finally {
     loading.value = false
+    loadingMore.value = false
   }
+}
+
+const loadMore = () => {
+  if (!hasMore.value || loadingMore.value || loading.value) return
+  return loadRows({ append: true })
 }
 
 const onCategoryCreated = async () => {
@@ -267,6 +317,7 @@ watch(table, () => {
   filterCategoriaId.value = ''
   filterModeloId.value = ''
   filterTipoCatalogo.value = ''
+  filterText.value = ''
   loadRows()
   loadPlan()
 }, { immediate: true })
@@ -278,8 +329,12 @@ const loadModeloFilterOptions = async () => {
   filterModeloId.value = ''
   if (table.value !== 'produtos' || !filterCategoriaId.value) return
   try {
-    const models = await api.mergedList('modelos', { categoria_id: filterCategoriaId.value })
-    filterModeloOptions.value = (Array.isArray(models) ? models : []).map((m) => ({
+    const page = await api.mergedList('modelos', {
+      categoria_id: filterCategoriaId.value,
+      limit: '100',
+      offset: '0',
+    })
+    filterModeloOptions.value = (page.items || []).map((m) => ({
       id: m.id,
       label: m.nome || String(m.id).slice(0, 8),
     }))
@@ -296,15 +351,22 @@ watch(filterCategoriaId, () => {
   if (table.value === 'produtos') void loadModeloFilterOptions()
 })
 
+const ensureCategories = async () => {
+  if (!isMerged.value || categories.value.length) return
+  try {
+    categories.value = (await api.listCategories()).filter((c) => c.tipo_catalogo)
+  } catch {
+    categories.value = []
+  }
+}
+
 onMounted(async () => {
   await loadPlan()
-  if (isMerged.value) {
-    try {
-      categories.value = (await api.listCategories()).filter((c) => c.tipo_catalogo)
-    } catch {
-      categories.value = []
-    }
-  }
+  await ensureCategories()
+})
+
+onActivated(() => {
+  void ensureCategories()
 })
 </script>
 
@@ -384,6 +446,21 @@ onMounted(async () => {
       @toggle-visibility="toggleVisibility"
       @delete="deleteRow"
     />
+
+    <div v-if="isMerged && !loading && rows.length" class="pager">
+      <p class="pager-meta">
+        A mostrar {{ rows.length }}{{ totalApprox != null ? ` de ~${totalApprox}` : '' }} registos
+      </p>
+      <button
+        v-if="hasMore"
+        type="button"
+        class="btn btn-ghost"
+        :disabled="loadingMore"
+        @click="loadMore"
+      >
+        {{ loadingMore ? 'A carregar…' : 'Carregar mais' }}
+      </button>
+    </div>
   </div>
 </template>
 
@@ -412,4 +489,18 @@ onMounted(async () => {
 .picker-actions { display: flex; gap: 0.55rem; margin-top: 1rem; }
 .ok { color: var(--success); margin: 0 0 0.75rem; font-weight: 600; }
 .err { color: var(--danger); margin: 0 0 0.75rem; font-weight: 600; }
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.85rem;
+  flex-wrap: wrap;
+}
+.pager-meta {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  font-weight: 550;
+}
 </style>

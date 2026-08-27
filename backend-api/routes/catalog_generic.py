@@ -212,7 +212,7 @@ def _fetch_merged_table_page(
 async def admin_merged_list(
     view_key: str,
     visible_only: bool = False,
-    limit: int = 200,
+    limit: int = 80,
     offset: int = 0,
     categoria_id: str | None = None,
     modelo_id: str | None = None,
@@ -221,9 +221,10 @@ async def admin_merged_list(
     """Lista merged para backoffice (modelos ou produtos) — paginada."""
     if not is_catalog_view(view_key):
         raise HTTPException(status_code=400, detail="Vista inválida")
-    limit = min(max(limit, 1), 500)
+    limit = min(max(limit, 1), 200)
     offset = max(offset, 0)
-    per_table = min(limit + offset, 150)
+    # Buscar só o necessário por tabela (evita fan-out de 150×N em páginas pequenas).
+    per_table = min(max(limit + offset, limit), 120)
 
     if tipo_catalogo and aggregated_tipos_for_tipo(tipo_catalogo):
         tables = (

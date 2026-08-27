@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/lib/api'
 import SchemaForm from '@/components/SchemaForm.vue'
@@ -40,17 +40,7 @@ const title = computed(() =>
 const loadRelations = async (fields) => {
   const relTables = [...new Set(fields.filter((f) => f.relation).map((f) => f.relation))]
   const entries = await Promise.all(
-    relTables.map(async (rt) => {
-      try {
-        const data = await api.listRecords(rt, { visible_only: 'false', limit: '200' })
-        return [
-          rt,
-          data.map((r) => ({ id: r.id, label: r.nome || r.ean || r.numero || String(r.id).slice(0, 8) })),
-        ]
-      } catch {
-        return [rt, []]
-      }
-    }),
+    relTables.map(async (rt) => [rt, await api.listRelationOptions(rt)]),
   )
   relations.value = Object.fromEntries(entries)
 }
@@ -95,50 +85,65 @@ watch(
   },
 )
 
+let loadSeq = 0
+
 const load = async () => {
   if (isNew.value && isCategories.value) {
     router.replace({ name: 'workspace', params: { table: 'categories' } })
     return
   }
+  const seq = ++loadSeq
   loading.value = true
   error.value = ''
   try {
-    schema.value = await api.formSchema(table.value)
-    await loadRelations(schema.value.fields || [])
-    if (!isNew.value) {
-      formData.value = { ...(await api.getRecord(table.value, recordId.value)) }
+    const tableName = table.value
+    const schemaPromise = api.formSchema(tableName)
+    const recordPromise = !isNew.value
+      ? api.getRecord(tableName, recordId.value)
+      : Promise.resolve(null)
+
+    const schemaData = await schemaPromise
+    if (seq !== loadSeq) return
+    schema.value = schemaData
+
+    const relationsPromise = loadRelations(schemaData.fields || [])
+    const [record] = await Promise.all([recordPromise, relationsPromise])
+    if (seq !== loadSeq) return
+
+    if (record) {
+      formData.value = { ...record }
     } else {
       formData.value = { visibilidade: false }
       createIdempotencyKey.value = null
-      const hasCategoria = (schema.value?.fields || []).some((f) => f.name === 'id_categoria')
+      const hasCategoria = (schemaData.fields || []).some((f) => f.name === 'id_categoria')
       if (hasCategoria && route.query.id_categoria) {
         formData.value.id_categoria = route.query.id_categoria
       }
     }
     await loadModelDiscriminatorOptions(formData.value.id_modelo)
   } catch (e) {
-    error.value = e.message
+    if (seq === loadSeq) error.value = e.message
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
 const resolvePendingImages = async (payload) => {
   const out = { ...payload }
-  for (const [field, fileOrFiles] of Object.entries(pendingFiles.value)) {
-    if (!fileOrFiles) continue
-    if (Array.isArray(fileOrFiles)) {
-      const urls = []
-      for (const f of fileOrFiles) {
-        const up = await api.uploadImage(table.value, field, f)
-        urls.push(up.url)
+  const entries = Object.entries(pendingFiles.value).filter(([, v]) => v)
+  await Promise.all(
+    entries.map(async ([field, fileOrFiles]) => {
+      if (Array.isArray(fileOrFiles)) {
+        const uploads = await Promise.all(
+          fileOrFiles.map((f) => api.uploadImage(table.value, field, f)),
+        )
+        out[field] = uploads.map((up) => up.url)
+      } else {
+        const up = await api.uploadImage(table.value, field, fileOrFiles)
+        out[field] = up.url
       }
-      out[field] = urls
-    } else {
-      const up = await api.uploadImage(table.value, field, fileOrFiles)
-      out[field] = up.url
-    }
-  }
+    }),
+  )
   return out
 }
 
@@ -313,9 +318,7 @@ const hardDelete = async () => {
   }
 }
 
-watch(() => route.fullPath, load)
-
-onMounted(load)
+watch(() => route.fullPath, load, { immediate: true })
 </script>
 
 <template>

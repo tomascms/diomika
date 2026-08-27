@@ -42,7 +42,15 @@ const dimParts = ref({})
 
 const fieldErrors = ref({})
 
-const sync = () => emit('update:modelValue', { ...local.value })
+let syncingFromLocal = false
+
+const sync = () => {
+  syncingFromLocal = true
+  emit('update:modelValue', { ...local.value })
+  queueMicrotask(() => {
+    syncingFromLocal = false
+  })
+}
 
 const syncFiles = () => emit('pending-files', { ...pendingFiles.value })
 
@@ -114,13 +122,14 @@ const initWidgetFields = (source = local.value) => {
   }
 }
 
+// Sem deep-watch: só reage quando o pai substitui o objecto (load), não a cada tecla.
 watch(
   () => props.modelValue,
   (v) => {
+    if (syncingFromLocal) return
     local.value = { ...v }
     initWidgetFields(v)
   },
-  { deep: true },
 )
 
 watch(() => props.fields, () => initWidgetFields(), { immediate: true })

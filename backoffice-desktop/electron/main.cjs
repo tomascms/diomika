@@ -7,6 +7,7 @@ const http = require('http')
 const https = require('https')
 const fs = require('fs')
 const path = require('path')
+const zlib = require('zlib')
 const { URL } = require('url')
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL)
@@ -94,7 +95,8 @@ function proxyToApi(req, res) {
   const headers = { ...req.headers, host: target.host }
   delete headers.origin
   delete headers.referer
-  delete headers['accept-encoding']
+  // Pedir compressão à API; descomprimir no proxy antes do renderer local.
+  headers['accept-encoding'] = 'gzip, deflate'
   headers['user-agent'] = 'DiomikaBackoffice/1.0'
   if (DESKTOP_GATE) headers['x-diomika-desktop'] = DESKTOP_GATE
 
@@ -111,8 +113,18 @@ function proxyToApi(req, res) {
       const outHeaders = { ...upRes.headers }
       delete outHeaders['cross-origin-resource-policy']
       delete outHeaders['cross-origin-opener-policy']
+      const encoding = String(outHeaders['content-encoding'] || '').toLowerCase()
+      delete outHeaders['content-encoding']
+      delete outHeaders['content-length']
       res.writeHead(upRes.statusCode || 502, outHeaders)
-      upRes.pipe(res)
+      let stream = upRes
+      if (encoding === 'gzip') stream = upRes.pipe(zlib.createGunzip())
+      else if (encoding === 'deflate') stream = upRes.pipe(zlib.createInflate())
+      stream.on('error', () => {
+        if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({ detail: 'Falha ao descomprimir resposta da API.' }))
+      })
+      stream.pipe(res)
     },
   )
 
@@ -219,16 +231,18 @@ app.whenReady().then(async () => {
       'Falta DIOMIKA_DESKTOP_GATE neste instalador. Peça um build novo à Diomika.',
     )
   }
-  if (!isDev) {
-    const ok = await apiHealthOk()
-    if (!ok) {
-      dialog.showErrorBox(
-        'Sem ligação à API',
-        `Não foi possível contactar ${API_ORIGIN}.\nConfirme a internet e tente de novo.`,
-      )
-    }
-  }
+  // Abrir UI de imediato — health em background (AppShell mostra estado online/offline).
   localServer = await createWindow()
+  if (!isDev) {
+    apiHealthOk().then((ok) => {
+      if (!ok) {
+        dialog.showErrorBox(
+          'Sem ligação à API',
+          `Não foi possível contactar ${API_ORIGIN}.\nConfirme a internet e use «Tentar novamente» no painel.`,
+        )
+      }
+    })
+  }
 })
 
 app.on('window-all-closed', () => {

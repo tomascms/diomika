@@ -2,8 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter, RouterView } from 'vue-router'
 import { useWorkspace } from '@/composables/useWorkspace'
-import { mapApiError, clearSession, readSessionUser } from '@/lib/settings'
-import { api } from '@/lib/api'
+import { mapApiError, clearSession, readSessionUser, writeSessionUser } from '@/lib/settings'
+import { api, clearApiCaches } from '@/lib/api'
 import Sidebar from '@/components/Sidebar.vue'
 
 const route = useRoute()
@@ -43,25 +43,27 @@ async function logout() {
   try {
     await api.logout()
   } catch {
-    /* ignore */
+    clearApiCaches()
   }
   clearSession()
   sessionUser.value = null
   await router.replace({ name: 'login' })
 }
 
-onMounted(async () => {
-  await checkHealth()
-  if (apiOnline.value) {
-    await loadWorkspace().catch(() => {})
-    try {
-      const me = await api.me()
+onMounted(() => {
+  void checkHealth()
+  loadWorkspace().catch(() => {})
+  api.me()
+    .then((me) => {
       sessionUser.value = { username: me.username, role: me.role }
-    } catch {
+      writeSessionUser(sessionUser.value)
+    })
+    .catch(() => {
       sessionUser.value = readSessionUser()
-    }
-  }
+    })
 })
+
+const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route.fullPath))
 </script>
 
 <template>
@@ -99,7 +101,11 @@ onMounted(async () => {
       </div>
 
       <main class="content">
-        <RouterView :key="route.fullPath" />
+        <RouterView v-slot="{ Component }">
+          <KeepAlive :include="['WorkspaceRouter']" :max="4">
+            <component :is="Component" :key="viewKey" />
+          </KeepAlive>
+        </RouterView>
       </main>
     </div>
   </div>

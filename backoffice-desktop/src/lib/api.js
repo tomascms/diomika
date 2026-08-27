@@ -1,8 +1,22 @@
-import { loadSettings } from './settings'
+import { loadSettings, clearSession } from './settings'
 
 const TIMEOUT_MS = 30000
 const WRITE_TIMEOUT_MS = 90000
 const schemaCache = new Map()
+const relationCache = new Map()
+
+const AUTH_STATUS_TTL_MS = 5 * 60 * 1000
+const ME_TTL_MS = 10 * 60 * 1000
+
+let authStatusCache = { value: null, at: 0 }
+let meCache = { value: null, at: 0 }
+
+export function clearApiCaches() {
+  authStatusCache = { value: null, at: 0 }
+  meCache = { value: null, at: 0 }
+  schemaCache.clear()
+  relationCache.clear()
+}
 
 function timeoutFor(method) {
   return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? WRITE_TIMEOUT_MS : TIMEOUT_MS
@@ -47,6 +61,10 @@ async function request(method, path, { body, params, headers: extraHeaders } = {
       signal: controller.signal,
     })
     if (!resp.ok) {
+      if (resp.status === 401) {
+        clearApiCaches()
+        clearSession()
+      }
       const err = await resp.json().catch(() => ({}))
       throw new Error(parseDetail(err, resp.status))
     }
@@ -81,6 +99,20 @@ async function uploadFile(table, field, file) {
   }
 }
 
+function normalizeMergedPage(data) {
+  if (Array.isArray(data)) {
+    return { items: data, count: data.length, total_approx: data.length, limit: data.length, offset: 0 }
+  }
+  const items = data?.items || []
+  return {
+    items,
+    count: data?.count ?? items.length,
+    total_approx: data?.total_approx ?? items.length,
+    limit: data?.limit,
+    offset: data?.offset ?? 0,
+  }
+}
+
 export const api = {
   get: (path, params) => request('GET', path, { params }),
   post: (path, body) => request('POST', path, { body }),
@@ -88,7 +120,14 @@ export const api = {
   patch: (path, body) => request('PATCH', path, { body }),
   delete: (path, params) => request('DELETE', path, { params }),
   health: () => request('GET', '/health'),
-  authStatus: () => request('GET', '/admin/auth/status'),
+  authStatus: async (force = false) => {
+    if (!force && authStatusCache.value && Date.now() - authStatusCache.at < AUTH_STATUS_TTL_MS) {
+      return authStatusCache.value
+    }
+    const st = await request('GET', '/admin/auth/status')
+    authStatusCache = { value: st, at: Date.now() }
+    return st
+  },
   login: (username, password, totp_code) =>
     request('POST', '/admin/auth/login', {
       body: totp_code ? { username, password, totp_code } : { username, password },
@@ -99,8 +138,21 @@ export const api = {
     request('POST', '/admin/auth/mfa/confirm', {
       body: { username, password, totp_code },
     }),
-  logout: () => request('POST', '/admin/auth/logout'),
-  me: () => request('GET', '/admin/auth/me'),
+  logout: async () => {
+    try {
+      return await request('POST', '/admin/auth/logout')
+    } finally {
+      clearApiCaches()
+    }
+  },
+  me: async (force = false) => {
+    if (!force && meCache.value && Date.now() - meCache.at < ME_TTL_MS) {
+      return meCache.value
+    }
+    const me = await request('GET', '/admin/auth/me')
+    meCache = { value: me, at: Date.now() }
+    return me
+  },
   workspace: () => request('GET', '/system/workspace'),
   formSchema: (table) => {
     if (schemaCache.has(table)) return schemaCache.get(table)
@@ -114,6 +166,25 @@ export const api = {
   listRecords: async (table, params) => {
     const data = await request('GET', `/admin/crud/${table}`, { params })
     return Array.isArray(data) ? data : data?.items || []
+  },
+  listRelationOptions: async (table, { force = false } = {}) => {
+    if (!force && relationCache.has(table)) return relationCache.get(table)
+    const pending = (async () => {
+      try {
+        const data = await request('GET', `/admin/crud/${table}`, {
+          params: { visible_only: 'false', limit: '200' },
+        })
+        const rows = Array.isArray(data) ? data : data?.items || []
+        return rows.map((r) => ({
+          id: r.id,
+          label: r.nome || r.ean || r.numero || String(r.id).slice(0, 8),
+        }))
+      } catch {
+        return []
+      }
+    })()
+    relationCache.set(table, pending)
+    return pending
   },
   listModelColors: async (colorsTable, modelId) => {
     if (!colorsTable || !modelId) return []
@@ -145,9 +216,9 @@ export const api = {
   createCategory: (body) => request('POST', '/system/categories/create', { body }),
   mergedList: async (viewKey, params = {}) => {
     const data = await request('GET', `/catalogo/admin/merged/${viewKey}`, {
-      params: { limit: '500', offset: '0', ...params },
+      params: { limit: '80', offset: '0', ...params },
     })
-    return Array.isArray(data) ? data : data?.items || []
+    return normalizeMergedPage(data)
   },
   schemaSync: (dryRun = false) => request('POST', `/system/schema/sync?dry_run=${dryRun}`),
   schemaStatus: () => request('GET', '/system/schema/status'),
