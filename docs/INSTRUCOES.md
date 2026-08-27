@@ -39,7 +39,7 @@ python deploy/deploy_pages.py --build --pages-deploy --api-url https://api.diomi
 python deploy/verify_production.py
 ```
 
-O token `CLOUDFLARE_API_TOKEN` usado no deploy da loja precisa de **Account → Cloudflare Pages → Edit**. Um token só de Analytics (hub) falha com `Authentication error [code: 10000]`. Alternativa: Cloudflare Dashboard → Pages → `diomika-loja` → Upload de `frontend-web/dist/`.
+Preferir `CLOUDFLARE_PAGES_API_TOKEN` (Account → **Cloudflare Pages → Edit/Write**, ex. token «Diomika deploy»). O `CLOUDFLARE_API_TOKEN` do hub (Analytics) fica separado — sem Pages Write falha com `Authentication error [code: 10000]`. Alternativa: Dashboard → Pages → `diomika-loja` → Upload de `frontend-web/dist/`.
 
 | Script | Faz |
 |--------|-----|

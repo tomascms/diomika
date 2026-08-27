@@ -9151,7 +9151,7 @@ python deploy/monitor_check.py --alert
 python deploy/security_test.py
 ```
 
-**Token Cloudflare para Pages:** precisa de permissão **Account → Cloudflare Pages → Edit** (e tipicamente Zone Read). Um token só com Analytics/Zone Read (hub) devolve `Authentication error [code: 10000]` no `wrangler pages deploy`.
+**Token Cloudflare para Pages:** usar `CLOUDFLARE_PAGES_API_TOKEN` com **Account → Cloudflare Pages → Edit/Write** (ex. token «Diomika deploy»). Manter `CLOUDFLARE_API_TOKEN` do hub só com Analytics/Zone Read — sem Pages Write o `wrangler pages deploy` devolve `Authentication error [code: 10000]`.
 
 Testes: `backend-api/tests/`, `deploy/security_test.py`, `frontend-web/e2e/critical.spec.js`, `deploy/security_audit_deep.py` (auditoria expandida).
 

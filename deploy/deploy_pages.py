@@ -102,7 +102,12 @@ def build_frontend(env: dict[str, str], api_url: str, *, beta: bool = True) -> b
 
 
 def deploy_cloudflare_pages(dist: Path, project: str, env: dict[str, str]) -> str | None:
-    token = (env.get("CLOUDFLARE_API_TOKEN") or "").strip()
+    # Prefer Pages-specific token so hub analytics tokens (Zone/Analytics Read) stay separate.
+    token = (
+        env.get("CLOUDFLARE_PAGES_API_TOKEN")
+        or env.get("CLOUDFLARE_API_TOKEN")
+        or ""
+    ).strip()
     account = (env.get("CLOUDFLARE_ACCOUNT_ID") or "").strip()
     if not token or not account:
         print("! Pages manual: Cloudflare Dashboard -> Upload dist/ ou Connect GitHub")
@@ -127,6 +132,7 @@ def deploy_cloudflare_pages(dist: Path, project: str, env: dict[str, str]) -> st
         "CLOUDFLARE_API_TOKEN": token,
         "CLOUDFLARE_ACCOUNT_ID": account,
         "NODE_OPTIONS": os.environ.get("NODE_OPTIONS", "--use-system-ca"),
+        "PYTHONIOENCODING": "utf-8",
     }
     print("\n=== Deploy Cloudflare Pages ===\n")
     proc = subprocess.run(
@@ -137,11 +143,13 @@ def deploy_cloudflare_pages(dist: Path, project: str, env: dict[str, str]) -> st
         shell=os.name == "nt",
     )
     out = ((proc.stdout or b"") + (proc.stderr or b"")).decode("utf-8", errors="replace")
+    # Windows consoles (cp1252) choke on wrangler emoji; keep ASCII for logs.
+    safe = out.encode("ascii", errors="replace").decode("ascii")
     if proc.returncode != 0:
-        print(out[:2000])
+        print(safe[:2000])
         return None
     match = re.search(r"https://[a-z0-9-]+\.pages\.dev", out)
-    url = match.group(0) if match else env.get("BETA_PAGES_URL")
+    url = match.group(0) if match else env.get("BETA_PAGES_URL") or env.get("PROD_PAGES_URL")
     if url:
         print(f"OK Pages: {url}")
     return url
