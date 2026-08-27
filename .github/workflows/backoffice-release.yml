@@ -69,7 +69,10 @@ jobs:
 
       - name: Remove previous cliente release tag
         run: |
-          gh release delete backoffice-cliente-latest --yes 2>/dev/null || true
+          # Apagar releases (incl. drafts) e a tag rolling para evitar conflito already_exists
+          for id in $(gh api repos/${{ github.repository }}/releases --paginate --jq '.[] | select(.tag_name=="backoffice-cliente-latest") | .id'); do
+            gh api -X DELETE "repos/${{ github.repository }}/releases/$id" || true
+          done
           git push --delete origin backoffice-cliente-latest 2>/dev/null || true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -85,3 +88,4 @@ jobs:
             artifacts/**/*.exe
             artifacts/**/*.dmg
             artifacts/**/*.AppImage
+          overwrite_files: true
