@@ -55,6 +55,20 @@ const filterDefs = computed(() => catalog.filterDefinitionsForTipo(catalogTipo.v
 
 const showFilters = computed(() => filterDefs.value.length > 0)
 
+function blankFilters(defs = filterDefs.value) {
+  const next = {}
+  for (const def of defs || []) {
+    if (def?.field) next[def.field] = ''
+  }
+  return next
+}
+
+function resetFilters() {
+  selectedFilters.value = blankFilters()
+  localSearch.value = ''
+  sortBy.value = 'az'
+}
+
 
 
 const tipoLabel = (product) => catalog.badgeLabel(product, catalogTipo.value)
@@ -302,9 +316,32 @@ let productsSubscription = null
 watch(
   () => route.params.categorySlug,
   () => {
-    selectedFilters.value = {}
+    resetFilters()
     fetchProducts()
   },
+)
+
+watch(
+  filterDefs,
+  (defs) => {
+    const next = blankFilters(defs)
+    let changed = false
+    for (const field of Object.keys(next)) {
+      if (!(field in selectedFilters.value) || selectedFilters.value[field] == null) {
+        selectedFilters.value[field] = ''
+        changed = true
+      }
+    }
+    // Drop stale fields from previous category
+    for (const field of Object.keys(selectedFilters.value)) {
+      if (!(field in next)) {
+        delete selectedFilters.value[field]
+        changed = true
+      }
+    }
+    if (changed && !Object.keys(next).length) selectedFilters.value = {}
+  },
+  { immediate: true },
 )
 
 watch(selectedFilters, fetchProducts, { deep: true })
@@ -403,8 +440,9 @@ onUnmounted(() => {
         >
           <span class="field-label">{{ filterDef.label }}</span>
           <select
-            v-model="selectedFilters[filterDef.field]"
             class="field-select"
+            :value="selectedFilters[filterDef.field] ?? ''"
+            @change="selectedFilters[filterDef.field] = $event.target.value"
           >
             <option
               v-for="opt in catalog.filterOptionsForField(filterDef)"
