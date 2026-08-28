@@ -1,7 +1,8 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/lib/api'
+import { workspace } from '@/composables/useWorkspace'
 import SchemaForm from '@/components/SchemaForm.vue'
 import ModelColorsPanel from '@/components/ModelColorsPanel.vue'
 
@@ -25,6 +26,14 @@ const saving = ref(false)
 const error = ref('')
 const message = ref('')
 const createIdempotencyKey = ref(null)
+const categoryRows = ref([])
+const familyTipo = ref('')
+let switchingSchema = false
+/** Campos a repor após mudar categoria/família (novo registo). */
+let formCarry = null
+
+const catalogTypes = computed(() => workspace.value?.catalog?.catalog_types || [])
+const categoryDefinitions = computed(() => workspace.value?.catalog?.category_definitions || {})
 
 const embedColors = computed(() => Boolean(schema.value?.config?.ui_embed_colors))
 const catalogTipo = computed(() => schema.value?.config?.ui_catalog_tipo || null)
@@ -32,15 +41,99 @@ const colorsTable = computed(() => schema.value?.config?.ui_colors_table || null
 const savedModelId = computed(() => (isNew.value ? null : String(recordId.value)))
 const isCatalogRecord = computed(() => Boolean(schema.value?.config?.ui_catalog_tipo || colorsTable.value))
 const isPublished = computed(() => formData.value.visibilidade === true)
+const isModelForm = computed(() =>
+  catalogTypes.value.some((t) => t.model_table === table.value),
+)
+const isProductForm = computed(() =>
+  catalogTypes.value.some((t) => t.product_table === table.value),
+)
 
 const title = computed(() =>
   isNew.value ? `Novo — ${schema.value?.label || table.value}` : `Editar — ${schema.value?.label || table.value}`,
 )
 
+const selectedCategory = computed(() =>
+  categoryRows.value.find((c) => String(c.id) === String(formData.value.id_categoria || '')) || null,
+)
+
+const aggregatedTipos = computed(() => {
+  const cat = selectedCategory.value
+  if (!cat?.tipo_catalogo) return null
+  for (const def of Object.values(categoryDefinitions.value || {})) {
+    if (def.tipo_catalogo === cat.tipo_catalogo && def.aggregated_tipos?.length) {
+      return def.aggregated_tipos
+    }
+  }
+  return null
+})
+
+const showFamilyPicker = computed(
+  () => isNew.value && isModelForm.value && Boolean(aggregatedTipos.value?.length),
+)
+
+/** Sempre editar/guardar na tabela física (nunca «modelos» / «produtos»). */
+const goToEdit = (savedId) =>
+  router.replace({
+    name: 'record-edit',
+    params: { table: table.value, id: String(savedId) },
+  })
+
+const modelTableForTipo = (tipo) =>
+  catalogTypes.value.find((t) => t.tipo === tipo)?.model_table || null
+
+const resolveTargetModelTable = (cat, preferredTipo = null) => {
+  if (!cat?.tipo_catalogo) return null
+  const aggregated = (() => {
+    for (const def of Object.values(categoryDefinitions.value || {})) {
+      if (def.tipo_catalogo === cat.tipo_catalogo && def.aggregated_tipos?.length) {
+        return def.aggregated_tipos
+      }
+    }
+    return null
+  })()
+  let tipo = preferredTipo || cat.tipo_catalogo
+  if (aggregated?.length) {
+    const currentTipo = catalogTipo.value
+    if (preferredTipo && aggregated.includes(preferredTipo)) tipo = preferredTipo
+    else if (currentTipo && aggregated.includes(currentTipo)) tipo = currentTipo
+    else tipo = aggregated[0]
+  }
+  return modelTableForTipo(tipo)
+}
+
+const navigateNewPhysical = async (physicalTable, categoryId) => {
+  if (!physicalTable) return
+  if (physicalTable === table.value && String(route.query.id_categoria || '') === String(categoryId || '')) {
+    return
+  }
+  switchingSchema = true
+  formCarry = {
+    nome: formData.value.nome,
+    descricao: formData.value.descricao,
+    composicao: formData.value.composicao,
+  }
+  createIdempotencyKey.value = crypto.randomUUID()
+  pendingFiles.value = {}
+  await router.replace({
+    name: 'record-new-physical',
+    params: { table: 'modelos', physicalTable },
+    query: categoryId ? { id_categoria: String(categoryId) } : {},
+  })
+}
+
+const loadCategories = async () => {
+  try {
+    const all = await api.listRecords('categories', { visible_only: 'false', limit: '200' })
+    categoryRows.value = (Array.isArray(all) ? all : []).filter((c) => c.tipo_catalogo)
+  } catch {
+    categoryRows.value = []
+  }
+}
+
 const loadRelations = async (fields) => {
   const relTables = [...new Set(fields.filter((f) => f.relation).map((f) => f.relation))]
   const entries = await Promise.all(
-    relTables.map(async (rt) => [rt, await api.listRelationOptions(rt)]),
+    relTables.map(async (rt) => [rt, await api.listRelationOptions(rt, { force: true })]),
   )
   relations.value = Object.fromEntries(entries)
 }
@@ -85,6 +178,35 @@ watch(
   },
 )
 
+watch(
+  () => formData.value.id_categoria,
+  async (catId) => {
+    if (!isNew.value || !isModelForm.value || switchingSchema || loading.value) return
+    if (!catId) return
+    const cat = categoryRows.value.find((c) => String(c.id) === String(catId))
+    if (!cat) return
+    const target = resolveTargetModelTable(cat, familyTipo.value || null)
+    if (!target) {
+      error.value = 'Categoria sem tipo de catálogo — escolha outra.'
+      return
+    }
+    if (target !== table.value) {
+      message.value = ''
+      error.value = ''
+      await navigateNewPhysical(target, catId)
+    }
+  },
+)
+
+watch(familyTipo, async (tipo) => {
+  if (!isNew.value || !showFamilyPicker.value || switchingSchema || loading.value) return
+  if (!tipo || !formData.value.id_categoria) return
+  const target = modelTableForTipo(tipo)
+  if (target && target !== table.value) {
+    await navigateNewPhysical(target, formData.value.id_categoria)
+  }
+})
+
 let loadSeq = 0
 
 const load = async () => {
@@ -92,11 +214,19 @@ const load = async () => {
     router.replace({ name: 'workspace', params: { table: 'categories' } })
     return
   }
+  // Evitar formSchema em vistas virtuais (modelos/produtos)
+  if (table.value === 'modelos' || table.value === 'produtos') {
+    error.value = 'Escolha uma categoria e família para criar o registo.'
+    loading.value = false
+    schema.value = null
+    return
+  }
   const seq = ++loadSeq
   loading.value = true
   error.value = ''
   try {
     const tableName = table.value
+    await loadCategories()
     const schemaPromise = api.formSchema(tableName)
     const recordPromise = !isNew.value
       ? api.getRecord(tableName, recordId.value)
@@ -119,12 +249,26 @@ const load = async () => {
       if (hasCategoria && route.query.id_categoria) {
         formData.value.id_categoria = route.query.id_categoria
       }
+      if (formCarry) {
+        formData.value = {
+          ...formData.value,
+          ...Object.fromEntries(
+            Object.entries(formCarry).filter(([, v]) => v !== undefined && v !== null && v !== ''),
+          ),
+        }
+        formCarry = null
+      }
     }
+    familyTipo.value = schemaData?.config?.ui_catalog_tipo || catalogTipo.value || ''
     await loadModelDiscriminatorOptions(formData.value.id_modelo)
   } catch (e) {
     if (seq === loadSeq) error.value = e.message
   } finally {
-    if (seq === loadSeq) loading.value = false
+    if (seq === loadSeq) {
+      loading.value = false
+      await nextTick()
+      switchingSchema = false
+    }
   }
 }
 
@@ -147,6 +291,19 @@ const resolvePendingImages = async (payload) => {
   return out
 }
 
+const preparePayload = async () => {
+  let payload = { ...formData.value, visibilidade: false }
+  payload = await resolvePendingImages(payload)
+  if (typeof payload.composicao === 'string') {
+    try {
+      payload.composicao = JSON.parse(payload.composicao)
+    } catch {
+      throw new Error('Composição inválida — use material e % em cada linha.')
+    }
+  }
+  return payload
+}
+
 const saveDraft = async () => {
   if (saving.value) return
   if (schemaFormRef.value && !schemaFormRef.value.validate()) {
@@ -160,16 +317,7 @@ const saveDraft = async () => {
     createIdempotencyKey.value = crypto.randomUUID()
   }
   try {
-    let payload = { ...formData.value, visibilidade: false }
-    payload = await resolvePendingImages(payload)
-    if (typeof payload.composicao === 'string') {
-      try {
-        payload.composicao = JSON.parse(payload.composicao)
-      } catch {
-        throw new Error('Composição inválida — use JSON válido (ex: {"algodao":60,"poliester":40}).')
-      }
-    }
-
+    const payload = await preparePayload()
     let savedId = recordId.value
     if (isNew.value) {
       const created = await api.createRecord(table.value, payload, createIdempotencyKey.value)
@@ -184,28 +332,14 @@ const saveDraft = async () => {
       } catch (e) {
         message.value = `Rascunho guardado, mas cores: ${e.message}`
         saving.value = false
-        if (isNew.value && savedId) {
-          await router.replace({
-            name: 'record-edit',
-            params: { table: route.params.table, physicalTable: route.params.physicalTable, id: savedId },
-          })
-        }
+        if (isNew.value && savedId) await goToEdit(savedId)
         return
       }
     }
 
     formData.value.visibilidade = false
     message.value = 'Rascunho guardado (oculto na loja).'
-    if (isNew.value && savedId) {
-      await router.replace({
-        name: 'record-edit',
-        params: {
-          table: route.params.table,
-          ...(route.params.physicalTable ? { physicalTable: route.params.physicalTable } : {}),
-          id: savedId,
-        },
-      })
-    }
+    if (isNew.value && savedId) await goToEdit(savedId)
   } catch (e) {
     error.value = e.message || 'Não foi possível guardar o rascunho.'
   } finally {
@@ -226,17 +360,7 @@ const publish = async () => {
     createIdempotencyKey.value = crypto.randomUUID()
   }
   try {
-    // 1) Guardar sempre como rascunho primeiro (modelos novos nunca nascem públicos)
-    let payload = { ...formData.value, visibilidade: false }
-    payload = await resolvePendingImages(payload)
-    if (typeof payload.composicao === 'string') {
-      try {
-        payload.composicao = JSON.parse(payload.composicao)
-      } catch {
-        throw new Error('Composição inválida — use JSON válido (ex: {"algodao":60,"poliester":40}).')
-      }
-    }
-
+    const payload = await preparePayload()
     let savedId = recordId.value
     if (isNew.value) {
       const created = await api.createRecord(table.value, payload, createIdempotencyKey.value)
@@ -251,21 +375,11 @@ const publish = async () => {
       } catch (e) {
         message.value = `Dados guardados, mas cores: ${e.message}`
         saving.value = false
-        if (isNew.value && savedId) {
-          await router.replace({
-            name: 'record-edit',
-            params: {
-              table: route.params.table,
-              ...(route.params.physicalTable ? { physicalTable: route.params.physicalTable } : {}),
-              id: savedId,
-            },
-          })
-        }
+        if (isNew.value && savedId) await goToEdit(savedId)
         return
       }
     }
 
-    // 2) Publicar via endpoint que valida cor + EAN
     if (isCatalogRecord.value) {
       await api.publishRecord(table.value, savedId)
     } else {
@@ -273,25 +387,16 @@ const publish = async () => {
     }
 
     formData.value.visibilidade = true
-    message.value = 'Publicado na loja. Pode criar outro sem voltar atrás.'
-    if (isNew.value && savedId) {
-      await router.replace({
-        name: 'record-edit',
-        params: {
-          table: route.params.table,
-          ...(route.params.physicalTable ? { physicalTable: route.params.physicalTable } : {}),
-          id: savedId,
-        },
-      })
-    }
+    message.value = 'Publicado. Pode criar outro sem voltar atrás.'
+    if (isNew.value && savedId) await goToEdit(savedId)
   } catch (e) {
     const msg = e.message || ''
     if (isNew.value && /502|504|timeout|abort|inacessível/i.test(msg)) {
       error.value =
-        'A API não respondeu a tempo, mas o registo pode ter sido criado. Verifique a lista antes de publicar outra vez.'
+        'A API não respondeu a tempo, mas o registo pode ter sido criado. Verifique a lista antes de tentar outra vez.'
     } else if (isNew.value && /409|processamento/i.test(msg)) {
       error.value =
-        'Pedido ainda em processamento. Aguarde alguns segundos e clique «Publicar» outra vez (não crie duplicado).'
+        'Pedido ainda em processamento. Aguarde e clique «Publicar» outra vez (não crie duplicado).'
     } else {
       error.value = msg
     }
@@ -326,7 +431,7 @@ const hardDelete = async () => {
   }
 }
 
-/** Novo produto na mesma secção — mantém categoria se existir; não volta à lista. */
+/** Novo registo — limpa o formulário; pode mudar categoria/família na mesma página. */
 const createAnother = async () => {
   const keepCat = formData.value?.id_categoria || route.query.id_categoria || ''
   message.value = ''
@@ -337,17 +442,28 @@ const createAnother = async () => {
   if (isNew.value) {
     formData.value = { visibilidade: false }
     if (keepCat) formData.value.id_categoria = String(keepCat)
-    message.value = 'Formulário limpo — mude a categoria se quiser e guarde o novo produto.'
+    message.value = 'Formulário limpo — mude a categoria ou a subcategoria e guarde.'
     return
   }
 
-  const params = { table: route.params.table }
-  const name = route.params.physicalTable ? 'record-new-physical' : 'record-new'
-  if (route.params.physicalTable) params.physicalTable = route.params.physicalTable
+  if (isModelForm.value) {
+    await router.push({
+      name: 'record-new-physical',
+      params: { table: 'modelos', physicalTable: table.value },
+      query: keepCat ? { id_categoria: String(keepCat) } : {},
+    })
+    return
+  }
+  if (isProductForm.value) {
+    await router.push({
+      name: 'record-new-physical',
+      params: { table: 'produtos', physicalTable: table.value },
+    })
+    return
+  }
   await router.push({
-    name,
-    params,
-    query: keepCat ? { id_categoria: String(keepCat) } : {},
+    name: 'record-new',
+    params: { table: table.value },
   })
 }
 
@@ -384,6 +500,25 @@ watch(() => route.fullPath, load, { immediate: true })
     <p v-if="loading" class="loading-banner">A carregar formulário…</p>
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="message" class="ok">{{ message }}</p>
+
+    <div v-if="isNew && isModelForm && !loading" class="create-flex card">
+      <p class="create-flex-hint">
+        Pode mudar a categoria (e a subcategoria) sem sair desta página — o formulário adapta-se.
+      </p>
+      <label v-if="showFamilyPicker" class="family-field">
+        <span>Subcategoria</span>
+        <select v-model="familyTipo" class="input">
+          <option
+            v-for="tipo in aggregatedTipos"
+            :key="tipo"
+            :value="tipo"
+          >
+            {{ catalogTypes.find((t) => t.tipo === tipo)?.label || tipo }}
+          </option>
+        </select>
+      </label>
+    </div>
+
     <div v-if="loading && !schema" class="form-card card form-skeleton" aria-hidden="true">
       <div class="sk-line" style="width:40%" />
       <div class="sk-line" style="width:100%" />
@@ -415,7 +550,7 @@ watch(() => route.fullPath, load, { immediate: true })
           {{ saving ? 'A publicar…' : 'Publicar na loja' }}
         </button>
         <button
-          v-if="isCatalogRecord"
+          v-if="isCatalogRecord || isModelForm || isProductForm"
           class="btn btn-ghost"
           type="button"
           :disabled="saving"
@@ -459,47 +594,45 @@ watch(() => route.fullPath, load, { immediate: true })
   color: var(--text-muted);
 }
 .vis-chip.live {
-  background: rgba(34, 120, 70, 0.12);
-  color: var(--success);
+  background: rgba(34, 140, 70, 0.15);
+  color: var(--success, #1a7a3a);
 }
-.form-card { padding: 1.35rem 1.4rem 5.5rem; max-width: 720px; }
-.actions {
-  display: flex;
-  gap: 0.55rem;
-  margin-top: 1.35rem;
-  padding-top: 1.1rem;
-  border-top: 1px solid var(--border);
-  flex-wrap: wrap;
+.error { color: var(--danger); margin: 0 0 0.75rem; }
+.ok { color: var(--success, #1a7a3a); margin: 0 0 0.75rem; }
+.loading-banner { color: var(--text-muted); }
+.form-card { padding: 1.25rem; }
+.form-skeleton { display: grid; gap: 0.75rem; }
+.sk-line {
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--bg-hover), transparent);
 }
+.actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1.25rem; }
 .actions-sticky {
   position: sticky;
   bottom: 0;
-  z-index: 5;
-  margin-top: 1.5rem;
-  padding: 0.85rem 0 0.35rem;
-  background: linear-gradient(to top, var(--bg-panel) 78%, rgba(255, 255, 255, 0));
+  padding: 0.75rem 0;
+  background: var(--bg, #fff);
 }
-.error { color: var(--danger); font-weight: 600; }
-.ok { color: var(--success); font-weight: 600; }
-.loading-banner {
-  margin: 0 0 0.75rem;
-  padding: 0.55rem 0.85rem;
-  font-size: 0.84rem;
+.create-flex {
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.85rem;
+  display: grid;
+  gap: 0.65rem;
+}
+.create-flex-hint {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+.family-field {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 320px;
+  font-size: 0.85rem;
   font-weight: 600;
-  color: var(--accent-hover);
-  background: var(--accent-soft);
-  border-radius: var(--radius-sm);
 }
-.form-skeleton { display: grid; gap: 0.85rem; padding: 1.35rem 1.4rem; }
-.form-skeleton .sk-line {
-  height: 2.2rem;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #e8ecef 0%, #f4f6f8 45%, #e8ecef 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.1s ease-in-out infinite;
-}
-@keyframes shimmer {
-  0% { background-position: 100% 0; }
-  100% { background-position: -100% 0; }
+.family-field .input {
+  font-weight: 500;
 }
 </style>

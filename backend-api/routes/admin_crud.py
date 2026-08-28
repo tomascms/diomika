@@ -103,7 +103,10 @@ def _is_expected_client_conflict(exc: Exception) -> bool:
 
 def _schema_for(table: str):
     if table not in TABLE_MAP:
-        raise HTTPException(status_code=404, detail="Categoria não mapeada")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Tabela «{table}» não registada no catálogo",
+        )
     schema = TABLE_MAP[table].get("schema")
     if not schema:
         raise HTTPException(status_code=404, detail="Sem schema")
@@ -410,7 +413,10 @@ def _assert_ean_globally_unique(table_name: str, payload: dict, record_id: str |
 
 
 def _assert_model_publishable(table_name: str, record_id: str) -> None:
-    """Loja só mostra modelos com ≥1 cor e ≥1 produto com EAN."""
+    """Loja só mostra modelos com ≥1 cor (imagem) e ≥1 produto com EAN.
+
+    Conta rascunhos — a cascata de publicação torna-os visíveis a seguir.
+    """
     if table_name not in all_model_tables():
         return
     tipo = tipo_for_table(table_name)
@@ -423,8 +429,7 @@ def _assert_model_publishable(table_name: str, record_id: str) -> None:
             db.table(ct)
             .select("id,imagem")
             .eq("id_modelo", record_id)
-            .eq("visibilidade", True)
-            .limit(5)
+            .limit(20)
             .execute()
             .data
             or []
@@ -436,14 +441,39 @@ def _assert_model_publishable(table_name: str, record_id: str) -> None:
             db.table(pt)
             .select("id,ean")
             .eq("id_modelo", record_id)
-            .eq("visibilidade", True)
-            .limit(20)
+            .limit(50)
             .execute()
             .data
             or []
         )
         if not any(str(p.get("ean") or "").strip() for p in products):
             raise ValueError("Adicione pelo menos um produto com EAN antes de publicar na loja.")
+
+
+def _cascade_category_visibility(category_id: str, vis: bool) -> None:
+    """Ao tornar categoria visível/oculta, propaga para modelos (e produtos/cores)."""
+    db = get_db()
+    for tipo, cfg in CATALOG_TYPES.items():
+        mt = cfg.get("model_table")
+        if not mt:
+            continue
+        models = (
+            db.table(mt)
+            .select("id")
+            .eq("id_categoria", str(category_id))
+            .execute()
+            .data
+            or []
+        )
+        for row in models:
+            mid = str(row.get("id") or "")
+            if not mid:
+                continue
+            db.table(mt).update({"visibilidade": vis}).eq("id", mid).execute()
+            if vis:
+                _publish_catalog_children(mt, mid, tipo=tipo)
+            else:
+                _hide_catalog_children(mt, mid, tipo=tipo)
 
 
 def _enrich_create_payload(table_name: str, payload: dict) -> dict:
@@ -700,6 +730,10 @@ def update_record(request: Request, table_name: str, record_id: str, body: dict)
         if payload.get("visibilidade"):
             cfg = TABLE_MAP.get(table_name, {})
             _publish_catalog_children(table_name, record_id, tipo=cfg.get("ui_catalog_tipo"))
+            if table_name == "categories":
+                _cascade_category_visibility(record_id, True)
+        elif table_name == "categories" and "visibilidade" in payload and not payload.get("visibilidade"):
+            _cascade_category_visibility(record_id, False)
         return (res.data or [{}])[0] if res.data else {"id": record_id, **payload}
     except Exception as exc:
         detail = _client_error(exc)
@@ -733,6 +767,8 @@ def patch_visibility(request: Request, table_name: str, record_id: str, body: di
             _publish_catalog_children(table_name, record_id, tipo=tipo)
         else:
             _hide_catalog_children(table_name, record_id, tipo=tipo)
+    elif table_name == "categories":
+        _cascade_category_visibility(record_id, vis)
     _invalidate_catalog_cache()
     _audit(request, "visibility", table_name, resource_id=record_id, visibilidade=vis)
     return (res.data or [{"id": record_id, "visibilidade": vis}])[0]
@@ -740,10 +776,13 @@ def patch_visibility(request: Request, table_name: str, record_id: str, body: di
 
 @router.post("/{table_name}/{record_id}/publish")
 def publish_record(request: Request, table_name: str, record_id: str):
-    """Torna o registo visível na loja (e cores do modelo, se aplicável)."""
+    """Torna o registo visível na loja (e cores/produtos do modelo, se aplicável)."""
     cfg = TABLE_MAP.get(table_name)
     if not cfg:
-        raise HTTPException(status_code=404, detail="Categoria não mapeada")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Tabela «{table_name}» não registada no catálogo",
+        )
     assert_table_action(table_name, "update", _role(request))
     if table_name in all_model_tables():
         try:
@@ -763,6 +802,8 @@ def publish_record(request: Request, table_name: str, record_id: str):
 
     if table_name in all_model_tables() and tipo:
         _publish_catalog_children(table_name, record_id, tipo=tipo)
+    elif table_name == "categories":
+        _cascade_category_visibility(record_id, True)
 
     _invalidate_catalog_cache()
     _audit(request, "publish", table_name, resource_id=record_id)

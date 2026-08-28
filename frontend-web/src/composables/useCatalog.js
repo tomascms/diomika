@@ -42,7 +42,10 @@ export function useCatalog() {
 
   const isAssentoMode = (tipo) => storefrontMode(tipo) === 'assento'
 
-  const isAggregatedMode = (tipo) => storefrontMode(tipo) === 'aggregado'
+  const isAggregatedMode = (tipo) => {
+    if (storefrontMode(tipo) === 'aggregado') return true
+    return Boolean((metaCache.value?.aggregated_categories || []).find((t) => t.tipo === tipo))
+  }
 
   const storefrontContext = (tipo, model = null) => {
     if (model?._storefront) return model._storefront
@@ -213,7 +216,10 @@ export function useCatalog() {
 
   const filterDefinitionsForTipo = (tipo) => {
     const cfg = tipoConfig(tipo)
-    return cfg?.storefront_filters || []
+    if (cfg?.storefront_filters?.length) return cfg.storefront_filters
+    const agg = (metaCache.value?.aggregated_categories || []).find((t) => t.tipo === tipo)
+    if (agg?.storefront_filters?.length) return agg.storefront_filters
+    return []
   }
 
   const filterOptionsForField = (filterDef) => {

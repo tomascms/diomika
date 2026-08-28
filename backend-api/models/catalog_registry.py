@@ -223,7 +223,7 @@ def aggregated_family_filter(tipo: str | None) -> dict | None:
         return None
     return {
         "field": "_tipo_catalogo",
-        "label": "Família",
+        "label": "Subcategoria",
         "options": tipos,
         "labels": {
             t: CATALOG_TYPES[t]["label"]

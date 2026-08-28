@@ -40,7 +40,10 @@ def _exportable_tables() -> set[str]:
 def _schema_for(table_name: str):
     cfg = TABLE_MAP.get(table_name)
     if not cfg or not cfg.get("schema"):
-        raise HTTPException(status_code=404, detail="Categoria não mapeada")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Tabela «{table_name}» não registada no catálogo",
+        )
     return cfg["schema"]
 
 

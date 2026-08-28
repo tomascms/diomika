@@ -51,6 +51,18 @@ CATEGORY_DEFINITIONS = {
         "carrinho_step": 6,
         "carrinho_min": 6,
     },
+    "protetores-colchao": {
+        "nome": "Protetor de colchão",
+        "tipo_catalogo": "protetor_colchao",
+        "carrinho_step": 6,
+        "carrinho_min": 6,
+    },
+    "passadeiras": {
+        "nome": "Passadeira",
+        "tipo_catalogo": "passadeira",
+        "carrinho_step": 6,
+        "carrinho_min": 6,
+    },
     "material-cozinha": {
         "nome": "Material de cozinha",
         "tipo_catalogo": "material_cozinha",
@@ -810,6 +822,126 @@ class PanoCozinha(BaseModel):
         return _validate_ean(v)
 
 
+# --- Protetor de colchão ---
+
+class ModeloProtetorColchaoCor(BaseModel):
+    id: UUID = Field(default_factory=uuid4, json_schema_extra={"ui_hidden": True})
+    id_modelo: UUID = Field(..., json_schema_extra={"ui_hidden": True})
+    numero: int = Field(..., ge=1)
+    nome: str = Field(default="")
+    imagem: str = Field(...)
+    visibilidade: bool = Field(default=False)
+
+
+class ModeloProtetorColchao(BaseModel):
+    id: UUID = Field(default_factory=uuid4, json_schema_extra={"ui_hidden": True})
+    id_categoria: UUID = Field(..., json_schema_extra={"ui_relation": "categories"})
+    nome: str = Field(...)
+    slug: str = Field(default="", json_schema_extra={"ui_readonly": True})
+    descricao: str = Field(default="")
+    composicao: Dict[str, int] = _composicao_field()
+    dimensoes: List[str] = Field(
+        ...,
+        min_length=1,
+        json_schema_extra={"ui_widget": "string_list", "ui_label": "Dimensões"},
+    )
+    visibilidade: bool = Field(default=False)
+
+    @model_validator(mode="after")
+    def set_slug(self) -> "ModeloProtetorColchao":
+        if not self.slug:
+            self.slug = generate_slug(self.nome)
+        return self
+
+    @field_validator("dimensoes")
+    @classmethod
+    def validate_dimensoes(cls, v: List[str]) -> List[str]:
+        return _validate_string_list(v, "dimensão")
+
+    @field_validator("composicao")
+    @classmethod
+    def validate_composicao(cls, v: Dict[str, int]) -> Dict[str, int]:
+        return _validate_composicao_pct(v)
+
+
+class ProtetorColchao(BaseModel):
+    id: UUID = Field(default_factory=uuid4, json_schema_extra={"ui_hidden": True})
+    id_modelo: UUID = Field(..., json_schema_extra={"ui_relation": "modelos_protetores_colchao"})
+    dimensoes: str = Field(
+        ...,
+        pattern=r"^\d+x\d+$",
+        json_schema_extra={"ui_widget": "dimensao_modelo", "ui_lock_on_edit": True},
+    )
+    ean: str = Field(..., pattern=r"^\d{13}$")
+    barcode_url: Optional[str] = Field(None, json_schema_extra={"ui_readonly": True})
+    visibilidade: bool = Field(default=False)
+
+    @field_validator("ean")
+    @classmethod
+    def validate_ean(cls, v: str) -> str:
+        return _validate_ean(v)
+
+
+# --- Passadeira ---
+
+class ModeloPassadeiraCor(BaseModel):
+    id: UUID = Field(default_factory=uuid4, json_schema_extra={"ui_hidden": True})
+    id_modelo: UUID = Field(..., json_schema_extra={"ui_hidden": True})
+    numero: int = Field(..., ge=1)
+    nome: str = Field(default="")
+    imagem: str = Field(...)
+    visibilidade: bool = Field(default=False)
+
+
+class ModeloPassadeira(BaseModel):
+    id: UUID = Field(default_factory=uuid4, json_schema_extra={"ui_hidden": True})
+    id_categoria: UUID = Field(..., json_schema_extra={"ui_relation": "categories"})
+    nome: str = Field(...)
+    slug: str = Field(default="", json_schema_extra={"ui_readonly": True})
+    descricao: str = Field(default="")
+    composicao: Dict[str, int] = _composicao_field()
+    dimensoes: List[str] = Field(
+        ...,
+        min_length=1,
+        json_schema_extra={"ui_widget": "string_list", "ui_label": "Dimensões"},
+    )
+    visibilidade: bool = Field(default=False)
+
+    @model_validator(mode="after")
+    def set_slug(self) -> "ModeloPassadeira":
+        if not self.slug:
+            self.slug = generate_slug(self.nome)
+        return self
+
+    @field_validator("dimensoes")
+    @classmethod
+    def validate_dimensoes(cls, v: List[str]) -> List[str]:
+        return _validate_string_list(v, "dimensão")
+
+    @field_validator("composicao")
+    @classmethod
+    def validate_composicao(cls, v: Dict[str, int]) -> Dict[str, int]:
+        return _validate_composicao_pct(v)
+
+
+class Passadeira(BaseModel):
+    id: UUID = Field(default_factory=uuid4, json_schema_extra={"ui_hidden": True})
+    id_modelo: UUID = Field(..., json_schema_extra={"ui_relation": "modelos_passadeiras"})
+    dimensoes: str = Field(
+        ...,
+        pattern=r"^\d+x\d+$",
+        json_schema_extra={"ui_widget": "dimensao_modelo", "ui_lock_on_edit": True},
+    )
+    ean: str = Field(..., pattern=r"^\d{13}$")
+    barcode_url: Optional[str] = Field(None, json_schema_extra={"ui_readonly": True})
+    visibilidade: bool = Field(default=False)
+
+    @field_validator("ean")
+    @classmethod
+    def validate_ean(cls, v: str) -> str:
+        return _validate_ean(v)
+
+
 # --- Regional ---
 
 SUBTIPO_REGIONAL = Literal["avental", "luva", "pega", "pano_cozinha", "toalha", "protetor"]
@@ -1060,6 +1192,46 @@ def _register_catalog_types() -> None:
                 "colors_schema": ModeloPanoCozinhaCor,
                 "model_schema": ModeloPanoCozinha,
                 "product_schema": PanoCozinha,
+                "model_discriminator_field": "dimensoes",
+                "product_readonly_on_edit": True,
+                "apply_barcode_on_save": True,
+                "storefront_mode": "variantes",
+                "storefront_picker": {
+                    "source": "products",
+                    "field": "dimensoes",
+                    "label": "Dimensão",
+                    "format": "dimensions",
+                    "suffix": " cm",
+                },
+            },
+            "protetor_colchao": {
+                "label": "Protetor de colchão",
+                "model_table": "modelos_protetores_colchao",
+                "product_table": "protetor_colchao",
+                "colors_table": "modelo_protetor_colchao_cores",
+                "colors_schema": ModeloProtetorColchaoCor,
+                "model_schema": ModeloProtetorColchao,
+                "product_schema": ProtetorColchao,
+                "model_discriminator_field": "dimensoes",
+                "product_readonly_on_edit": True,
+                "apply_barcode_on_save": True,
+                "storefront_mode": "variantes",
+                "storefront_picker": {
+                    "source": "products",
+                    "field": "dimensoes",
+                    "label": "Dimensão",
+                    "format": "dimensions",
+                    "suffix": " cm",
+                },
+            },
+            "passadeira": {
+                "label": "Passadeira",
+                "model_table": "modelos_passadeiras",
+                "product_table": "passadeira",
+                "colors_table": "modelo_passadeira_cores",
+                "colors_schema": ModeloPassadeiraCor,
+                "model_schema": ModeloPassadeira,
+                "product_schema": Passadeira,
                 "model_discriminator_field": "dimensoes",
                 "product_readonly_on_edit": True,
                 "apply_barcode_on_save": True,

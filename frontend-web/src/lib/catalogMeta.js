@@ -284,6 +284,60 @@ export const CATALOG_META = {
       "product_select": "id, ean, barcode_url, visibilidade, dimensoes"
     },
     {
+      "tipo": "protetor_colchao",
+      "label": "Protetor de colchão",
+      "model_table": "modelos_protetores_colchao",
+      "product_table": "protetor_colchao",
+      "colors_table": "modelo_protetor_colchao_cores",
+      "storefront_mode": "variantes",
+      "storefront_filters": [],
+      "storefront_picker": {
+        "source": "products",
+        "field": "dimensoes",
+        "label": "Dimensão",
+        "format": "dimensions",
+        "suffix": " cm"
+      },
+      "storefront_specs": [
+        {
+          "field": "composicao",
+          "label": "Composicao",
+          "widget": "composition",
+          "enum_labels": {}
+        }
+      ],
+      "storefront_badge": null,
+      "order_picker_mode": "variantes",
+      "product_select": "id, ean, barcode_url, visibilidade, dimensoes"
+    },
+    {
+      "tipo": "passadeira",
+      "label": "Passadeira",
+      "model_table": "modelos_passadeiras",
+      "product_table": "passadeira",
+      "colors_table": "modelo_passadeira_cores",
+      "storefront_mode": "variantes",
+      "storefront_filters": [],
+      "storefront_picker": {
+        "source": "products",
+        "field": "dimensoes",
+        "label": "Dimensão",
+        "format": "dimensions",
+        "suffix": " cm"
+      },
+      "storefront_specs": [
+        {
+          "field": "composicao",
+          "label": "Composicao",
+          "widget": "composition",
+          "enum_labels": {}
+        }
+      ],
+      "storefront_badge": null,
+      "order_picker_mode": "variantes",
+      "product_select": "id, ean, barcode_url, visibilidade, dimensoes"
+    },
+    {
       "tipo": "regional",
       "label": "Regional",
       "model_table": "modelos_regionais",
@@ -354,19 +408,19 @@ export const CATALOG_META = {
       "storefront_filters": [
         {
           "field": "_tipo_catalogo",
-          "label": "Família",
-          "options": [
-            "avental",
-            "luva",
-            "pega",
-            "pano_cozinha"
-          ],
-          "labels": {
-            "avental": "Aventais",
-            "luva": "Luvas",
-            "pega": "Pegas",
-            "pano_cozinha": "Panos de cozinha"
-          }
+      "label": "Subcategoria",
+      "options": [
+        "avental",
+        "luva",
+        "pega",
+        "pano_cozinha"
+      ],
+      "labels": {
+        "avental": "Aventais",
+        "luva": "Luvas",
+        "pega": "Pegas",
+        "pano_cozinha": "Panos de cozinha"
+      }
         }
       ],
       "storefront_picker": null,
@@ -399,6 +453,18 @@ export const CATALOG_META = {
     "toalhas-mesa": {
       "nome": "Toalhas de mesa",
       "tipo_catalogo": "toalha_mesa"
+    },
+    "protetores-colchao": {
+      "nome": "Protetor de colchão",
+      "tipo_catalogo": "protetor_colchao",
+      "carrinho_step": 6,
+      "carrinho_min": 6
+    },
+    "passadeiras": {
+      "nome": "Passadeira",
+      "tipo_catalogo": "passadeira",
+      "carrinho_step": 6,
+      "carrinho_min": 6
     },
     "material-cozinha": {
       "nome": "Material de cozinha",

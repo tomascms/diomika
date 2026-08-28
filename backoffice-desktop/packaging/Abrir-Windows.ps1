@@ -15,14 +15,19 @@ Write-Host ''
 Write-Host ' Diomika Backoffice'
 Write-Host ' -------------------'
 
-# 1) Remover marca "descarregado da Internet" (Zone.Identifier)
-Write-Step 'A desbloquear ficheiros...'
-Get-ChildItem -LiteralPath $Root -Recurse -File -ErrorAction SilentlyContinue |
-  ForEach-Object {
+# 1) Remover marca "descarregado da Internet" só no pacote e na app
+Write-Step 'A desbloquear ficheiros do pacote...'
+@(
+  (Get-ChildItem -LiteralPath $Root -Filter 'Diomika-Backoffice-*-windows.zip' -File -ErrorAction SilentlyContinue)
+  (Get-ChildItem -LiteralPath $Root -Filter 'Diomika-Backoffice-*-windows.exe' -File -ErrorAction SilentlyContinue)
+) | ForEach-Object {
+  if ($_) {
     try { Unblock-File -LiteralPath $_.FullName -ErrorAction SilentlyContinue } catch {}
   }
+}
 
-# 2) Exclusão Microsoft Defender (melhor esforço; Admin ajuda)
+# 2) Exclusão Microsoft Defender (opcional; só se o utilizador correr este script)
+# Não falha se não houver permissão — o objectivo é abrir a app.
 $exclusionOk = $false
 try {
   if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
@@ -31,7 +36,7 @@ try {
     Write-Step "Exclusao Defender: $Root"
   }
 } catch {
-  Write-Step 'Exclusao Defender automatica falhou (abra o .cmd como Administrador se o AV continuar a bloquear).'
+  Write-Step 'Sem exclusao automatica (opcional). Se o AV bloquear: Definições → Exclusões → pasta cliente-backoffice.'
 }
 
 # 3) Preferir pasta extraida do ZIP (sem .exe portatil auto-extraivel)
@@ -89,11 +94,8 @@ if (-not $appExe) {
   exit 1
 }
 
-# 4) Desbloquear tambem a pasta da app
-Get-ChildItem -LiteralPath (Split-Path $appExe -Parent) -Recurse -File -ErrorAction SilentlyContinue |
-  ForEach-Object {
-    try { Unblock-File -LiteralPath $_.FullName -ErrorAction SilentlyContinue } catch {}
-  }
+# 4) Desbloquear só o executável principal
+try { Unblock-File -LiteralPath $appExe -ErrorAction SilentlyContinue } catch {}
 
 Write-Step "A abrir: $appExe"
 if ($exclusionOk) {

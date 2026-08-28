@@ -81,7 +81,10 @@ def workspace_config(request: Request, role=Depends(require_admin)):
 @router.get("/schema/form/{table_name}")
 def form_schema(request: Request, table_name: str, role=Depends(require_admin)):
     if table_name not in TABLE_MAP or table_name in CRUD_INFRA_BLOCKED:
-        raise HTTPException(status_code=404, detail="Categoria não mapeada")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Tabela «{table_name}» não registada no catálogo",
+        )
     assert_table_action(table_name, "read", role)
     cfg = TABLE_MAP[table_name]
     schema = cfg.get("schema")
