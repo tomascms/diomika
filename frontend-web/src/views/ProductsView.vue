@@ -32,6 +32,14 @@ const tipoLabel = (product) => catalog.badgeLabel(product, catalogTipo.value)
 
 let fetchSeq = 0
 let productsSubscription = null
+let realtimeRefreshTimer = null
+
+function scheduleProductsRefresh() {
+  clearTimeout(realtimeRefreshTimer)
+  realtimeRefreshTimer = setTimeout(() => {
+    void fetchProducts({ silent: true })
+  }, 900)
+}
 
 function blankFilters(defs = filterDefs.value) {
   return Object.fromEntries(
@@ -50,7 +58,7 @@ function onFilterChange(field, value) {
     ...selectedFilters.value,
     [field]: value ?? '',
   }
-  void fetchProducts()
+  void fetchProducts({ silent: true })
 }
 
 watchDynamicTitle(
@@ -143,12 +151,14 @@ const hasActiveFilters = computed(() =>
   ),
 )
 
-async function fetchProducts({ resetCategory = false } = {}) {
+async function fetchProducts({ resetCategory = false, silent = false } = {}) {
   const seq = ++fetchSeq
   const categorySlug = route.params.categorySlug
 
-  loading.value = true
-  error.value = null
+  if (!silent) {
+    loading.value = true
+    error.value = null
+  }
 
   if (resetCategory) {
     categoryData.value = null
@@ -243,7 +253,7 @@ async function fetchProducts({ resetCategory = false } = {}) {
     error.value = `Erro ao carregar produtos: ${err.message}`
     console.error(err)
   } finally {
-    if (seq === fetchSeq) loading.value = false
+    if (seq === fetchSeq && !silent) loading.value = false
   }
 }
 
@@ -320,7 +330,7 @@ onMounted(async () => {
     const channel = supabase.channel('catalog_realtime')
     for (const table of catalog.realtimeTables()) {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => {
-        void fetchProducts()
+        scheduleProductsRefresh()
       })
     }
     productsSubscription = subscribeRealtime(channel)

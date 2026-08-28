@@ -613,13 +613,9 @@ class ModeloToalhaMesa(BaseModel):
             "ui_labels": TIPO_TOALHA_MESA_LABELS,
         },
     )
-    material: MATERIAL_TOALHA = Field(
-        ...,
-        json_schema_extra={
-            "ui_widget": "enum",
-            "ui_options": ["pvc", "poliester"],
-            "ui_labels": MATERIAL_TOALHA_LABELS,
-        },
+    material: Optional[MATERIAL_TOALHA] = Field(
+        None,
+        json_schema_extra={"ui_hidden": True, "ui_storefront": False},
     )
     composicao: Dict[str, int] = _composicao_field()
     dimensoes: List[str] = _dimensoes_list_field()
@@ -1157,12 +1153,6 @@ def _register_catalog_types() -> None:
                         "label": "Tipo",
                         "options": ["toalha", "protetor"],
                         "labels": TIPO_TOALHA_MESA_LABELS,
-                    },
-                    {
-                        "field": "material",
-                        "label": "Material",
-                        "options": ["pvc", "poliester"],
-                        "labels": MATERIAL_TOALHA_LABELS,
                     },
                 ],
                 "storefront_picker": {

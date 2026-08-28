@@ -305,17 +305,19 @@ export async function catalogueModelsForCategory(tipo, categoryId, { filters = {
     const dbFilters = Object.fromEntries(
       Object.entries(filters).filter(([key]) => !key.startsWith('_')),
     )
-    const out = []
-    for (const physical of cfg.aggregated_tipos) {
-      if (family && physical !== family) continue
-      const rows = await catalogueModelsForTipo(physical, categoryId, { filters: dbFilters })
-      for (const row of rows) {
-        row._tipo_catalogo = physical
-        row._category_tipo = tipo
-        row._familia_label = getTipoConfig(physical)?.label || physical
-        out.push(row)
-      }
-    }
+    const chunks = await Promise.all(
+      cfg.aggregated_tipos.map(async (physical) => {
+        if (family && physical !== family) return []
+        const rows = await catalogueModelsForTipo(physical, categoryId, { filters: dbFilters })
+        return rows.map((row) => {
+          row._tipo_catalogo = physical
+          row._category_tipo = tipo
+          row._familia_label = getTipoConfig(physical)?.label || physical
+          return row
+        })
+      }),
+    )
+    const out = chunks.flat()
     out.sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || '')))
     return out
   }

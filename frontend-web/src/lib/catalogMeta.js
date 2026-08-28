@@ -145,18 +145,6 @@ export const CATALOG_META = {
             "toalha": "Toalha de mesa",
             "protetor": "Protetor de mesa"
           }
-        },
-        {
-          "field": "material",
-          "label": "Material",
-          "options": [
-            "pvc",
-            "poliester"
-          ],
-          "labels": {
-            "pvc": "PVC",
-            "poliester": "Poliéster"
-          }
         }
       ],
       "storefront_picker": {
@@ -167,15 +155,6 @@ export const CATALOG_META = {
         "suffix": " cm"
       },
       "storefront_specs": [
-        {
-          "field": "material",
-          "label": "Material",
-          "widget": "enum",
-          "enum_labels": {
-            "pvc": "PVC",
-            "poliester": "Poliéster"
-          }
-        },
         {
           "field": "composicao",
           "label": "Composicao",

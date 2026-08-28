@@ -158,6 +158,13 @@ const loadRows = async ({ append = false } = {}) => {
   }
   error.value = ''
   try {
+    if (isMerged.value && !filterCategoriaId.value) {
+      if (seq !== loadSeq) return
+      rows.value = []
+      hasMore.value = false
+      totalApprox.value = 0
+      return
+    }
     if (isMerged.value) {
       const viewKey = table.value === 'produtos' ? 'produtos' : 'modelos'
       const offset = append ? listOffset.value : 0
@@ -400,7 +407,7 @@ onActivated(() => {
       <input v-model="filterText" class="input search" type="search" placeholder="Filtrar registos…" />
       <template v-if="isMerged">
         <select v-model="filterCategoriaId" class="input filter-mini">
-          <option value="">Todas categorias</option>
+          <option value="">— Escolher categoria —</option>
           <option v-for="c in categories" :key="c.id" :value="c.id">
             {{ c.nome }}{{ c.visibilidade === false ? ' (oculta no site)' : '' }}
           </option>
@@ -450,6 +457,10 @@ onActivated(() => {
 
     <p v-if="message" class="ok">{{ message }}</p>
     <p v-if="error" class="err">{{ error }}</p>
+
+    <p v-if="isMerged && !filterCategoriaId && !loading" class="notice">
+      Escolha uma categoria acima para carregar modelos ou produtos — evita esperas longas.
+    </p>
 
     <DataList
       :rows="filteredRows"

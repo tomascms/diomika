@@ -25,7 +25,6 @@ export function useCatalog() {
   const loadMeta = async (force = false) => {
     if (metaCache.value && !force) return metaCache.value
     try {
-      // Fonte de verdade: API (evita drift com catalogMeta.js estático)
       const data = await apiGet('/catalogo/meta')
       metaCache.value = data
       setLiveCatalogMeta(data)
@@ -35,8 +34,15 @@ export function useCatalog() {
     return metaCache.value
   }
 
-  const tipoConfig = (tipo) =>
-    (metaCache.value?.catalog_types || []).find((t) => t.tipo === tipo) || null
+  const resolveTipoConfig = (tipo) => {
+    if (!tipo) return null
+    const meta = metaCache.value || getCatalogMeta()
+    const physical = (meta?.catalog_types || []).find((t) => t.tipo === tipo)
+    if (physical) return physical
+    return (meta?.aggregated_categories || []).find((t) => t.tipo === tipo) || null
+  }
+
+  const tipoConfig = (tipo) => resolveTipoConfig(tipo)
 
   const storefrontMode = (tipo) => tipoConfig(tipo)?.storefront_mode || 'variantes'
 
@@ -71,21 +77,60 @@ export function useCatalog() {
   }
 
   const fetchCategoryModels = async (tipo, categoryId, activeFilters = null) => {
-    if (supabaseConfigured && !metaCache.value) {
-      await loadMeta()
-    }
+    await loadMeta()
 
     let url = `/catalogo/${encodeURIComponent(tipo)}/modelos-catalogo/${categoryId}`
     url += buildFilterQuery(tipo, activeFilters)
 
-    if (supabaseConfigured) {
-      return catalogueModelsForCategory(tipo, categoryId, { filters: activeFilters || {} })
+    try {
+      return await apiGet(url)
+    } catch (apiErr) {
+      if (supabaseConfigured) {
+        return catalogueModelsForCategory(tipo, categoryId, { filters: activeFilters || {} })
+      }
+      throw apiErr
     }
-
-    return apiGet(url)
   }
 
   const fetchModelDetail = async ({ categorySlug = null, modelSlug = null, modelId = null, tipo = null } = {}) => {
+    if (categorySlug && modelSlug) {
+      try {
+        const resolvedTipo =
+          tipo || (await apiGet(`/categorias/slug/${encodeURIComponent(categorySlug)}`)).tipo_catalogo
+        const data = await apiGet(
+          `/catalogo/${encodeURIComponent(resolvedTipo)}/modelo-detalhe/slug/${encodeURIComponent(categorySlug)}/${encodeURIComponent(modelSlug)}`,
+        )
+        return {
+          ...data,
+          _tipo_catalogo: data._tipo_catalogo || resolvedTipo,
+          _storefront_mode: data._storefront_mode || storefrontMode(data._tipo_catalogo || resolvedTipo),
+        }
+      } catch (apiErr) {
+        if (!supabaseConfigured) throw apiErr
+      }
+    }
+
+    if (tipo && modelId) {
+      try {
+        const data = await apiGet(`/catalogo/${encodeURIComponent(tipo)}/modelo-detalhe/${modelId}`)
+        return {
+          ...data,
+          _tipo_catalogo: tipo,
+          _storefront_mode: data._storefront_mode || storefrontMode(tipo),
+        }
+      } catch (apiErr) {
+        if (!supabaseConfigured) throw apiErr
+      }
+    }
+
+    if (modelId) {
+      try {
+        return await apiGet(`/catalogo/modelo-detalhe/${modelId}`)
+      } catch (apiErr) {
+        if (!supabaseConfigured) throw apiErr
+      }
+    }
+
     if (supabaseConfigured) {
       let data = null
       if (categorySlug && modelSlug) {
@@ -103,32 +148,6 @@ export function useCatalog() {
         _storefront_mode:
           data._storefront_mode || (resolvedTipo ? storefrontMode(resolvedTipo) : data._storefront_mode),
       }
-    }
-
-    if (categorySlug && modelSlug) {
-      const resolvedTipo =
-        tipo || (await apiGet(`/categorias/slug/${encodeURIComponent(categorySlug)}`)).tipo_catalogo
-      const data = await apiGet(
-        `/catalogo/${encodeURIComponent(resolvedTipo)}/modelo-detalhe/slug/${encodeURIComponent(categorySlug)}/${encodeURIComponent(modelSlug)}`,
-      )
-      return {
-        ...data,
-        _tipo_catalogo: data._tipo_catalogo || resolvedTipo,
-        _storefront_mode: data._storefront_mode || storefrontMode(data._tipo_catalogo || resolvedTipo),
-      }
-    }
-
-    if (tipo && modelId) {
-      const data = await apiGet(`/catalogo/${encodeURIComponent(tipo)}/modelo-detalhe/${modelId}`)
-      return {
-        ...data,
-        _tipo_catalogo: tipo,
-        _storefront_mode: data._storefront_mode || storefrontMode(tipo),
-      }
-    }
-
-    if (modelId) {
-      return apiGet(`/catalogo/modelo-detalhe/${modelId}`)
     }
 
     throw new Error('Modelo não encontrado.')
@@ -215,10 +234,8 @@ export function useCatalog() {
   }
 
   const filterDefinitionsForTipo = (tipo) => {
-    const cfg = tipoConfig(tipo)
+    const cfg = resolveTipoConfig(tipo)
     if (cfg?.storefront_filters?.length) return cfg.storefront_filters
-    const agg = (metaCache.value?.aggregated_categories || []).find((t) => t.tipo === tipo)
-    if (agg?.storefront_filters?.length) return agg.storefront_filters
     return []
   }
 

@@ -7,8 +7,8 @@ const loading = ref(false)
 const error = ref('')
 let loadPromise = null
 
-const CACHE_KEY = 'diomika_cats_v4'
-const CACHE_TTL_MS = 5 * 60 * 1000
+const CACHE_KEY = 'diomika_cats_v5'
+const CACHE_TTL_MS = 90 * 1000
 
 function readCatCache() {
   try {

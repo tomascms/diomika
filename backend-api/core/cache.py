@@ -13,7 +13,7 @@ _store: dict[str, tuple[float, Any]] = {}
 
 
 def catalog_cache_ttl() -> int:
-    return max(15, int(os.getenv("CATALOG_CACHE_TTL", "60")))
+    return max(10, int(os.getenv("CATALOG_CACHE_TTL", "20")))
 
 
 def get_or_set(key: str, ttl_seconds: float, factory: Callable[[], T]) -> T:
