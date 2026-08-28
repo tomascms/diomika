@@ -34,8 +34,8 @@
   --shadow-md: 0 8px 24px rgba(16, 24, 40, 0.1);
   --shadow-lg: 0 16px 40px rgba(16, 24, 40, 0.12);
 
-  --page-pad: clamp(0.75rem, 1.6vw, 1.35rem);
-  --content-max: min(1920px, 100%);
+  --page-pad: clamp(1rem, 2.2vw, 2rem);
+  --content-max: none;
   --transition: 0.2s ease;
 }
 
@@ -74,8 +74,8 @@ img {
 
 .page-shell {
   width: 100%;
-  max-width: var(--content-max);
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   padding: 1.75rem var(--page-pad) 2.5rem;
 }
 

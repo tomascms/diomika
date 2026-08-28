@@ -125,6 +125,7 @@ def get_form_fields(schema_class: type[BaseModel], table_config: dict, table_nam
                 "enum_options": field_extra(field).get("ui_options"),
                 "enum_labels": field_extra(field).get("ui_labels", {}),
                 "lock_on_edit": field_extra(field).get("ui_lock_on_edit", False),
+                "placeholder": field_extra(field).get("ui_placeholder") or "",
             }
         )
     return fields

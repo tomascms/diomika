@@ -341,29 +341,17 @@ defineExpose({ validate })
 
 
       <div v-else-if="field.widget === 'string_list' && stringListRows[field.name]" class="string-list">
-
         <div v-for="(row, idx) in stringListRows[field.name]" :key="idx" class="sl-row">
-
           <input
-
             v-model="stringListRows[field.name][idx]"
-
             class="input"
-
-            placeholder="ex: 32mm"
-
+            :placeholder="field.placeholder || (field.name === 'alturas' ? 'ex: 32mm' : 'ex: 40x40')"
             :disabled="isLocked(field)"
-
             @input="syncStringList(field.name)"
-
           />
-
           <button v-if="!isLocked(field)" type="button" class="btn btn-danger btn-sm" @click="removeStringRow(field.name, idx)">X</button>
-
         </div>
-
         <button v-if="!isLocked(field)" type="button" class="btn btn-ghost btn-sm" @click="addStringRow(field.name)">+ Adicionar</button>
-
       </div>
 
 

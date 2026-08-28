@@ -115,6 +115,38 @@ def _validate_string_list(v: List[str], label: str = "valores") -> List[str]:
     return cleaned
 
 
+def _validate_dimensoes_list(v: List[str]) -> List[str]:
+    """Dimensões = comprimento×largura (ex: 40x40), nunca altura de assento."""
+    cleaned = _validate_string_list(v, "dimensão")
+    bad = [d for d in cleaned if not re.fullmatch(r"\d+x\d+", d)]
+    if bad:
+        raise ValueError(
+            f"Dimensões devem ser comprimento×largura (ex: 40x40). Inválido: {', '.join(bad)}"
+        )
+    return cleaned
+
+
+def _dimensoes_list_field(*, required: bool = True):
+    """Campo de dimensões no modelo — formato NxN como nas almofadas."""
+    extras = {
+        "ui_widget": "string_list",
+        "ui_label": "Dimensões (comprimento×largura)",
+        "ui_placeholder": "ex: 40x40",
+    }
+    if required:
+        return Field(
+            ...,
+            min_length=1,
+            description="Dimensões disponíveis em cm (ex: 40x40, 50x70)",
+            json_schema_extra=extras,
+        )
+    return Field(
+        None,
+        description="Dimensões disponíveis em cm (ex: 40x40, 50x70)",
+        json_schema_extra=extras,
+    )
+
+
 def _validate_ean(v: str) -> str:
     digits = [int(d) for d in v]
     check = (10 - (sum(d * (3 if i % 2 else 1) for i, d in enumerate(digits[:-1])) % 10)) % 10
@@ -243,12 +275,7 @@ class ModeloAlmofada(BaseModel):
         },
     )
     composicao: Dict[str, int] = _composicao_field()
-    dimensoes: List[str] = Field(
-        ...,
-        min_length=1,
-        description="Dimensões disponíveis (ex: 40x40, 50x50 cm)",
-        json_schema_extra={"ui_widget": "string_list", "ui_label": "Dimensões"},
-    )
+    dimensoes: List[str] = _dimensoes_list_field()
     visibilidade: bool = Field(default=False)
 
     @model_validator(mode="after")
@@ -265,7 +292,7 @@ class ModeloAlmofada(BaseModel):
     @field_validator("dimensoes")
     @classmethod
     def validate_dimensoes(cls, v: List[str]) -> List[str]:
-        return _validate_string_list(v, "dimensão")
+        return _validate_dimensoes_list(v)
 
 
 class ModeloAlmofadaCor(BaseModel):
@@ -405,8 +432,12 @@ class ModeloAssento(BaseModel):
     alturas: List[str] = Field(
         ...,
         min_length=1,
-        description="Alturas disponíveis (ex: 32mm, 45mm)",
-        json_schema_extra={"ui_widget": "string_list", "ui_label": "Alturas"},
+        description="Alturas disponíveis em mm (ex: 32mm, 45mm) — não são dimensões L×A",
+        json_schema_extra={
+            "ui_widget": "string_list",
+            "ui_label": "Alturas (mm)",
+            "ui_placeholder": "ex: 32mm",
+        },
     )
     visibilidade: bool = Field(default=False)
 
@@ -591,11 +622,7 @@ class ModeloToalhaMesa(BaseModel):
         },
     )
     composicao: Dict[str, int] = _composicao_field()
-    dimensoes: List[str] = Field(
-        ...,
-        min_length=1,
-        json_schema_extra={"ui_widget": "string_list", "ui_label": "Dimensões"},
-    )
+    dimensoes: List[str] = _dimensoes_list_field()
     visibilidade: bool = Field(default=False)
 
     @model_validator(mode="after")
@@ -612,7 +639,7 @@ class ModeloToalhaMesa(BaseModel):
     @field_validator("dimensoes")
     @classmethod
     def validate_dimensoes(cls, v: List[str]) -> List[str]:
-        return _validate_string_list(v, "dimensão")
+        return _validate_dimensoes_list(v)
 
 
 class ToalhaMesa(BaseModel):
@@ -780,11 +807,7 @@ class ModeloPanoCozinha(BaseModel):
     slug: str = Field(default="", json_schema_extra={"ui_readonly": True})
     descricao: str = Field(default="")
     composicao: Dict[str, int] = _composicao_field()
-    dimensoes: List[str] = Field(
-        ...,
-        min_length=1,
-        json_schema_extra={"ui_widget": "string_list", "ui_label": "Dimensões"},
-    )
+    dimensoes: List[str] = _dimensoes_list_field()
     visibilidade: bool = Field(default=False)
 
     @model_validator(mode="after")
@@ -796,7 +819,7 @@ class ModeloPanoCozinha(BaseModel):
     @field_validator("dimensoes")
     @classmethod
     def validate_dimensoes(cls, v: List[str]) -> List[str]:
-        return _validate_string_list(v, "dimensão")
+        return _validate_dimensoes_list(v)
 
     @field_validator("composicao")
     @classmethod
@@ -840,11 +863,7 @@ class ModeloProtetorColchao(BaseModel):
     slug: str = Field(default="", json_schema_extra={"ui_readonly": True})
     descricao: str = Field(default="")
     composicao: Dict[str, int] = _composicao_field()
-    dimensoes: List[str] = Field(
-        ...,
-        min_length=1,
-        json_schema_extra={"ui_widget": "string_list", "ui_label": "Dimensões"},
-    )
+    dimensoes: List[str] = _dimensoes_list_field()
     visibilidade: bool = Field(default=False)
 
     @model_validator(mode="after")
@@ -856,7 +875,7 @@ class ModeloProtetorColchao(BaseModel):
     @field_validator("dimensoes")
     @classmethod
     def validate_dimensoes(cls, v: List[str]) -> List[str]:
-        return _validate_string_list(v, "dimensão")
+        return _validate_dimensoes_list(v)
 
     @field_validator("composicao")
     @classmethod
@@ -900,11 +919,7 @@ class ModeloPassadeira(BaseModel):
     slug: str = Field(default="", json_schema_extra={"ui_readonly": True})
     descricao: str = Field(default="")
     composicao: Dict[str, int] = _composicao_field()
-    dimensoes: List[str] = Field(
-        ...,
-        min_length=1,
-        json_schema_extra={"ui_widget": "string_list", "ui_label": "Dimensões"},
-    )
+    dimensoes: List[str] = _dimensoes_list_field()
     visibilidade: bool = Field(default=False)
 
     @model_validator(mode="after")
@@ -916,7 +931,7 @@ class ModeloPassadeira(BaseModel):
     @field_validator("dimensoes")
     @classmethod
     def validate_dimensoes(cls, v: List[str]) -> List[str]:
-        return _validate_string_list(v, "dimensão")
+        return _validate_dimensoes_list(v)
 
     @field_validator("composicao")
     @classmethod
@@ -981,7 +996,12 @@ class ModeloRegional(BaseModel):
     composicao: Dict[str, int] = _composicao_field()
     dimensoes: Optional[List[str]] = Field(
         None,
-        json_schema_extra={"ui_widget": "string_list", "ui_label": "Dimensões"},
+        description="Dimensões comprimento×largura (ex: 40x40) quando aplicável",
+        json_schema_extra={
+            "ui_widget": "string_list",
+            "ui_label": "Dimensões (comprimento×largura)",
+            "ui_placeholder": "ex: 40x40",
+        },
     )
     visibilidade: bool = Field(default=False)
 
@@ -995,7 +1015,9 @@ class ModeloRegional(BaseModel):
     def validate_subtipo_fields(self) -> "ModeloRegional":
         needs_dim = self.subtipo in ("pano_cozinha", "toalha", "protetor")
         if needs_dim and not self.dimensoes:
-            raise ValueError("Indique dimensões para este subtipo.")
+            raise ValueError("Indique dimensões comprimento×largura (ex: 40x40) para este subtipo.")
+        if self.dimensoes:
+            self.dimensoes = _validate_dimensoes_list(list(self.dimensoes))
         if not self.composicao:
             raise ValueError("Indique composição.")
         _validate_composicao_pct(self.composicao)
@@ -1059,7 +1081,7 @@ def _register_catalog_types() -> None:
                 "storefront_picker": {
                     "source": "products",
                     "field": "dimensoes",
-                    "label": "Tamanho",
+                    "label": "Dimensão (comprimento×largura)",
                     "format": "dimensions",
                     "suffix": " cm",
                 },
@@ -1146,7 +1168,7 @@ def _register_catalog_types() -> None:
                 "storefront_picker": {
                     "source": "products",
                     "field": "dimensoes",
-                    "label": "Dimensão",
+                    "label": "Dimensão (comprimento×largura)",
                     "format": "dimensions",
                     "suffix": " cm",
                 },
@@ -1199,7 +1221,7 @@ def _register_catalog_types() -> None:
                 "storefront_picker": {
                     "source": "products",
                     "field": "dimensoes",
-                    "label": "Dimensão",
+                    "label": "Dimensão (comprimento×largura)",
                     "format": "dimensions",
                     "suffix": " cm",
                 },
@@ -1219,7 +1241,7 @@ def _register_catalog_types() -> None:
                 "storefront_picker": {
                     "source": "products",
                     "field": "dimensoes",
-                    "label": "Dimensão",
+                    "label": "Dimensão (comprimento×largura)",
                     "format": "dimensions",
                     "suffix": " cm",
                 },
@@ -1239,7 +1261,7 @@ def _register_catalog_types() -> None:
                 "storefront_picker": {
                     "source": "products",
                     "field": "dimensoes",
-                    "label": "Dimensão",
+                    "label": "Dimensão (comprimento×largura)",
                     "format": "dimensions",
                     "suffix": " cm",
                 },
@@ -1267,7 +1289,7 @@ def _register_catalog_types() -> None:
                 "storefront_picker": {
                     "source": "products",
                     "field": "dimensoes",
-                    "label": "Dimensão",
+                    "label": "Dimensão (comprimento×largura)",
                     "format": "dimensions",
                     "suffix": " cm",
                 },

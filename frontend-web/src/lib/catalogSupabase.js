@@ -266,7 +266,19 @@ export async function catalogueModelsForTipo(tipo, categoryId, { filters = {}, f
     query = query.eq(field, value)
   }
 
-  const { data, error } = await query.order('nome')
+  let { data, error } = await query.order('nome')
+  // Tabelas novas sem FK no schema cache do PostgREST — não bloquear a loja
+  if (error && /relationship|schema cache/i.test(error.message || '')) {
+    query = supabase
+      .from(mt)
+      .select(`*, ${pt}(${productFields})`)
+      .eq('id_categoria', categoryId)
+      .eq('visibilidade', true)
+    for (const [field, value] of Object.entries(modelFilters)) {
+      query = query.eq(field, value)
+    }
+    ;({ data, error } = await query.order('nome'))
+  }
   if (error) throw new Error(error.message)
 
   await attachModeloCores(data || [], tipo)
