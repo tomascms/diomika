@@ -13,7 +13,7 @@
     "build": "vite build",
     "start": "electron .",
     "dist": "npm run dist:win",
-    "dist:win": "node scripts/write-gate.cjs && vite build && electron-builder --win portable --x64",
+    "dist:win": "node scripts/write-gate.cjs && vite build && electron-builder --win zip --x64",
     "dist:mac": "node scripts/write-gate.cjs && vite build && electron-builder --mac dmg --universal",
     "dist:linux": "node scripts/write-gate.cjs && vite build && electron-builder --linux AppImage --x64",
     "dist:cliente": "node scripts/build-cliente-pack.cjs",
@@ -36,9 +36,16 @@
       "main": "electron/main.cjs"
     },
     "win": {
-      "target": ["portable"],
+      "target": ["zip"],
       "signAndEditExecutable": false,
-      "artifactName": "Diomika-Backoffice-${version}-windows.exe"
+      "requestedExecutionLevel": "asInvoker",
+      "artifactName": "Diomika-Backoffice-${version}-windows.zip"
+    },
+    "nsis": {
+      "packElevateHelper": false,
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false
     },
     "portable": {
       "artifactName": "Diomika-Backoffice-${version}-windows.exe"

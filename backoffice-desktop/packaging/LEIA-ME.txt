@@ -1,0 +1,39 @@
+# Diomika Backoffice — ficheiros para o cliente #
+
+Actualizado: 28/08/2026 (pacote Windows em ZIP — menos bloqueios de antivirus).
+
+| SO      | Ficheiro                                  |
+|---------|-------------------------------------------|
+| Windows | `Diomika-Backoffice-1.0.0-windows.zip` + `Abrir-Windows.cmd` |
+| macOS   | `Diomika-Backoffice-1.0.0-mac.dmg`        |
+| Linux   | `Diomika-Backoffice-1.0.0-linux.AppImage` |
+
+## Windows (recomendado) ##
+1. Extraia o `.zip` para esta pasta (ou para Documentos\Diomika).
+2. Duplo-clique em **`Abrir-Windows.cmd`** (não no .exe antigo portátil).
+   - Desbloqueia ficheiros marcados como “da Internet”.
+   - Tenta adicionar exclusão no Microsoft Defender (pede Admin se precisar).
+   - Abre o programa.
+3. Login com o utilizador/password que a Diomika lhe enviar.
+4. Precisa de internet (liga a `api.diomika.com`).
+
+### Se o antivirus bloquear ###
+- **Microsoft Defender:** Definições → Proteção contra vírus → Exclusões → Adicionar pasta
+  (escolha a pasta `cliente-backoffice` ou a pasta extraída).
+- **Outro antivirus:** adicione a mesma pasta às exclusões / allowlist.
+- **SmartScreen** (“O Windows protegeu o seu PC”): Mais informações → Executar mesmo assim.
+- Apague o `.exe` portátil antigo se ainda existir — esse formato é o que mais dispara scans.
+
+## Catálogo ##
+- **Guardar rascunho** — oculto na loja.
+- **Publicar na loja** — só com cor (imagem) + produto com EAN.
+- **Criar outro** — novo produto sem voltar à lista.
+
+## Mac (primeira vez) ##
+Botão direito no `.app` → Abrir (Gatekeeper).
+
+## Linux ##
+`chmod +x Diomika-Backoffice-*-linux.AppImage` e executar.
+
+## Suporte ##
+Contacte a Diomika — suporte activo nesta fase.

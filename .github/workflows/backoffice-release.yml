@@ -50,6 +50,7 @@ jobs:
           name: diomika-backoffice-${{ matrix.os }}
           path: |
             backoffice-desktop/release/*.exe
+            backoffice-desktop/release/*.zip
             backoffice-desktop/release/*.dmg
             backoffice-desktop/release/*.AppImage
           if-no-files-found: error
@@ -86,6 +87,7 @@ jobs:
           make_latest: false
           files: |
             artifacts/**/*.exe
+            artifacts/**/*.zip
             artifacts/**/*.dmg
             artifacts/**/*.AppImage
           overwrite_files: true
