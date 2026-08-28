@@ -236,6 +236,7 @@ watch(() => route.fullPath, fetchProduct)
             eager
             fetchpriority="high"
           />
+          <span class="zoom-hint" aria-hidden="true">Ampliar</span>
         </button>
 
         <div v-if="colors.length > 1" class="color-picker">
@@ -366,12 +367,29 @@ watch(() => route.fullPath, fetchProduct)
   background: transparent;
   aspect-ratio: 1;
   appearance: none;
+  position: relative;
+}
+
+.zoom-hint {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 2;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(12, 18, 28, 0.72);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  pointer-events: none;
 }
 
 .main-image-wrap :deep(.soft-image),
 .main-image-wrap :deep(.soft-image__img) {
   width: 100%;
   height: 100%;
+  pointer-events: none;
 }
 
 .main-image-wrap :deep(.soft-image__img) {
@@ -391,8 +409,13 @@ watch(() => route.fullPath, fetchProduct)
 
 .color-thumbs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.5rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.35rem;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
 .color-thumb-btn {
@@ -402,6 +425,7 @@ watch(() => route.fullPath, fetchProduct)
   overflow: hidden;
   width: 68px;
   height: 68px;
+  flex: 0 0 68px;
   cursor: pointer;
   background: none;
   transition: border-color var(--transition), transform var(--transition);

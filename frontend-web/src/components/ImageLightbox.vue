@@ -55,8 +55,10 @@ onUnmounted(() => {
   cursor: zoom-out;
 }
 .lightbox-img {
-  max-width: min(96vw, 1100px);
-  max-height: 90vh;
+  max-width: min(96vw, 1200px);
+  max-height: 92vh;
+  width: auto;
+  height: auto;
   object-fit: contain;
   border-radius: 8px;
   cursor: default;

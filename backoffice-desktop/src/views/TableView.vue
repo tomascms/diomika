@@ -250,7 +250,9 @@ const physicalTableForCategory = (categoryId, physicalTipo = null) => {
 const startNew = async () => {
   if (isMerged.value) {
     if (!categories.value.length) {
-      categories.value = (await api.listCategories()).filter((c) => c.tipo_catalogo)
+      // Inclui categorias ocultas na loja — preparo de catálogo antes de publicar
+      const all = await api.listRecords('categories', { visible_only: 'false', limit: '200' })
+      categories.value = (Array.isArray(all) ? all : []).filter((c) => c.tipo_catalogo)
     }
     newCategoryId.value = ''
     newPhysicalTipo.value = ''
@@ -345,7 +347,8 @@ const loadModeloFilterOptions = async () => {
 const ensureCategories = async () => {
   if (!isMerged.value || categories.value.length) return
   try {
-    categories.value = (await api.listCategories()).filter((c) => c.tipo_catalogo)
+    const all = await api.listRecords('categories', { visible_only: 'false', limit: '200' })
+    categories.value = (Array.isArray(all) ? all : []).filter((c) => c.tipo_catalogo)
   } catch {
     categories.value = []
   }
@@ -401,7 +404,9 @@ onActivated(() => {
       <template v-if="isMerged">
         <select v-model="filterCategoriaId" class="input filter-mini">
           <option value="">Todas categorias</option>
-          <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.nome }}</option>
+          <option v-for="c in categories" :key="c.id" :value="c.id">
+            {{ c.nome }}{{ c.visibilidade === false ? ' (oculta no site)' : '' }}
+          </option>
         </select>
         <select v-if="table === 'produtos'" v-model="filterModeloId" class="input filter-mini">
           <option value="">Todos modelos</option>
@@ -423,7 +428,9 @@ onActivated(() => {
       <label>Categoria</label>
       <select v-model="newCategoryId" class="input">
         <option value="">— Escolher categoria —</option>
-        <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.nome }}</option>
+        <option v-for="c in categories" :key="c.id" :value="c.id">
+          {{ c.nome }}{{ c.visibilidade === false ? ' (oculta no site)' : '' }}
+        </option>
       </select>
       <template v-if="isAggregatedCategory">
         <label>Família</label>

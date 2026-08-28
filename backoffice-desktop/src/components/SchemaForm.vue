@@ -225,31 +225,31 @@ const clearFieldError = (name) => {
 
 
 const validate = () => {
-
   const errors = {}
-
   for (const field of props.fields) {
-
     if (field.hidden) continue
-
     const val = local.value[field.name]
+    if (!field.required && field.widget !== 'composition') continue
+
+    if (field.widget === 'composition') {
+      const obj = val && typeof val === 'object' && !Array.isArray(val) ? val : {}
+      const sum = Object.values(obj).reduce((a, b) => a + (parseInt(b, 10) || 0), 0)
+      if (field.required || Object.keys(obj).length || sum > 0) {
+        if (sum !== 100) {
+          errors[field.name] = `Composição deve somar 100% (atual: ${sum}%). Indique material e % em cada linha.`
+        }
+      }
+      continue
+    }
 
     if (!field.required) continue
-
     const empty = val === null || val === undefined || val === ''
-
       || (Array.isArray(val) && val.length === 0)
-
       || (field.widget === 'dimensions' && !(dimParts.value[field.name]?.w && dimParts.value[field.name]?.h))
-
     if (empty) errors[field.name] = `${field.label} é obrigatório.`
-
   }
-
   fieldErrors.value = errors
-
   return Object.keys(errors).length === 0
-
 }
 
 

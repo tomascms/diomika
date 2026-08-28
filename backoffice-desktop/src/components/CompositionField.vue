@@ -21,25 +21,39 @@ const parseValue = (val) => {
   }
   if (typeof val === 'object' && !Array.isArray(val)) {
     const entries = Object.entries(val)
-    return entries.length ? entries.map(([material, percent]) => ({ material, percent: String(percent) })) : [{ material: '', percent: '' }]
+    return entries.length
+      ? entries.map(([material, percent]) => ({ material: String(material), percent: String(percent ?? '') }))
+      : [{ material: '', percent: '' }]
   }
   return [{ material: '', percent: '' }]
 }
 
-watch(() => props.modelValue, (v) => { rows.value = parseValue(v) }, { immediate: true })
-
-const total = computed(() =>
-  rows.value.reduce((sum, r) => sum + (parseInt(r.percent, 10) || 0), 0),
+watch(
+  () => props.modelValue,
+  (v) => {
+    rows.value = parseValue(v)
+  },
+  { immediate: true },
 )
 
-const sync = () => {
+/** Só conta linhas com material + % — alinhado com o que se grava. */
+const buildPayload = () => {
   const out = {}
   for (const r of rows.value) {
-    const m = r.material.trim()
-    const p = r.percent.trim()
-    if (m && p) out[m] = parseInt(p, 10)
+    const m = String(r.material ?? '').trim()
+    const pRaw = String(r.percent ?? '').trim()
+    if (!m || !pRaw) continue
+    const p = parseInt(pRaw, 10)
+    if (!Number.isFinite(p) || p < 0) continue
+    out[m] = p
   }
-  emit('update:modelValue', out)
+  return out
+}
+
+const total = computed(() => Object.values(buildPayload()).reduce((sum, p) => sum + p, 0))
+
+const sync = () => {
+  emit('update:modelValue', buildPayload())
 }
 
 const addRow = () => {
@@ -59,7 +73,7 @@ const removeRow = (idx) => {
       <input
         v-model="row.material"
         class="input"
-        placeholder="Material"
+        placeholder="Material (ex: algodão)"
         :disabled="disabled"
         @input="sync"
       />
@@ -76,7 +90,12 @@ const removeRow = (idx) => {
       <button v-if="!disabled" type="button" class="btn btn-danger btn-sm" @click="removeRow(idx)">X</button>
     </div>
     <button v-if="!disabled" type="button" class="btn btn-ghost btn-sm" @click="addRow">+ Adicionar material</button>
-    <p class="sum" :class="{ ok: total === 100, warn: total !== 100 }">Total: {{ total }}% (deve ser 100%)</p>
+    <p class="sum" :class="{ ok: total === 100, warn: total !== 100 }">
+      Total: {{ total }}% (deve ser 100%)
+      <span v-if="total !== 100 && rows.some((r) => String(r.percent || '').trim() && !String(r.material || '').trim())" class="hint">
+        — indique o nome do material em cada linha com %
+      </span>
+    </p>
   </div>
 </template>
 
@@ -88,4 +107,5 @@ const removeRow = (idx) => {
 .sum { margin: 4px 0 0; font-size: 0.8rem; }
 .sum.ok { color: var(--success); }
 .sum.warn { color: var(--danger); }
+.hint { font-weight: 500; }
 </style>
