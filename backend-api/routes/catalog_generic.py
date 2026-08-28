@@ -30,6 +30,8 @@ from models.schemas import aggregated_tipos_for_tipo
 
 logger = logging.getLogger("diomika-api")
 
+_ADMIN_MERGED_CACHE_TTL = max(20, catalog_cache_ttl() // 2)
+
 router = APIRouter(prefix="/catalogo", tags=["Catálogo"])
 
 
@@ -216,6 +218,75 @@ def _fetch_merged_table_page(
     return out
 
 
+def _merged_cache_key(
+    *,
+    view_key: str,
+    visible_only: bool,
+    categoria_id: str | None,
+    modelo_id: str | None,
+    tipo_catalogo: str | None,
+) -> str:
+    return (
+        f"admin:merged:{view_key}:"
+        f"v{int(visible_only)}:"
+        f"c{categoria_id or ''}:"
+        f"m{modelo_id or ''}:"
+        f"t{tipo_catalogo or ''}"
+    )
+
+
+def _resolve_merged_tables(
+    view_key: str,
+    tipo_catalogo: str | None,
+) -> list[str]:
+    if tipo_catalogo and aggregated_tipos_for_tipo(tipo_catalogo):
+        tables = (
+            [model_table_for_tipo(t) for t in aggregated_tipos_for_tipo(tipo_catalogo) or []]
+            if view_key == "modelos"
+            else [product_table_for_tipo(t) for t in aggregated_tipos_for_tipo(tipo_catalogo) or []]
+        )
+        return [t for t in tables if t]
+    if tipo_catalogo and is_valid_tipo(tipo_catalogo):
+        physical = (
+            model_table_for_tipo(tipo_catalogo)
+            if view_key == "modelos"
+            else product_table_for_tipo(tipo_catalogo)
+        )
+        return [physical] if physical else []
+    return [t for t in (all_model_tables() if view_key == "modelos" else all_product_tables()) if t]
+
+
+def _load_merged_rows_sync(
+    *,
+    view_key: str,
+    tables: list[str],
+    visible_only: bool,
+    per_table: int,
+    categoria_id: str | None,
+    modelo_id: str | None,
+) -> list[dict]:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    rows: list[dict] = []
+    with ThreadPoolExecutor(max_workers=min(5, max(len(tables), 1))) as pool:
+        futures = [
+            pool.submit(
+                _fetch_merged_table_page,
+                view_key=view_key,
+                ptable=ptable,
+                visible_only=visible_only,
+                per_table=per_table,
+                categoria_id=categoria_id,
+                modelo_id=modelo_id,
+            )
+            for ptable in tables
+        ]
+        for fut in as_completed(futures):
+            rows.extend(fut.result())
+    rows.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+    return rows
+
+
 @router.get(
     "/admin/merged/{view_key}",
     dependencies=[Depends(admin_must_be_local), Depends(require_catalog_role)],
@@ -234,39 +305,54 @@ async def admin_merged_list(
         raise HTTPException(status_code=400, detail="Vista inválida")
     limit = min(max(limit, 1), 200)
     offset = max(offset, 0)
-    # Página pequena: cada tabela só precisa de `limit` linhas mais recentes para o merge.
-    per_table = min(max(limit, 20), 60) if offset == 0 else min(limit + offset, 100)
 
-    if tipo_catalogo and aggregated_tipos_for_tipo(tipo_catalogo):
-        tables = (
-            [model_table_for_tipo(t) for t in aggregated_tipos_for_tipo(tipo_catalogo) or []]
-            if view_key == "modelos"
-            else [product_table_for_tipo(t) for t in aggregated_tipos_for_tipo(tipo_catalogo) or []]
-        )
-        tables = [t for t in tables if t]
-    elif tipo_catalogo and is_valid_tipo(tipo_catalogo):
-        physical = model_table_for_tipo(tipo_catalogo) if view_key == "modelos" else product_table_for_tipo(tipo_catalogo)
-        tables = [physical] if physical else []
+    tables = _resolve_merged_tables(view_key, tipo_catalogo)
+    if not tables:
+        return {"items": [], "limit": limit, "offset": offset, "count": 0, "total_approx": 0}
+
+    # Por tabela: bastam linhas recentes para ordenação global; cache evita repetir em cada página.
+    n_tables = len(tables)
+    need = limit + offset
+    if n_tables == 1:
+        per_table = min(max(need, 20), 120)
     else:
-        tables = all_model_tables() if view_key == "modelos" else all_product_tables()
+        per_table = min(max(need // n_tables + 10, 16), 50)
 
-    tables = [t for t in tables if t]
-    tasks = [
-        asyncio.to_thread(
-            _fetch_merged_table_page,
+    cache_key = _merged_cache_key(
+        view_key=view_key,
+        visible_only=visible_only,
+        categoria_id=categoria_id,
+        modelo_id=modelo_id,
+        tipo_catalogo=tipo_catalogo,
+    )
+
+    def _load_cached() -> list[dict]:
+        return _load_merged_rows_sync(
             view_key=view_key,
-            ptable=ptable,
+            tables=tables,
             visible_only=visible_only,
             per_table=per_table,
             categoria_id=categoria_id,
             modelo_id=modelo_id,
         )
-        for ptable in tables
-    ]
-    chunks = await asyncio.gather(*tasks)
-    rows: list[dict] = []
-    for chunk in chunks:
-        rows.extend(chunk)
-    rows.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+
+    rows = await asyncio.to_thread(get_or_set, cache_key, float(_ADMIN_MERGED_CACHE_TTL), _load_cached)
+    if offset + limit > len(rows) and per_table < 100:
+        per_table = min(max(need, per_table + 30), 100)
+        rows = await asyncio.to_thread(
+            _load_merged_rows_sync,
+            view_key=view_key,
+            tables=tables,
+            visible_only=visible_only,
+            per_table=per_table,
+            categoria_id=categoria_id,
+            modelo_id=modelo_id,
+        )
     page = rows[offset : offset + limit]
-    return {"items": page, "limit": limit, "offset": offset, "count": len(page), "total_approx": len(rows)}
+    return {
+        "items": page,
+        "limit": limit,
+        "offset": offset,
+        "count": len(page),
+        "total_approx": len(rows),
+    }

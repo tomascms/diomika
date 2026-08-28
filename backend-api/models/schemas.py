@@ -116,12 +116,12 @@ def _validate_string_list(v: List[str], label: str = "valores") -> List[str]:
 
 
 def _validate_dimensoes_list(v: List[str]) -> List[str]:
-    """Dimensões = comprimento×largura (ex: 40x40), nunca altura de assento."""
+    """Dimensões = comprimento×largura (ex: 100x200), nunca altura de assento."""
     cleaned = _validate_string_list(v, "dimensão")
     bad = [d for d in cleaned if not re.fullmatch(r"\d+x\d+", d)]
     if bad:
         raise ValueError(
-            f"Dimensões devem ser comprimento×largura (ex: 40x40). Inválido: {', '.join(bad)}"
+            f"Dimensões devem ser comprimento×largura (ex: 100x200). Inválido: {', '.join(bad)}"
         )
     return cleaned
 
@@ -131,18 +131,18 @@ def _dimensoes_list_field(*, required: bool = True):
     extras = {
         "ui_widget": "string_list",
         "ui_label": "Dimensões (comprimento×largura)",
-        "ui_placeholder": "ex: 40x40",
+        "ui_placeholder": "ex: 100x200",
     }
     if required:
         return Field(
             ...,
             min_length=1,
-            description="Dimensões disponíveis em cm (ex: 40x40, 50x70)",
+            description="Dimensões disponíveis em cm (ex: 100x200, 50x70)",
             json_schema_extra=extras,
         )
     return Field(
         None,
-        description="Dimensões disponíveis em cm (ex: 40x40, 50x70)",
+        description="Dimensões disponíveis em cm (ex: 100x200, 50x70)",
         json_schema_extra=extras,
     )
 
@@ -996,11 +996,11 @@ class ModeloRegional(BaseModel):
     composicao: Dict[str, int] = _composicao_field()
     dimensoes: Optional[List[str]] = Field(
         None,
-        description="Dimensões comprimento×largura (ex: 40x40) quando aplicável",
+        description="Dimensões comprimento×largura (ex: 100x200) quando aplicável",
         json_schema_extra={
             "ui_widget": "string_list",
             "ui_label": "Dimensões (comprimento×largura)",
-            "ui_placeholder": "ex: 40x40",
+            "ui_placeholder": "ex: 100x200",
         },
     )
     visibilidade: bool = Field(default=False)
@@ -1015,7 +1015,7 @@ class ModeloRegional(BaseModel):
     def validate_subtipo_fields(self) -> "ModeloRegional":
         needs_dim = self.subtipo in ("pano_cozinha", "toalha", "protetor")
         if needs_dim and not self.dimensoes:
-            raise ValueError("Indique dimensões comprimento×largura (ex: 40x40) para este subtipo.")
+            raise ValueError("Indique dimensões comprimento×largura (ex: 100x200) para este subtipo.")
         if self.dimensoes:
             self.dimensoes = _validate_dimensoes_list(list(self.dimensoes))
         if not self.composicao:

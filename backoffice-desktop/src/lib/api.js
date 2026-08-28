@@ -4,6 +4,8 @@ const TIMEOUT_MS = 30000
 const WRITE_TIMEOUT_MS = 90000
 const schemaCache = new Map()
 const relationCache = new Map()
+const categoriesCache = { value: null, at: 0 }
+const CATEGORIES_TTL_MS = 5 * 60 * 1000
 
 const AUTH_STATUS_TTL_MS = 5 * 60 * 1000
 const ME_TTL_MS = 10 * 60 * 1000
@@ -14,6 +16,8 @@ let meCache = { value: null, at: 0 }
 export function clearApiCaches() {
   authStatusCache = { value: null, at: 0 }
   meCache = { value: null, at: 0 }
+  categoriesCache.value = null
+  categoriesCache.at = 0
   schemaCache.clear()
   relationCache.clear()
 }
@@ -171,20 +175,33 @@ export const api = {
     if (!force && relationCache.has(table)) return relationCache.get(table)
     const pending = (async () => {
       try {
-        const data = await request('GET', `/admin/crud/${table}`, {
+        const data = await request('GET', `/admin/crud/${table}/options`, {
           params: { visible_only: 'false', limit: '200' },
         })
-        const rows = Array.isArray(data) ? data : data?.items || []
-        return rows.map((r) => ({
-          id: r.id,
-          label: r.nome || r.ean || r.numero || String(r.id).slice(0, 8),
-        }))
+        return data?.items || []
       } catch {
         return []
       }
     })()
     relationCache.set(table, pending)
     return pending
+  },
+  listCategoriesForForms: async (force = false) => {
+    if (!force && categoriesCache.value && Date.now() - categoriesCache.at < CATEGORIES_TTL_MS) {
+      return categoriesCache.value
+    }
+    const data = await request('GET', '/admin/crud/categories/options', {
+      params: { visible_only: 'false', limit: '300' },
+    })
+    const rows = (data?.items || []).map((r) => ({
+      id: r.id,
+      nome: r.label,
+      tipo_catalogo: r.tipo_catalogo || null,
+    }))
+    const filtered = rows.filter((c) => c.tipo_catalogo)
+    categoriesCache.value = filtered
+    categoriesCache.at = Date.now()
+    return filtered
   },
   listModelColors: async (colorsTable, modelId) => {
     if (!colorsTable || !modelId) return []

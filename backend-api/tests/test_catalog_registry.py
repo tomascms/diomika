@@ -38,6 +38,8 @@ def test_catalog_types_registered():
         "luva",
         "pega",
         "pano_cozinha",
+        "protetor_colchao",
+        "passadeira",
         "regional",
     }
     assert set(CATALOG_TYPES) == expected

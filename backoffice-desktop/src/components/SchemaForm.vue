@@ -345,7 +345,7 @@ defineExpose({ validate })
           <input
             v-model="stringListRows[field.name][idx]"
             class="input"
-            :placeholder="field.placeholder || (field.name === 'alturas' ? 'ex: 32mm' : 'ex: 40x40')"
+            :placeholder="field.placeholder || (field.name === 'alturas' ? 'ex: 32mm' : 'ex: 100x200')"
             :disabled="isLocked(field)"
             @input="syncStringList(field.name)"
           />

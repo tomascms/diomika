@@ -26,6 +26,7 @@ from core.local_only import admin_must_be_local
 from core.rate_limit import get_client_ip
 from models.catalog_registry import (
     CATALOG_TYPES,
+    admin_list_select_query,
     all_colors_tables,
     all_model_tables,
     all_product_tables,
@@ -33,6 +34,7 @@ from models.catalog_registry import (
     colors_table_for_model_table,
     colors_table_for_tipo,
     list_select_query,
+    relation_options_select_query,
     tipo_for_table,
 )
 from models.schemas import TABLE_MAP, aggregated_tipos_for_tipo
@@ -142,6 +144,7 @@ def _audit(request: Request, action: str, resource: str, resource_id: str | None
 def _invalidate_catalog_cache() -> None:
     invalidate_prefix("categories:")
     invalidate_prefix("catalog:")
+    invalidate_prefix("admin:merged:")
 
 
 def _tipo_for_model_id(model_id: str | None) -> str:
@@ -607,6 +610,60 @@ async def upload_image(
     return {"url": url}
 
 
+@router.get("/{table_name}/options")
+def list_relation_options(
+    request: Request,
+    table_name: str,
+    visible_only: bool = False,
+    limit: int = 200,
+    id_modelo: str | None = None,
+):
+    """Dropdowns leves — só id + label, sem embeds pesados."""
+    _schema_for(table_name)
+    assert_table_action(table_name, "read", _role(request))
+    limit = min(max(limit, 1), 300)
+    query = get_db().table(table_name).select(relation_options_select_query(table_name))
+    if visible_only:
+        query = query.eq("visibilidade", True)
+    if id_modelo and table_name in all_colors_tables():
+        query = query.eq("id_modelo", id_modelo)
+    try:
+        res = query.order("nome").limit(limit).execute()
+    except Exception:
+        try:
+            res = query.order("created_at", desc=True).limit(limit).execute()
+        except Exception:
+            res = query.limit(limit).execute()
+    rows = res.data or []
+
+    def _label(row: dict) -> str:
+        if row.get("nome"):
+            return str(row["nome"]).strip()
+        if row.get("ean"):
+            return str(row["ean"]).strip()
+        if row.get("numero") is not None:
+            parts = [str(row["numero"]).strip()]
+            if row.get("nome"):
+                parts.append(str(row["nome"]).strip())
+            return " · ".join(p for p in parts if p)
+        return str(row.get("id", ""))[:8]
+
+    return {
+        "items": [
+            {
+                "id": r["id"],
+                "label": _label(r) or str(r.get("id", ""))[:8],
+                **(
+                    {"tipo_catalogo": r["tipo_catalogo"]}
+                    if table_name == "categories" and r.get("tipo_catalogo")
+                    else {}
+                ),
+            }
+            for r in rows
+        ],
+    }
+
+
 @router.get("/{table_name}")
 def list_records(
     request: Request,
@@ -621,7 +678,8 @@ def list_records(
     assert_table_action(table_name, "read", _role(request))
     limit = min(max(limit, 1), 200)
     offset = max(offset, 0)
-    query = get_db().table(table_name).select(list_select_query(table_name))
+    select_q = admin_list_select_query(table_name, embed_category=table_name in all_product_tables())
+    query = get_db().table(table_name).select(select_q)
     if visible_only:
         query = query.eq("visibilidade", True)
     if id_modelo and table_name in all_colors_tables():

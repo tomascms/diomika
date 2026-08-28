@@ -123,8 +123,7 @@ const navigateNewPhysical = async (physicalTable, categoryId) => {
 
 const loadCategories = async () => {
   try {
-    const all = await api.listRecords('categories', { visible_only: 'false', limit: '200' })
-    categoryRows.value = (Array.isArray(all) ? all : []).filter((c) => c.tipo_catalogo)
+    categoryRows.value = await api.listCategoriesForForms()
   } catch {
     categoryRows.value = []
   }
@@ -133,7 +132,7 @@ const loadCategories = async () => {
 const loadRelations = async (fields) => {
   const relTables = [...new Set(fields.filter((f) => f.relation).map((f) => f.relation))]
   const entries = await Promise.all(
-    relTables.map(async (rt) => [rt, await api.listRelationOptions(rt, { force: true })]),
+    relTables.map(async (rt) => [rt, await api.listRelationOptions(rt)]),
   )
   relations.value = Object.fromEntries(entries)
 }

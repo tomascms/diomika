@@ -175,9 +175,16 @@ def admin_merged_select_query(table: str) -> str:
     Colunas por família — pedir campos inexistentes (ex.: altura em almofada)
     faz o PostgREST falhar e a lista merged ficar vazia.
     """
+    return admin_list_select_query(table, embed_category=True)
+
+
+def admin_list_select_query(table: str, *, embed_category: bool = False) -> str:
+    """Select leve para listagens do backoffice (sem * nem embeds pesados)."""
+    if table == "categories":
+        return "id, nome, tipo_catalogo, visibilidade, slug, created_at"
     tipo = tipo_for_table(table)
     if not tipo:
-        return "id, visibilidade, created_at"
+        return "id, nome, visibilidade, created_at"
     cfg = CATALOG_TYPES[tipo]
     mt = cfg["model_table"]
     if table == cfg["product_table"]:
@@ -186,12 +193,41 @@ def admin_merged_select_query(table: str) -> str:
             cols.append("altura")
         elif tipo == "oculo":
             cols.append("segmento")
-        elif tipo in ("almofada", "toalha_mesa", "pano_cozinha", "regional"):
+        elif tipo in ("almofada", "toalha_mesa", "pano_cozinha", "regional", "protetor_colchao", "passadeira"):
             cols.append("dimensoes")
-        return f"{', '.join(cols)}, {mt}(nome, categories(nome))"
+        if embed_category:
+            return f"{', '.join(cols)}, {mt}(nome, categories(nome))"
+        return f"{', '.join(cols)}, {mt}(nome)"
     if table == mt:
-        return "id, nome, visibilidade, created_at, id_categoria, categories(nome)"
+        cols = ["id", "nome", "visibilidade", "created_at", "id_categoria"]
+        disc = cfg.get("model_discriminator_field")
+        if disc:
+            cols.append(disc)
+        if embed_category:
+            return f"{', '.join(cols)}, categories(nome)"
+        return ", ".join(cols)
+    colors = cfg.get("colors_table")
+    if colors and table == colors:
+        return "id, numero, nome, visibilidade, id_modelo, created_at"
     return "id, visibilidade, created_at"
+
+
+def relation_options_select_query(table: str) -> str:
+    """Mínimo para dropdowns de relação no formulário."""
+    if table == "categories":
+        return "id, nome, tipo_catalogo"
+    tipo = tipo_for_table(table)
+    if not tipo:
+        return "id, nome"
+    cfg = CATALOG_TYPES[tipo]
+    if table == cfg["model_table"]:
+        return "id, nome"
+    if table == cfg["product_table"]:
+        return "id, ean, id_modelo"
+    colors = cfg.get("colors_table")
+    if colors and table == colors:
+        return "id, numero, nome, id_modelo"
+    return "id, nome"
 
 def infer_model_ptable(item: dict) -> str | None:
     if item.get("_ptable") in all_model_tables():

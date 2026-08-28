@@ -250,9 +250,7 @@ const physicalTableForCategory = (categoryId, physicalTipo = null) => {
 const startNew = async () => {
   if (isMerged.value) {
     if (!categories.value.length) {
-      // Inclui categorias ocultas na loja — preparo de catálogo antes de publicar
-      const all = await api.listRecords('categories', { visible_only: 'false', limit: '200' })
-      categories.value = (Array.isArray(all) ? all : []).filter((c) => c.tipo_catalogo)
+      categories.value = await api.listCategoriesForForms()
     }
     newCategoryId.value = ''
     newPhysicalTipo.value = ''
@@ -347,8 +345,7 @@ const loadModeloFilterOptions = async () => {
 const ensureCategories = async () => {
   if (!isMerged.value || categories.value.length) return
   try {
-    const all = await api.listRecords('categories', { visible_only: 'false', limit: '200' })
-    categories.value = (Array.isArray(all) ? all : []).filter((c) => c.tipo_catalogo)
+    categories.value = await api.listCategoriesForForms()
   } catch {
     categories.value = []
   }
