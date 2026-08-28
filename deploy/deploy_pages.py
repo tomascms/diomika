@@ -373,6 +373,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Deploy beta privada Diomika (grátis)")
     parser.add_argument("--deploy", action="store_true", help="Tunnel + build + Pages")
     parser.add_argument("--pages-deploy", action="store_true", help="Deploy dist/ para Cloudflare Pages")
+    parser.add_argument(
+        "--skip-build",
+        action="store_true",
+        help="Pages deploy sem npm run build (só se dist/ já estiver actualizado)",
+    )
     parser.add_argument("--detach", action="store_true", help="Sair após deploy (tunnels ficam activos)")
     parser.add_argument("--build", action="store_true", help="Só build frontend")
     parser.add_argument("--api-url", default=os.getenv("BETA_API_URL", ""))
@@ -388,7 +393,7 @@ def main() -> int:
         if not api:
             print("ERRO: --api-url ou BETA_API_URL em falta")
             return 1
-        if args.build:
+        if not args.skip_build:
             prod = os.getenv("PAGES_PRODUCTION", "").strip().lower() in ("1", "true", "yes")
             if not build_frontend(env, api, beta=not prod):
                 return 1

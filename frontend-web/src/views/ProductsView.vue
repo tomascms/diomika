@@ -26,7 +26,11 @@ const sortBy = ref('az')
 const breadcrumbItems = ref([{ label: 'Início', to: { name: 'home' } }])
 
 const catalogTipo = computed(() => categoryData.value?.tipo_catalogo || '')
-const filterDefs = computed(() => catalog.filterDefinitionsForTipo(catalogTipo.value) || [])
+const filterDefs = computed(() => {
+  // Garantir recomputação quando /catalogo/meta chega da API.
+  void catalog.metaCache.value
+  return catalog.filterDefinitionsForTipo(catalogTipo.value) || []
+})
 const heroImageUrl = computed(() => safeCssUrl(categoryData.value?.imagem) || '')
 const tipoLabel = (product) => catalog.badgeLabel(product, catalogTipo.value)
 
