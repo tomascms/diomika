@@ -99,7 +99,7 @@ export const CATALOG_META = {
       "model_table": "modelos_oculos",
       "product_table": "oculo",
       "colors_table": "modelo_oculo_cores",
-      "storefront_mode": "variantes",
+      "storefront_mode": "unico",
       "storefront_filters": [
         {
           "field": "tipo_oculo",
@@ -114,12 +114,7 @@ export const CATALOG_META = {
           }
         }
       ],
-      "storefront_picker": {
-        "source": "products",
-        "field": "segmento",
-        "label": "Segmento",
-        "format": "plain"
-      },
+      "storefront_picker": null,
       "storefront_specs": [],
       "storefront_badge": {
         "field": "tipo_oculo",
@@ -128,8 +123,8 @@ export const CATALOG_META = {
           "leitura": "Óculos de leitura"
         }
       },
-      "order_picker_mode": "variantes",
-      "product_select": "id, ean, barcode_url, visibilidade, segmento"
+      "order_picker_mode": "unico",
+      "product_select": "id, ean, barcode_url, visibilidade"
     },
     {
       "tipo": "toalha_mesa",

@@ -273,9 +273,17 @@ const publish = async () => {
     }
 
     formData.value.visibilidade = true
-    message.value = 'Publicado na loja.'
-    const backTable = route.params.physicalTable ? route.params.table : table.value
-    setTimeout(() => router.push({ name: 'workspace', params: { table: backTable } }), 900)
+    message.value = 'Publicado na loja. Pode criar outro sem voltar atrás.'
+    if (isNew.value && savedId) {
+      await router.replace({
+        name: 'record-edit',
+        params: {
+          table: route.params.table,
+          ...(route.params.physicalTable ? { physicalTable: route.params.physicalTable } : {}),
+          id: savedId,
+        },
+      })
+    }
   } catch (e) {
     const msg = e.message || ''
     if (isNew.value && /502|504|timeout|abort|inacessível/i.test(msg)) {
@@ -316,6 +324,31 @@ const hardDelete = async () => {
   } catch (e) {
     error.value = e.message
   }
+}
+
+/** Novo produto na mesma secção — mantém categoria se existir; não volta à lista. */
+const createAnother = async () => {
+  const keepCat = formData.value?.id_categoria || route.query.id_categoria || ''
+  message.value = ''
+  error.value = ''
+  pendingFiles.value = {}
+  createIdempotencyKey.value = crypto.randomUUID()
+
+  if (isNew.value) {
+    formData.value = { visibilidade: false }
+    if (keepCat) formData.value.id_categoria = String(keepCat)
+    message.value = 'Formulário limpo — mude a categoria se quiser e guarde o novo produto.'
+    return
+  }
+
+  const params = { table: route.params.table }
+  const name = route.params.physicalTable ? 'record-new-physical' : 'record-new'
+  if (route.params.physicalTable) params.physicalTable = route.params.physicalTable
+  await router.push({
+    name,
+    params,
+    query: keepCat ? { id_categoria: String(keepCat) } : {},
+  })
 }
 
 watch(() => route.fullPath, load, { immediate: true })
@@ -380,6 +413,15 @@ watch(() => route.fullPath, load, { immediate: true })
         </button>
         <button class="btn btn-primary" type="button" :disabled="saving" @click="publish">
           {{ saving ? 'A publicar…' : 'Publicar na loja' }}
+        </button>
+        <button
+          v-if="isCatalogRecord"
+          class="btn btn-ghost"
+          type="button"
+          :disabled="saving"
+          @click="createAnother"
+        >
+          Criar outro
         </button>
         <template v-if="!isNew">
           <button class="btn btn-ghost" type="button" @click="hideRecord">Ocultar</button>

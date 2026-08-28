@@ -526,12 +526,8 @@ class Oculo(BaseModel):
     id_modelo: UUID = Field(..., json_schema_extra={"ui_relation": "modelos_oculos"})
     segmento: Optional[SEGMENTO_OCULO] = Field(
         None,
-        description="Segmento (óculos de sol)",
-        json_schema_extra={
-            "ui_widget": "enum",
-            "ui_options": ["homem", "mulher", "crianca"],
-            "ui_labels": SEGMENTO_OCULO_LABELS,
-        },
+        description="Segmento (legado — oculto no backoffice)",
+        json_schema_extra={"ui_hidden": True},
     )
     ean: str = Field(..., pattern=r"^\d{13}$")
     barcode_url: Optional[str] = Field(None, json_schema_extra={"ui_readonly": True})
@@ -979,7 +975,7 @@ def _register_catalog_types() -> None:
                 "model_discriminator_field": None,
                 "product_readonly_on_edit": True,
                 "apply_barcode_on_save": True,
-                "storefront_mode": "variantes",
+                "storefront_mode": "unico",
                 "storefront_filters": [
                     {
                         "field": "tipo_oculo",
@@ -988,12 +984,6 @@ def _register_catalog_types() -> None:
                         "labels": TIPO_OCULO_LABELS,
                     },
                 ],
-                "storefront_picker": {
-                    "source": "products",
-                    "field": "segmento",
-                    "label": "Segmento",
-                    "format": "plain",
-                },
             },
             "toalha_mesa": {
                 "label": "Toalhas de mesa",

@@ -326,7 +326,7 @@ onUnmounted(() => {
   gap: 1.5rem 1rem;
   padding-top: 0;
   padding-bottom: 2.25rem;
-  max-width: 1320px;
+  max-width: var(--content-max);
 }
 
 .footer-brand img {

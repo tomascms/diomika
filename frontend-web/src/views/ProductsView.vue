@@ -80,15 +80,51 @@ function nestedEans(value, found = []) {
   return found
 }
 
+function foldText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLocaleLowerCase('pt')
+}
+
+function searchHaystack(product) {
+  const cores = (product.modelo_cores || []).map((c) => c?.nome).filter(Boolean)
+  const extras = [
+    product.tipo,
+    product.tipo_oculo,
+    product.tipo_produto,
+    product.material,
+    product.subtipo,
+    product._familia_label,
+  ].filter(Boolean)
+  return foldText([product.nome, product.slug, ...extras, ...cores, ...nestedEans(product)].join(' '))
+}
+
+function modelMatchesClientFilters(product, filters) {
+  const entries = Object.entries(filters || {}).filter(([, v]) => String(v ?? '').trim())
+  if (!entries.length) return true
+  return entries.every(([field, value]) => {
+    const wanted = String(value)
+    if (String(product?.[field] ?? '') === wanted) return true
+    if (field === '_tipo_catalogo' && String(product?._tipo_catalogo || '') === wanted) return true
+    const pt =
+      product?._storefront?.product_table ||
+      catalog.storefrontContext(catalogTipo.value, product)?.product_table
+    if (!pt) return false
+    const rows = Array.isArray(product[pt]) ? product[pt] : product[pt] ? [product[pt]] : []
+    return rows.some((row) => String(row?.[field] ?? '') === wanted)
+  })
+}
+
 const displayedProducts = computed(() => {
-  const query = localSearch.value.trim().toLocaleLowerCase('pt')
+  const query = foldText(localSearch.value.trim())
+  const active = Object.fromEntries(
+    Object.entries(selectedFilters.value || {}).filter(([, v]) => String(v ?? '').trim()),
+  )
   const filtered = products.value.filter((product) => {
+    if (!modelMatchesClientFilters(product, active)) return false
     if (!query) return true
-    return [product.nome, product.slug, ...nestedEans(product)]
-      .filter(Boolean)
-      .join(' ')
-      .toLocaleLowerCase('pt')
-      .includes(query)
+    return searchHaystack(product).includes(query)
   })
 
   return [...filtered].sort((a, b) => {
@@ -154,8 +190,14 @@ async function fetchProducts({ resetCategory = false } = {}) {
     const tipo = category.tipo_catalogo
     if (!tipo) throw new Error('Categoria sem tipo de catálogo.')
 
-    const filters = filterDefs.value.length ? { ...selectedFilters.value } : null
-    const models = await catalog.fetchCategoryModels(tipo, category.id, filters)
+    const filters = Object.fromEntries(
+      Object.entries(selectedFilters.value || {}).filter(([, value]) => String(value ?? '').trim()),
+    )
+    const models = await catalog.fetchCategoryModels(
+      tipo,
+      category.id,
+      Object.keys(filters).length ? filters : null,
+    )
     if (seq !== fetchSeq) return
 
     const visible = Array.isArray(models)

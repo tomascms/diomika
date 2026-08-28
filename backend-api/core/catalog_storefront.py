@@ -261,6 +261,37 @@ def _finalize_model_products(row: dict, cfg: dict, pt: str, mode: str) -> bool:
     return True
 
 
+# Campos na tabela de produto — filtrar depois do select do modelo.
+_PRODUCT_FILTER_FIELDS = frozenset({"dimensoes", "altura", "segmento", "ean"})
+
+
+def _split_filters(filters: dict[str, str] | None) -> tuple[dict[str, str], dict[str, str]]:
+    model_filters: dict[str, str] = {}
+    product_filters: dict[str, str] = {}
+    for field, value in (filters or {}).items():
+        if not field or field.startswith("_") or value is None or not str(value).strip():
+            continue
+        text = str(value)
+        if field in _PRODUCT_FILTER_FIELDS:
+            product_filters[field] = text
+        else:
+            model_filters[field] = text
+    return model_filters, product_filters
+
+
+def _matches_product_filters(row: dict, pt: str, product_filters: dict[str, str]) -> bool:
+    if not product_filters:
+        return True
+    raw = row.get(pt)
+    products = raw if isinstance(raw, list) else [raw] if raw else []
+    for product in products:
+        if not isinstance(product, dict):
+            continue
+        if all(str(product.get(field) or "") == value for field, value in product_filters.items()):
+            return True
+    return False
+
+
 def catalogue_models_for_tipo(
     tipo: str,
     id_categoria: str,
@@ -296,6 +327,8 @@ def catalogue_models_for_tipo(
     if filter_field and filter_value:
         active_filters[filter_field] = filter_value
 
+    model_filters, product_filters = _split_filters(active_filters)
+
     query = (
         get_db()
         .table(mt)
@@ -304,9 +337,8 @@ def catalogue_models_for_tipo(
         .eq("visibilidade", True)
     )
 
-    for field, value in active_filters.items():
-        if field and value:
-            query = query.eq(field, value)
+    for field, value in model_filters.items():
+        query = query.eq(field, value)
 
     rows = query.order("nome").execute().data or []
     _attach_modelo_cores(rows, tipo=tipo)
@@ -316,6 +348,8 @@ def catalogue_models_for_tipo(
         row = attach_storefront_fields(dict(row), cfg)
         row["modelo_cores"] = _modelo_cores(row)
         if not _finalize_model_products(row, cfg, pt, mode):
+            continue
+        if not _matches_product_filters(row, pt, product_filters):
             continue
 
         row["_tipo_catalogo"] = tipo

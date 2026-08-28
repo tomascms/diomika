@@ -9,20 +9,25 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const rows = ref([{ material: '', percent: '' }])
+let syncing = false
 
 const parseValue = (val) => {
   if (!val) return [{ material: '', percent: '' }]
+  let parsed = val
   if (typeof val === 'string') {
     try {
-      val = JSON.parse(val)
+      parsed = JSON.parse(val)
     } catch {
       return [{ material: '', percent: '' }]
     }
   }
-  if (typeof val === 'object' && !Array.isArray(val)) {
-    const entries = Object.entries(val)
+  if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const entries = Object.entries(parsed)
     return entries.length
-      ? entries.map(([material, percent]) => ({ material: String(material), percent: String(percent ?? '') }))
+      ? entries.map(([material, percent]) => ({
+          material: String(material),
+          percent: String(percent ?? ''),
+        }))
       : [{ material: '', percent: '' }]
   }
   return [{ material: '', percent: '' }]
@@ -31,12 +36,12 @@ const parseValue = (val) => {
 watch(
   () => props.modelValue,
   (v) => {
+    if (syncing) return
     rows.value = parseValue(v)
   },
   { immediate: true },
 )
 
-/** Só conta linhas com material + % — alinhado com o que se grava. */
 const buildPayload = () => {
   const out = {}
   for (const r of rows.value) {
@@ -50,10 +55,21 @@ const buildPayload = () => {
   return out
 }
 
-const total = computed(() => Object.values(buildPayload()).reduce((sum, p) => sum + p, 0))
+/** Total visual: soma % das linhas (mesmo sem material ainda). */
+const totalUi = computed(() =>
+  rows.value.reduce((sum, r) => sum + (parseInt(String(r.percent ?? ''), 10) || 0), 0),
+)
+
+const totalSaved = computed(() =>
+  Object.values(buildPayload()).reduce((sum, p) => sum + p, 0),
+)
 
 const sync = () => {
+  syncing = true
   emit('update:modelValue', buildPayload())
+  queueMicrotask(() => {
+    syncing = false
+  })
 }
 
 const addRow = () => {
@@ -90,11 +106,10 @@ const removeRow = (idx) => {
       <button v-if="!disabled" type="button" class="btn btn-danger btn-sm" @click="removeRow(idx)">X</button>
     </div>
     <button v-if="!disabled" type="button" class="btn btn-ghost btn-sm" @click="addRow">+ Adicionar material</button>
-    <p class="sum" :class="{ ok: total === 100, warn: total !== 100 }">
-      Total: {{ total }}% (deve ser 100%)
-      <span v-if="total !== 100 && rows.some((r) => String(r.percent || '').trim() && !String(r.material || '').trim())" class="hint">
-        — indique o nome do material em cada linha com %
-      </span>
+    <p class="sum" :class="{ ok: totalSaved === 100, warn: totalSaved !== 100 }">
+      Total a gravar: {{ totalSaved }}%
+      <span v-if="totalUi !== totalSaved"> (a escrever: {{ totalUi }}%)</span>
+      — deve ser 100%
     </p>
   </div>
 </template>
@@ -107,5 +122,4 @@ const removeRow = (idx) => {
 .sum { margin: 4px 0 0; font-size: 0.8rem; }
 .sum.ok { color: var(--success); }
 .sum.warn { color: var(--danger); }
-.hint { font-weight: 500; }
 </style>

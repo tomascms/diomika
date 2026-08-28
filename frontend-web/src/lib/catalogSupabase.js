@@ -132,6 +132,37 @@ function finalizeModelRow(row, cfg) {
   return row
 }
 
+/** Campos que vivem na tabela de produto — não filtrar com .eq na tabela do modelo. */
+const PRODUCT_FILTER_FIELDS = new Set(['dimensoes', 'altura', 'segmento', 'ean'])
+
+function splitFilters(filters = {}) {
+  const modelFilters = {}
+  const productFilters = {}
+  for (const [field, value] of Object.entries(filters || {})) {
+    if (!field || field.startsWith('_') || value == null || String(value).trim() === '') continue
+    if (PRODUCT_FILTER_FIELDS.has(field)) productFilters[field] = String(value)
+    else modelFilters[field] = String(value)
+  }
+  return { modelFilters, productFilters }
+}
+
+function matchesProductFilters(row, cfg, productFilters) {
+  const entries = Object.entries(productFilters || {})
+  if (!entries.length) return true
+  const pt = cfg.product_table
+  const raw = row?.[pt]
+  const products = Array.isArray(raw) ? raw : raw ? [raw] : []
+  return products.some((p) =>
+    entries.every(([field, value]) => String(p?.[field] ?? '') === value),
+  )
+}
+
+function matchesModelFilters(row, modelFilters) {
+  return Object.entries(modelFilters || {}).every(
+    ([field, value]) => String(row?.[field] ?? '') === value,
+  )
+}
+
 export { getCatalogMeta } from '@/lib/catalogMeta'
 
 export async function listCategories() {
@@ -223,6 +254,7 @@ export async function catalogueModelsForTipo(tipo, categoryId, { filters = {}, f
 
   const activeFilters = { ...filters }
   if (filterField && filterValue) activeFilters[filterField] = filterValue
+  const { modelFilters, productFilters } = splitFilters(activeFilters)
 
   let query = supabase
     .from(mt)
@@ -230,8 +262,8 @@ export async function catalogueModelsForTipo(tipo, categoryId, { filters = {}, f
     .eq('id_categoria', categoryId)
     .eq('visibilidade', true)
 
-  for (const [field, value] of Object.entries(activeFilters)) {
-    if (field && value) query = query.eq(field, value)
+  for (const [field, value] of Object.entries(modelFilters)) {
+    query = query.eq(field, value)
   }
 
   const { data, error } = await query.order('nome')
@@ -244,7 +276,10 @@ export async function catalogueModelsForTipo(tipo, categoryId, { filters = {}, f
     const row = attachStorefrontFields({ ...raw }, cfg)
     row.modelo_cores = modeloCores(row)
     const finalized = finalizeModelRow(row, cfg)
-    if (finalized) out.push(finalized)
+    if (!finalized) continue
+    if (!matchesProductFilters(finalized, cfg, productFilters)) continue
+    if (!matchesModelFilters(finalized, modelFilters)) continue
+    out.push(finalized)
   }
   return out
 }

@@ -66,7 +66,7 @@ const isLocked = (field) => {
 
   if (field.lock_on_edit && props.editing) return true
 
-  if (props.editing && ['id_categoria', 'id_modelo'].includes(field.name)) return true
+  if (props.editing && field.name === 'id_modelo') return true
 
   return false
 
