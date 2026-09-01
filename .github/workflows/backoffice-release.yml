@@ -79,7 +79,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Publish public cliente release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: backoffice-cliente-latest
           name: Diomika Backoffice cliente (latest)
