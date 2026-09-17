@@ -115,12 +115,17 @@ function proxyToApi(req, res) {
     delete outHeaders['cross-origin-resource-policy']
     delete outHeaders['cross-origin-opener-policy']
     delete outHeaders['content-encoding']
-    res.writeHead(upRes.statusCode || 502, outHeaders)
+    delete outHeaders['content-length']
+    const chunks = []
+    upRes.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+    upRes.on('end', () => {
+      if (!res.headersSent) res.writeHead(upRes.statusCode || 502, outHeaders)
+      res.end(Buffer.concat(chunks))
+    })
     upRes.on('error', () => {
       if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ detail: 'Falha ao ler resposta da API.' }))
     })
-    upRes.pipe(res)
   })
 
   upstream.on('error', (err) => {
@@ -241,16 +246,7 @@ app.whenReady().then(async () => {
     )
   }
   localServer = await createWindow()
-  if (!isDev) {
-    apiHealthOk().then((ok) => {
-      if (!ok) {
-        dialog.showErrorBox(
-          'Sem ligação à API',
-          `Não foi possível contactar ${API_ORIGIN}.\nConfirme a internet e use «Tentar novamente» no painel.`,
-        )
-      }
-    })
-  }
+  // Estado online/offline fica no painel (AppShell) — sem popup ao arrancar.
 })
 
 app.on('window-all-closed', () => {
