@@ -1,14 +1,12 @@
 /**
  * Diomika Backoffice — Electron (Win/Mac/Linux).
  * Proxy /api → API cloud com header de gate (WAF + API).
+ * Usa electron.net (Chromium) — fiável com antivirus/SSL inspection (AVG, etc.).
  */
-const { app, BrowserWindow, shell, dialog } = require('electron')
+const { app, BrowserWindow, shell, dialog, net } = require('electron')
 const http = require('http')
-const https = require('https')
 const fs = require('fs')
 const path = require('path')
-const zlib = require('zlib')
-const { URL } = require('url')
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL)
 const API_ORIGIN = (
@@ -30,33 +28,23 @@ function loadDesktopGate() {
 const DESKTOP_GATE = loadDesktopGate()
 const DIST_DIR = path.join(__dirname, '../dist')
 
-function transportFor(url) {
-  return url.protocol === 'https:' ? https : http
+function apiTargetUrl(reqUrl) {
+  const incoming = new URL(reqUrl || '/', 'http://127.0.0.1')
+  const targetPath = (incoming.pathname.replace(/^\/api/, '') || '/') + incoming.search
+  return `${API_ORIGIN}${targetPath.startsWith('/') ? targetPath : `/${targetPath}`}`
 }
 
 function apiHealthOk() {
   return new Promise((resolve) => {
-    const target = new URL(`${API_ORIGIN}/health`)
-    const lib = transportFor(target)
-    const req = lib.get(
-      {
-        protocol: target.protocol,
-        hostname: target.hostname,
-        port: target.port || (target.protocol === 'https:' ? 443 : 80),
-        path: target.pathname + target.search,
-        timeout: 8000,
-        headers: { 'User-Agent': 'DiomikaBackoffice/1.0' },
-      },
-      (res) => {
-        res.resume()
-        resolve(res.statusCode >= 200 && res.statusCode < 500)
-      },
-    )
-    req.on('error', () => resolve(false))
-    req.on('timeout', () => {
-      req.destroy()
-      resolve(false)
+    const req = net.request({ method: 'GET', url: `${API_ORIGIN}/health` })
+    req.setHeader('User-Agent', 'DiomikaBackoffice/1.0')
+    if (DESKTOP_GATE) req.setHeader('x-diomika-desktop', DESKTOP_GATE)
+    req.on('response', (res) => {
+      res.on('data', () => {})
+      res.on('end', () => resolve(res.statusCode >= 200 && res.statusCode < 500))
     })
+    req.on('error', () => resolve(false))
+    req.end()
   })
 }
 
@@ -86,47 +74,54 @@ function safeJoin(root, reqPath) {
   return full
 }
 
+const HOP_BY_HOP = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+  'host',
+  'content-length',
+])
+
 function proxyToApi(req, res) {
-  const incoming = new URL(req.url || '/', 'http://127.0.0.1')
-  const targetPath = (incoming.pathname.replace(/^\/api/, '') || '/') + incoming.search
-  const target = new URL(targetPath, API_ORIGIN + '/')
-  const lib = transportFor(target)
+  const targetUrl = apiTargetUrl(req.url)
+  const method = (req.method || 'GET').toUpperCase()
 
-  const headers = { ...req.headers, host: target.host }
-  delete headers.origin
-  delete headers.referer
-  // Pedir compressão à API; descomprimir no proxy antes do renderer local.
-  headers['accept-encoding'] = 'gzip, deflate'
-  headers['user-agent'] = 'DiomikaBackoffice/1.0'
-  if (DESKTOP_GATE) headers['x-diomika-desktop'] = DESKTOP_GATE
+  const upstream = net.request({
+    method,
+    url: targetUrl,
+    redirect: 'follow',
+  })
 
-  const upstream = lib.request(
-    {
-      protocol: target.protocol,
-      hostname: target.hostname,
-      port: target.port || (target.protocol === 'https:' ? 443 : 80),
-      method: req.method,
-      path: target.pathname + target.search,
-      headers,
-    },
-    (upRes) => {
-      const outHeaders = { ...upRes.headers }
-      delete outHeaders['cross-origin-resource-policy']
-      delete outHeaders['cross-origin-opener-policy']
-      const encoding = String(outHeaders['content-encoding'] || '').toLowerCase()
-      delete outHeaders['content-encoding']
-      delete outHeaders['content-length']
-      res.writeHead(upRes.statusCode || 502, outHeaders)
-      let stream = upRes
-      if (encoding === 'gzip') stream = upRes.pipe(zlib.createGunzip())
-      else if (encoding === 'deflate') stream = upRes.pipe(zlib.createInflate())
-      stream.on('error', () => {
-        if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' })
-        res.end(JSON.stringify({ detail: 'Falha ao descomprimir resposta da API.' }))
-      })
-      stream.pipe(res)
-    },
-  )
+  // Sem gzip — evita incompatibilidade net.IncomingMessage ↔ zlib no Electron
+  upstream.setHeader('accept-encoding', 'identity')
+  upstream.setHeader('user-agent', 'DiomikaBackoffice/1.0')
+  if (DESKTOP_GATE) upstream.setHeader('x-diomika-desktop', DESKTOP_GATE)
+
+  for (const [key, value] of Object.entries(req.headers)) {
+    const lower = key.toLowerCase()
+    if (HOP_BY_HOP.has(lower) || lower === 'origin' || lower === 'referer') continue
+    if (value === undefined || value === null) continue
+    if (Array.isArray(value)) value.forEach((v) => upstream.setHeader(key, v))
+    else upstream.setHeader(key, String(value))
+  }
+
+  upstream.on('response', (upRes) => {
+    const outHeaders = { ...upRes.headers }
+    delete outHeaders['cross-origin-resource-policy']
+    delete outHeaders['cross-origin-opener-policy']
+    delete outHeaders['content-encoding']
+    res.writeHead(upRes.statusCode || 502, outHeaders)
+    upRes.on('error', () => {
+      if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ detail: 'Falha ao ler resposta da API.' }))
+    })
+    upRes.pipe(res)
+  })
 
   upstream.on('error', (err) => {
     const msg = JSON.stringify({
@@ -136,7 +131,21 @@ function proxyToApi(req, res) {
     res.end(msg)
   })
 
-  req.pipe(upstream)
+  if (method === 'GET' || method === 'HEAD') {
+    upstream.end()
+    return
+  }
+
+  req.on('data', (chunk) => upstream.write(chunk))
+  req.on('end', () => upstream.end())
+  req.on('error', () => {
+    try {
+      upstream.abort()
+    } catch {
+      /* ignore */
+    }
+  })
+  req.resume()
 }
 
 function serveStatic(req, res) {
@@ -231,7 +240,6 @@ app.whenReady().then(async () => {
       'Falta DIOMIKA_DESKTOP_GATE neste instalador. Peça um build novo à Diomika.',
     )
   }
-  // Abrir UI de imediato — health em background (AppShell mostra estado online/offline).
   localServer = await createWindow()
   if (!isDev) {
     apiHealthOk().then((ok) => {

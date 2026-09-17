@@ -39,7 +39,19 @@ try {
   Write-Step 'Sem exclusao automatica (opcional). Se o AV bloquear: Definições → Exclusões → pasta cliente-backoffice.'
 }
 
-# 3) Extrair ZIP para pasta oculta .diomika (mantém a pasta do cliente limpa)
+# 3) Preferir .exe portátil (1 clique, sem extrair)
+$portable = Get-ChildItem -LiteralPath $Root -Filter 'Diomika-Backoffice-*-windows.exe' -File -ErrorAction SilentlyContinue |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1
+
+if ($portable) {
+  Write-Step "A abrir $($portable.Name)..."
+  try { Unblock-File -LiteralPath $portable.FullName -ErrorAction SilentlyContinue } catch {}
+  Start-Process -FilePath $portable.FullName
+  exit 0
+}
+
+# 4) Alternativa: extrair ZIP para pasta oculta .diomika
 $zip = Get-ChildItem -LiteralPath $Root -Filter 'Diomika-Backoffice-*-windows.zip' -File -ErrorAction SilentlyContinue |
   Sort-Object LastWriteTime -Descending |
   Select-Object -First 1
@@ -79,24 +91,13 @@ if (-not $appExe -and $zip) {
 }
 
 if (-not $appExe) {
-  # Fallback legado: .exe portatil (pior para AV)
-  $portable = Get-ChildItem -LiteralPath $Root -Filter 'Diomika-Backoffice-*-windows.exe' -File -ErrorAction SilentlyContinue |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 1
-  if ($portable) {
-    Write-Step 'A usar .exe portatil antigo (pode ser bloqueado pelo antivirus)...'
-    try { Unblock-File -LiteralPath $portable.FullName } catch {}
-    Start-Process -FilePath $portable.FullName
-    exit 0
-  }
   Write-Host ''
-  Write-Host ' ERRO: nao encontrei Diomika-Backoffice-*-windows.zip nem a pasta extraida.'
-  Write-Host ' Coloque o ZIP nesta pasta e volte a correr Abrir-Windows.cmd'
+  Write-Host ' ERRO: nao encontrei Diomika-Backoffice-*-windows.exe nem .zip nesta pasta.'
   Write-Host ''
   exit 1
 }
 
-# 4) Desbloquear só o executável principal
+# 5) Desbloquear só o executável principal
 try { Unblock-File -LiteralPath $appExe -ErrorAction SilentlyContinue } catch {}
 
 Write-Step "A abrir: $appExe"

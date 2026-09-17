@@ -33,6 +33,7 @@ export default defineConfig(({ mode }) => {
           rewrite: (p) => p.replace(/^\/api/, ''),
           configure: (proxy) => {
             proxy.on('proxyReq', (proxyReq) => {
+              proxyReq.setHeader('User-Agent', 'DiomikaBackoffice/1.0')
               if (desktopGate) proxyReq.setHeader('x-diomika-desktop', desktopGate)
             })
           },

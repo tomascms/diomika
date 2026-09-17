@@ -7,9 +7,9 @@
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"wait-on http://127.0.0.1:5174 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5174 electron .\"",
-    "dev:ui": "vite",
-    "dev:browser": "vite --open",
+    "dev": "concurrently -k \"npm run dev:ui\" \"wait-on http://127.0.0.1:5174 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5174 electron .\"",
+    "dev:ui": "cross-env NODE_OPTIONS=--use-system-ca vite",
+    "dev:browser": "cross-env NODE_OPTIONS=--use-system-ca vite --open",
     "build": "vite build",
     "start": "electron .",
     "dist": "npm run dist:win",
