@@ -44,7 +44,7 @@ def main() -> int:
         failed += run(
             [
                 sys.executable,
-                "deploy/load_test.py",
+                "deploy/load/load_test.py",
                 "--url",
                 args.api,
                 "--concurrency",

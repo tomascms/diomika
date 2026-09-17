@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend-api/ ./backend-api/
 
 ENV PYTHONPATH=/app/backend-api
-ENV UVICORN_WORKERS=4
+ENV UVICORN_WORKERS=2
 WORKDIR /app/backend-api
 
 # Multi-worker — escala horizontal por CPU (VM produção)

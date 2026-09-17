@@ -56,11 +56,11 @@ class CatalogCacheHeadersMiddleware(BaseHTTPMiddleware):
             return response
         path = request.url.path
         if path == "/categorias" or path.startswith("/categorias/"):
-            response.headers.setdefault("Cache-Control", "public, max-age=60, stale-while-revalidate=120")
+            response.headers.setdefault("Cache-Control", "public, max-age=300, stale-while-revalidate=600")
         elif path == "/catalogo/meta" or (
             path.startswith("/catalogo/") and "/admin/" not in path and response.status_code == 200
         ):
-            response.headers.setdefault("Cache-Control", "public, max-age=60, stale-while-revalidate=120")
+            response.headers.setdefault("Cache-Control", "public, max-age=300, stale-while-revalidate=600")
         return response
 
 

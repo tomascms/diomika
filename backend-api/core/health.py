@@ -105,6 +105,7 @@ def build_health(*, detailed: bool = False, ready: bool = False) -> dict:
         return {"status": "online", "version": VERSION}
 
     from core.notify import contact_notify_email
+    from core.cache import cache_backend, cache_stats
     from core.rate_limit import redis_available
     from core.feature_flags import flags_snapshot
     from utils.storage import storage_is_private
@@ -122,6 +123,8 @@ def build_health(*, detailed: bool = False, ready: bool = False) -> dict:
         "database": db_ok,
         "storage": "private" if storage_is_private() else "public",
         "rate_limit": "redis" if redis_available() else "memory",
+        "catalog_cache": cache_backend(),
+        "catalog_cache_stats": cache_stats(),
         "api_key_required": settings.api_key_required,
         "contact_email_notify": bool(contact_notify_email()),
         "smtp_circuit": "open" if breaker.opened_at else "closed",

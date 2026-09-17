@@ -171,6 +171,18 @@ export const api = {
     const data = await request('GET', `/admin/crud/${table}`, { params })
     return Array.isArray(data) ? data : data?.items || []
   },
+  listRecordsPage: async (table, params) => {
+    const data = await request('GET', `/admin/crud/${table}`, { params })
+    if (Array.isArray(data)) {
+      return { items: data, limit: data.length, offset: 0, count: data.length }
+    }
+    return {
+      items: data?.items || [],
+      limit: data?.limit,
+      offset: data?.offset ?? 0,
+      count: data?.count ?? (data?.items || []).length,
+    }
+  },
   listRelationOptions: async (table, { force = false } = {}) => {
     if (!force && relationCache.has(table)) return relationCache.get(table)
     const pending = (async () => {

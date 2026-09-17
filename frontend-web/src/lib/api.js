@@ -51,15 +51,36 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_M
   }
 }
 
-export async function apiGet(path) {
+async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+export async function apiGet(path, { retries = 1 } = {}) {
   const headers = requestHeaders(false)
-  const resp = await fetchWithTimeout(`${base}${path}`, { headers })
-  const requestId = resp.headers.get('X-Request-Id') || headers['X-Request-Id']
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}))
-    throw new Error(parseApiDetail(err, resp.status, requestId))
+  let lastError = null
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const resp = await fetchWithTimeout(`${base}${path}`, { headers })
+      const requestId = resp.headers.get('X-Request-Id') || headers['X-Request-Id']
+      if (!resp.ok) {
+        if ([502, 503, 504].includes(resp.status) && attempt < retries) {
+          await sleep(200 * (attempt + 1))
+          continue
+        }
+        const err = await resp.json().catch(() => ({}))
+        throw new Error(parseApiDetail(err, resp.status, requestId))
+      }
+      return resp.json()
+    } catch (err) {
+      lastError = err
+      if (attempt < retries && !String(err.message || '').includes('HTTP 4')) {
+        await sleep(200 * (attempt + 1))
+        continue
+      }
+      throw err
+    }
   }
-  return resp.json()
+  throw lastError || new Error('Pedido falhou.')
 }
 
 export async function apiPost(path, body, options = {}) {

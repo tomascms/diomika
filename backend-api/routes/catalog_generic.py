@@ -30,7 +30,7 @@ from models.schemas import aggregated_tipos_for_tipo
 
 logger = logging.getLogger("diomika-api")
 
-_ADMIN_MERGED_CACHE_TTL = max(20, catalog_cache_ttl() // 2)
+_ADMIN_MERGED_CACHE_TTL = catalog_cache_ttl()
 
 router = APIRouter(prefix="/catalogo", tags=["Catálogo"])
 
@@ -40,6 +40,28 @@ async def get_catalog_meta():
     """Tipos, tabelas e modos de vitrine — derivado de CATALOG_TYPES."""
     ttl = catalog_cache_ttl()
     return await asyncio.to_thread(get_or_set, "catalog:meta", float(ttl), catalog_metadata)
+
+
+@router.get("/search")
+async def search_catalog(q: str = "", limit: int = 40):
+    """Pesquisa modelos por nome, slug ou EAN — substitui preload total no cliente."""
+    from core.catalog_search import search_storefront
+
+    needle = (q or "").strip()
+    if len(needle) < 2:
+        return []
+    lim = min(max(limit, 1), 80)
+    cache_key = f"catalog:search:{needle.lower()}:{lim}"
+    ttl = catalog_cache_ttl()
+
+    def load():
+        return search_storefront(needle, limit=lim)
+
+    try:
+        return await asyncio.to_thread(get_or_set, cache_key, float(ttl), load)
+    except Exception as exc:
+        logger.error("Search catalogo %r: %s", needle, exc)
+        raise HTTPException(status_code=500, detail="Erro na pesquisa") from exc
 
 
 def _require_tipo(tipo: str) -> dict:
@@ -57,7 +79,9 @@ async def get_storefront_model_detail_auto(id_modelo: str):
     cache_key = f"catalog:modelo-auto:{id_modelo}"
 
     def load():
-        for tipo in CATALOG_TYPES:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def try_tipo(tipo: str):
             try:
                 data = model_detail_for_tipo(tipo, id_modelo)
                 if data:
@@ -65,7 +89,15 @@ async def get_storefront_model_detail_auto(id_modelo: str):
                     data["_storefront_mode"] = CATALOG_TYPES[tipo].get("storefront_mode") or "variantes"
                     return data
             except HTTPException:
-                continue
+                return None
+            return None
+
+        with ThreadPoolExecutor(max_workers=min(5, len(CATALOG_TYPES))) as pool:
+            futures = [pool.submit(try_tipo, t) for t in CATALOG_TYPES]
+            for fut in as_completed(futures):
+                data = fut.result()
+                if data:
+                    return data
         raise HTTPException(status_code=404, detail="Modelo não encontrado")
 
     try:
@@ -149,6 +181,26 @@ async def get_storefront_model_detail(tipo: str, id_modelo: str):
         raise HTTPException(status_code=500, detail="Erro ao carregar modelo") from exc
 
 
+def _model_ids_by_table_for_category(categoria_id: str) -> dict[str, list[str]]:
+    """Uma passagem por família — evita N× a mesma query na lista merged de produtos."""
+    db = get_db()
+    out: dict[str, list[str]] = {}
+    for cfg in CATALOG_TYPES.values():
+        mt = cfg["model_table"]
+        rows = (
+            db.table(mt)
+            .select("id")
+            .eq("id_categoria", categoria_id)
+            .execute()
+            .data
+            or []
+        )
+        ids = [str(row["id"]) for row in rows if row.get("id")]
+        if ids:
+            out[mt] = ids
+    return out
+
+
 def _fetch_merged_table_page(
     *,
     view_key: str,
@@ -157,7 +209,15 @@ def _fetch_merged_table_page(
     per_table: int,
     categoria_id: str | None,
     modelo_id: str | None,
+    model_ids_by_mt: dict[str, list[str]] | None = None,
 ) -> list[dict]:
+    mt = model_table_for_tipo(tipo_for_table(ptable))
+
+    if categoria_id and view_key == "produtos" and mt:
+        model_ids = (model_ids_by_mt or {}).get(mt, [])
+        if not model_ids:
+            return []
+
     db = get_db()
 
     def _run(select_q: str):
@@ -166,21 +226,8 @@ def _fetch_merged_table_page(
             query = query.eq("visibilidade", True)
         if categoria_id and view_key == "modelos":
             query = query.eq("id_categoria", categoria_id)
-        if categoria_id and view_key == "produtos":
-            mt = model_table_for_tipo(tipo_for_table(ptable))
-            if mt:
-                model_rows = (
-                    db.table(mt)
-                    .select("id")
-                    .eq("id_categoria", categoria_id)
-                    .execute()
-                    .data
-                    or []
-                )
-                model_ids = [str(row["id"]) for row in model_rows if row.get("id")]
-                if not model_ids:
-                    return []
-                query = query.in_("id_modelo", model_ids)
+        if categoria_id and view_key == "produtos" and mt:
+            query = query.in_("id_modelo", model_ids)
         if modelo_id and view_key == "produtos":
             query = query.eq("id_modelo", modelo_id)
         try:
@@ -192,7 +239,6 @@ def _fetch_merged_table_page(
         try:
             res = _run(admin_merged_select_query(ptable))
         except Exception as lean_exc:
-            # Fallback seguro: select completo (nunca devolver vazio por coluna em falta)
             logger.warning("Merged lean select falhou %s/%s: %s — fallback *", view_key, ptable, lean_exc)
             res = _run(list_select_query(ptable))
     except Exception as exc:
@@ -200,7 +246,6 @@ def _fetch_merged_table_page(
         return []
 
     familia = tipo_label(tipo_for_table(ptable))
-    mt = model_table_for_tipo(tipo_for_table(ptable))
     out: list[dict] = []
     for item in res.data or []:
         item["_ptable"] = ptable
@@ -268,6 +313,11 @@ def _load_merged_rows_sync(
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     rows: list[dict] = []
+    model_ids_by_mt = (
+        _model_ids_by_table_for_category(categoria_id)
+        if categoria_id and view_key == "produtos"
+        else None
+    )
     with ThreadPoolExecutor(max_workers=min(5, max(len(tables), 1))) as pool:
         futures = [
             pool.submit(
@@ -278,6 +328,7 @@ def _load_merged_rows_sync(
                 per_table=per_table,
                 categoria_id=categoria_id,
                 modelo_id=modelo_id,
+                model_ids_by_mt=model_ids_by_mt,
             )
             for ptable in tables
         ]

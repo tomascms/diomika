@@ -8,7 +8,7 @@ const error = ref('')
 let loadPromise = null
 
 const CACHE_KEY = 'diomika_cats_v5'
-const CACHE_TTL_MS = 90 * 1000
+const CACHE_TTL_MS = 5 * 60 * 1000
 
 function readCatCache() {
   try {
@@ -70,8 +70,8 @@ export function useCategories() {
       const cached = readCatCache()
       if (cached?.length) {
         categories.value = cached.map((c) => ({ ...c }))
-        // Assinar URLs public→signed antes de pintar (bucket privado)
-        await hydrateCategoryImages(categories.value)
+        // Mostrar já; assinar imagens em background (bucket privado)
+        void hydrateCategoryImages(categories.value)
         return categories.value
       }
     }
@@ -90,9 +90,9 @@ export function useCategories() {
           raw = (Array.isArray(data) ? data : []).filter((c) => c.visibilidade !== false)
         }
         categories.value = raw.map((c) => ({ ...c }))
-        await hydrateCategoryImages(categories.value)
         writeCatCache(categories.value)
         loading.value = false
+        void hydrateCategoryImages(categories.value)
         return categories.value
       } catch (e) {
         error.value = e.message || 'Erro ao carregar categorias.'

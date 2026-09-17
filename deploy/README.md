@@ -18,6 +18,8 @@ python deploy/verify_production.py
 | `create_gcp_vm.py` | Criar VM GCP |
 | `security_gate.py` | Portão CI |
 | `verify_production.py` | Smoke pós-deploy |
+| `dev.ps1` | Arranque local loja + backoffice |
+| `load/` | Benchmark, load test Python, k6 stress |
 | `seed_catalog_demo.py` | Categorias + produtos `[TESTE]` + logo nas cores |
 | `apply_production.py` | Schema/SQL produção + seed (`--seed-demo`, `--images-only`) |
 | `gen_catalog_sql.py` | Regenera `generated_catalog_infra.sql` |

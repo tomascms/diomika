@@ -55,7 +55,7 @@
       "category": "public.app-category.business",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
-      "identity": null,
+      "identity": "-",
       "artifactName": "Diomika-Backoffice-${version}-mac.dmg"
     },
     "linux": {

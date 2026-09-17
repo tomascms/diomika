@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, Up
 
 from core.audit import log_admin_action
 from core.auth import Role, SENSITIVE_BUSINESS_TABLES, assert_table_action, require_admin
-from core.cache import invalidate_prefix
+from core.cache import invalidate_catalog_change
 from core.cqrs.commands.catalog import soft_delete
 from core.database import get_db
 from core.idempotency import (
@@ -141,10 +141,13 @@ def _audit(request: Request, action: str, resource: str, resource_id: str | None
     )
 
 
-def _invalidate_catalog_cache() -> None:
-    invalidate_prefix("categories:")
-    invalidate_prefix("catalog:")
-    invalidate_prefix("admin:merged:")
+def _invalidate_catalog_cache(
+    *,
+    table_name: str | None = None,
+    record: dict | None = None,
+    record_id: str | None = None,
+) -> None:
+    invalidate_catalog_change(table_name=table_name, record=record, record_id=record_id)
 
 
 def _tipo_for_model_id(model_id: str | None) -> str:
@@ -625,7 +628,7 @@ def list_relation_options(
     query = get_db().table(table_name).select(relation_options_select_query(table_name))
     if visible_only:
         query = query.eq("visibilidade", True)
-    if id_modelo and table_name in all_colors_tables():
+    if id_modelo and table_name in (*all_colors_tables(), *all_product_tables()):
         query = query.eq("id_modelo", id_modelo)
     try:
         res = query.order("nome").limit(limit).execute()
@@ -672,7 +675,7 @@ def list_records(
     limit: int = 100,
     offset: int = 0,
     id_modelo: str | None = None,
-    tipo_catalogo: str | None = None,
+    q: str | None = None,
 ):
     _schema_for(table_name)
     assert_table_action(table_name, "read", _role(request))
@@ -682,8 +685,16 @@ def list_records(
     query = get_db().table(table_name).select(select_q)
     if visible_only:
         query = query.eq("visibilidade", True)
-    if id_modelo and table_name in all_colors_tables():
+    if id_modelo and table_name in (*all_colors_tables(), *all_product_tables()):
         query = query.eq("id_modelo", id_modelo)
+    needle = (q or "").strip()
+    if needle:
+        if table_name in all_product_tables():
+            query = query.or_(f"ean.ilike.%{needle}%,dimensoes.ilike.%{needle}%")
+        elif table_name in all_model_tables():
+            query = query.or_(f"nome.ilike.%{needle}%,slug.ilike.%{needle}%")
+        elif table_name == "categories":
+            query = query.or_(f"nome.ilike.%{needle}%,slug.ilike.%{needle}%")
     try:
         res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
     except TypeError:
@@ -747,7 +758,7 @@ def create_record(
         record_id = str(row.get("id") or "")
         if key:
             complete_idempotent_request(key, op, row)
-        _invalidate_catalog_cache()
+        _invalidate_catalog_cache(table_name=table_name, record=row, record_id=record_id)
         _audit(request, "create", table_name, resource_id=record_id or None)
         _schedule_barcode_update(table_name, record_id, payload.get("ean"))
         if payload.get("visibilidade"):
@@ -782,7 +793,12 @@ def update_record(request: Request, table_name: str, record_id: str, body: dict)
         payload.pop("id", None)
         payload.pop("created_at", None)
         res = get_db().table(table_name).update(payload).eq("id", record_id).execute()
-        _invalidate_catalog_cache()
+        updated = (res.data or [{}])[0]
+        _invalidate_catalog_cache(
+            table_name=table_name,
+            record={**payload, **updated},
+            record_id=record_id,
+        )
         _audit(request, "update", table_name, resource_id=record_id)
         _schedule_barcode_update(table_name, record_id, payload.get("ean"))
         if payload.get("visibilidade"):
@@ -827,7 +843,7 @@ def patch_visibility(request: Request, table_name: str, record_id: str, body: di
             _hide_catalog_children(table_name, record_id, tipo=tipo)
     elif table_name == "categories":
         _cascade_category_visibility(record_id, vis)
-    _invalidate_catalog_cache()
+    _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
     _audit(request, "visibility", table_name, resource_id=record_id, visibilidade=vis)
     return (res.data or [{"id": record_id, "visibilidade": vis}])[0]
 
@@ -863,7 +879,7 @@ def publish_record(request: Request, table_name: str, record_id: str):
     elif table_name == "categories":
         _cascade_category_visibility(record_id, True)
 
-    _invalidate_catalog_cache()
+    _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
     _audit(request, "publish", table_name, resource_id=record_id)
     return (res.data or [{"id": record_id, "visibilidade": True}])[0]
 
@@ -904,11 +920,11 @@ def delete_record(request: Request, table_name: str, record_id: str, hard: bool 
                         db.table(cfg["product_table"]).delete().eq("id_modelo", record_id).execute()
                         break
             db.table(table_name).delete().eq("id", record_id).execute()
-            _invalidate_catalog_cache()
+            _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
             _audit(request, "hard_delete", table_name, resource_id=record_id)
             return {"status": "deleted", "hard": True}
         result = soft_delete(table_name, record_id)
-        _invalidate_catalog_cache()
+        _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
         _audit(request, "soft_delete", table_name, resource_id=record_id)
         return result
     except HTTPException:

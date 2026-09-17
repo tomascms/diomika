@@ -74,6 +74,16 @@ const router = createRouter({
       component: () => import('@/views/PrivacyView.vue'),
     },
     {
+      path: '/termos',
+      name: 'terms',
+      component: () => import('@/views/TermsView.vue'),
+    },
+    {
+      path: '/cookies',
+      name: 'cookies',
+      component: () => import('@/views/CookiesView.vue'),
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/views/NotFoundView.vue'),

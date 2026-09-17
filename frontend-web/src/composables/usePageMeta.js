@@ -9,6 +9,10 @@ const ROUTE_META = {
     title: 'Diomika — Catálogo',
     description: 'Explore o catálogo por categoria e peça orçamento.',
   },
+  categories: {
+    title: 'Categorias',
+    description: 'Explore o catálogo Diomika por categoria.',
+  },
   products: {
     title: 'Catálogo',
     description: 'Modelos e variantes disponíveis.',
@@ -36,6 +40,14 @@ const ROUTE_META = {
   privacy: {
     title: 'Política de privacidade',
     description: 'Como tratamos os seus dados pessoais.',
+  },
+  terms: {
+    title: 'Aviso legal',
+    description: 'Informação legal sobre o site Diomika.',
+  },
+  cookies: {
+    title: 'Política de cookies',
+    description: 'Como utilizamos cookies no site Diomika.',
   },
   'not-found': {
     title: 'Página não encontrada',
@@ -91,7 +103,12 @@ export function applyPageMeta({ title, description, image, path } = {}) {
   const metaImage = image || `${SITE_ORIGIN}/brand/logo.svg`
   const img = metaImage.startsWith('http') ? metaImage : `${SITE_ORIGIN}${metaImage.startsWith('/') ? '' : '/'}${metaImage}`
   setOg('og:image', img)
-  if (path && SITE_ORIGIN) {
+  setMeta('twitter:image', img)
+  const pagePath = path && SITE_ORIGIN ? `${SITE_ORIGIN}${path.startsWith('/') ? path : `/${path}`}` : ''
+  if (pagePath) {
+    setOg('og:url', pagePath)
+    setCanonical(pagePath)
+  } else if (path && SITE_ORIGIN) {
     setCanonical(`${SITE_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`)
   }
 }

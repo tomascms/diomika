@@ -108,6 +108,7 @@ const columns = computed(() => {
 })
 
 const filteredRows = computed(() => {
+  if (!isMerged.value) return rows.value
   const q = filterText.value.trim().toLowerCase()
   if (!q) return rows.value
   return rows.value.filter((r) => rowSearchText(r).includes(q))
@@ -128,6 +129,8 @@ const mergedListParams = computed(() => {
   const params = {}
   if (filterCategoriaId.value) params.categoria_id = filterCategoriaId.value
   if (filterModeloId.value) params.modelo_id = filterModeloId.value
+  const cat = categories.value.find((c) => String(c.id) === String(filterCategoriaId.value))
+  if (cat?.tipo_catalogo) params.tipo_catalogo = cat.tipo_catalogo
   return params
 })
 
@@ -182,10 +185,20 @@ const loadRows = async ({ append = false } = {}) => {
         totalApprox.value == null || listOffset.value < totalApprox.value
       )
     } else {
-      const data = await api.listRecords(table.value, { visible_only: 'false', limit: '200' })
+      const offset = append ? listOffset.value : 0
+      const params = {
+        visible_only: 'false',
+        limit: String(PAGE_SIZE),
+        offset: String(offset),
+      }
+      const q = filterText.value.trim()
+      if (q) params.q = q
+      const page = await api.listRecordsPage(table.value, params)
       if (seq !== loadSeq) return
-      rows.value = data
-      hasMore.value = false
+      const items = page.items || []
+      rows.value = append ? [...rows.value, ...items] : items
+      listOffset.value = offset + items.length
+      hasMore.value = items.length >= PAGE_SIZE
     }
   } catch (e) {
     if (seq !== loadSeq) return
@@ -337,6 +350,7 @@ const loadModeloFilterOptions = async () => {
   try {
     const page = await api.mergedList('modelos', {
       categoria_id: filterCategoriaId.value,
+      tipo_catalogo: categories.value.find((c) => String(c.id) === String(filterCategoriaId.value))?.tipo_catalogo || '',
       limit: '100',
       offset: '0',
     })
@@ -379,6 +393,13 @@ watch([filterCategoriaId, filterModeloId], () => {
 
 watch(filterCategoriaId, () => {
   if (table.value === 'produtos') void loadModeloFilterOptions()
+})
+
+let filterDebounce = null
+watch(filterText, () => {
+  if (isMerged.value) return
+  clearTimeout(filterDebounce)
+  filterDebounce = setTimeout(() => void loadRows(), 300)
 })
 
 onMounted(() => {

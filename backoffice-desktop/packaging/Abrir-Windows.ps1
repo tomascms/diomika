@@ -39,39 +39,41 @@ try {
   Write-Step 'Sem exclusao automatica (opcional). Se o AV bloquear: Definições → Exclusões → pasta cliente-backoffice.'
 }
 
-# 3) Preferir pasta extraida do ZIP (sem .exe portatil auto-extraivel)
+# 3) Extrair ZIP para pasta oculta .diomika (mantém a pasta do cliente limpa)
 $zip = Get-ChildItem -LiteralPath $Root -Filter 'Diomika-Backoffice-*-windows.zip' -File -ErrorAction SilentlyContinue |
   Sort-Object LastWriteTime -Descending |
   Select-Object -First 1
 
+$appDir = Join-Path $Root '.diomika'
 $candidates = @(
+  (Join-Path $appDir 'Diomika Backoffice.exe'),
+  (Join-Path $appDir 'Diomika Backoffice\Diomika Backoffice.exe'),
   (Join-Path $Root 'Diomika Backoffice\Diomika Backoffice.exe'),
-  (Join-Path $Root 'win-unpacked\Diomika Backoffice.exe'),
   (Join-Path $Root 'Diomika Backoffice.exe')
 )
 
 $appExe = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 
 if (-not $appExe -and $zip) {
-  Write-Step "A extrair $($zip.Name)..."
+  Write-Step "A extrair $($zip.Name) para .diomika (só na 1.a vez)..."
   $extractTo = Join-Path $Root '_extract_tmp'
   if (Test-Path -LiteralPath $extractTo) {
     Remove-Item -LiteralPath $extractTo -Recurse -Force -ErrorAction SilentlyContinue
   }
+  if (Test-Path -LiteralPath $appDir) {
+    Remove-Item -LiteralPath $appDir -Recurse -Force -ErrorAction SilentlyContinue
+  }
   New-Item -ItemType Directory -Path $extractTo | Out-Null
   Expand-Archive -LiteralPath $zip.FullName -DestinationPath $extractTo -Force
 
-  # electron-builder zip: ficheiros na raiz ou numa pasta
   $found = Get-ChildItem -LiteralPath $extractTo -Recurse -Filter 'Diomika Backoffice.exe' -File -ErrorAction SilentlyContinue |
     Select-Object -First 1
   if ($found) {
+    New-Item -ItemType Directory -Path $appDir -Force | Out-Null
     $srcDir = $found.Directory.FullName
-    $destDir = Join-Path $Root 'Diomika Backoffice'
-    if (Test-Path -LiteralPath $destDir) {
-      Remove-Item -LiteralPath $destDir -Recurse -Force -ErrorAction SilentlyContinue
-    }
-    Move-Item -LiteralPath $srcDir -Destination $destDir -Force
-    $appExe = Join-Path $destDir 'Diomika Backoffice.exe'
+    Copy-Item -LiteralPath $srcDir -Destination (Join-Path $appDir (Split-Path -Leaf $srcDir)) -Recurse -Force
+    $appExe = Get-ChildItem -LiteralPath $appDir -Recurse -Filter 'Diomika Backoffice.exe' -File -ErrorAction SilentlyContinue |
+      Select-Object -First 1 -ExpandProperty FullName
   }
   Remove-Item -LiteralPath $extractTo -Recurse -Force -ErrorAction SilentlyContinue
 }

@@ -42,6 +42,7 @@ jobs:
         run: npm run ${{ matrix.dist }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          CSC_IDENTITY: "-"
           DIOMIKA_DESKTOP_GATE: ${{ secrets.DIOMIKA_DESKTOP_GATE }}
 
       - name: Upload artifacts

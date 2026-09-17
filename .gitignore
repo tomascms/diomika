@@ -42,7 +42,6 @@ deploy/launch.state.json
 deploy/alerts.log
 deploy/.security_audit_latest.json
 deploy/proof/
-deploy/backups/
 *.sql.gz
 deploy/cloudflared-*.log
 deploy/beta-api.log

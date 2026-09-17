@@ -4,6 +4,7 @@ API FastAPI da Diomika (catálogo, orçamentos, contacto, admin local-only).
 Arranque local (dev): porta 8001. Docker compose / VM: :8000. Backoffice cliente → https://api.diomika.com.
 Produção: GCP e2-micro + Cloudflare Tunnel → api.diomika.com
 """
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -11,6 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from core.env_loader import load_project_env
@@ -78,6 +80,9 @@ async def lifespan(app: FastAPI):
         bootstrap_database_schema(logger)
     else:
         logger.info("SCHEMA_BOOTSTRAP=0 — skip bootstrap (replica ou init já feito)")
+    from core.cache_warmup import warm_catalog_cache
+
+    await asyncio.to_thread(warm_catalog_cache)
     start_background_workers()
     yield
     stop_background_workers()
@@ -94,6 +99,7 @@ app = FastAPI(
 )
 
 # Ordem: path guard primeiro (outermost = last add) — Starlette inverte
+app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(GlobalRateLimitMiddleware)
 app.add_middleware(BodySizeLimitMiddleware)
 app.add_middleware(LatencyAlertMiddleware)

@@ -35,7 +35,8 @@ onMounted(async () => {
     <aside v-if="visible" class="cookie-banner" role="dialog" aria-label="Consentimento de cookies">
       <p>
         Utilizamos analytics (PostHog) para melhorar o site — só com o seu consentimento.
-        <RouterLink to="/privacidade">Saiba mais</RouterLink>.
+        <RouterLink to="/cookies">Cookies</RouterLink> ·
+        <RouterLink to="/privacidade">Privacidade</RouterLink>.
       </p>
       <div class="cookie-actions">
         <button type="button" class="btn btn-secondary btn-sm" @click="reject">Recusar</button>

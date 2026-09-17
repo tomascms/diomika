@@ -55,6 +55,8 @@ def build_frontend(env: dict[str, str], api_url: str, *, beta: bool = True) -> b
         **env,
         "VITE_API_BASE_URL": api_url.rstrip("/"),
     }
+    if not beta:
+        build_env.setdefault("VITE_IMAGE_TRANSFORM", "1")
     if beta:
         build_env["VITE_BETA_MODE"] = "1"
         # Turnstile: usa VITE_TURNSTILE_SITE_KEY real do .env (widget inclui *.pages.dev)

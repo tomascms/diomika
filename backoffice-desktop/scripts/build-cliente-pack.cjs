@@ -20,7 +20,7 @@ if (platform === 'darwin') {
   targets.push(['npx electron-builder --linux AppImage --x64', 'Linux'])
 } else {
   targets.push(['npx electron-builder --win portable --x64', 'Windows'])
-  targets.push(['npx electron-builder --linux AppImage --x64', 'Linux'])
+  // AppImage no Windows falha (symlinks) — Linux/macOS via GitHub Actions
 }
 
 for (const [cmd, label] of targets) {
@@ -47,4 +47,4 @@ if (platform !== 'darwin') {
   )
 }
 
-require('./copy-cliente-pack.cjs')
+require('./prepare-cliente-pack.cjs')

@@ -8,9 +8,8 @@ import SoftImage from '@/components/SoftImage.vue'
 import { useCatalog } from '@/composables/useCatalog'
 import { watchDynamicTitle } from '@/composables/usePageMeta'
 import { apiGet } from '@/lib/api'
-import { resolveCategoryParam } from '@/lib/catalogSupabase'
 import { modelDetailRoute } from '@/lib/catalogRoutes'
-import { PLACEHOLDER, resolveImageUrl, resolveImageUrls, safeCssUrl } from '@/lib/images'
+import { PLACEHOLDER, resolveImageUrl, resolveImageUrls, safeCssUrl, IMG_CARD } from '@/lib/images'
 import { ensureSupabase, subscribeRealtime, supabaseConfigured } from '@/lib/supabase'
 
 const route = useRoute()
@@ -62,8 +61,11 @@ function onFilterChange(field, value) {
     ...selectedFilters.value,
     [field]: value ?? '',
   }
-  void fetchProducts({ silent: true })
+  clearTimeout(filterTimer)
+  filterTimer = setTimeout(() => void fetchProducts({ silent: true }), 250)
 }
+
+let filterTimer = null
 
 watchDynamicTitle(
   () => [categoryData.value?.nome, route.params.categorySlug],
@@ -178,18 +180,18 @@ async function fetchProducts({ resetCategory = false, silent = false } = {}) {
 
     let category = categoryData.value
     if (resetCategory || !category) {
-      const rawCategory = supabaseConfigured
-        ? await resolveCategoryParam(categorySlug)
-        : await apiGet(`/categorias/slug/${encodeURIComponent(categorySlug)}`)
+      const rawCategory = await apiGet(`/categorias/slug/${encodeURIComponent(categorySlug)}`)
       if (seq !== fetchSeq) return
 
-      category = {
-        ...rawCategory,
-        imagem: await resolveImageUrl(rawCategory.imagem, PLACEHOLDER),
-      }
-      if (seq !== fetchSeq) return
-
+      category = { ...rawCategory, imagem: PLACEHOLDER }
       categoryData.value = category
+      void resolveImageUrl(rawCategory.imagem, PLACEHOLDER).then((url) => {
+        if (seq !== fetchSeq || categoryData.value?.id !== rawCategory.id) return
+        if (url && url !== PLACEHOLDER) {
+          categoryData.value = { ...categoryData.value, imagem: url }
+        }
+      })
+      if (seq !== fetchSeq) return
       breadcrumbItems.value = [
         { label: 'Início', to: { name: 'home' } },
         { label: category.nome },
@@ -239,6 +241,7 @@ async function fetchProducts({ resetCategory = false, silent = false } = {}) {
     const covers = await resolveImageUrls(
       prepared.map((entry) => entry.coverPath),
       PLACEHOLDER,
+      { transform: IMG_CARD },
     )
     if (seq !== fetchSeq) return
 
@@ -270,6 +273,7 @@ async function hydrateGalleries(list, seq) {
   const urls = await resolveImageUrls(
     pending.flatMap((product) => product._galleryPaths),
     PLACEHOLDER,
+    { transform: IMG_CARD },
   )
   if (seq !== fetchSeq) return
 
@@ -447,9 +451,8 @@ onUnmounted(() => {
     <div v-else-if="displayedProducts.length > 0" class="page-shell page-shell--grid product-grid">
 
       <RouterLink
-
         v-for="product in displayedProducts"
-
+        v-memo="[product.id, product.nome, coverImage(product)]"
         :key="product.id"
 
         :to="modelDetailRoute(categoryData, product)"
@@ -669,11 +672,23 @@ onUnmounted(() => {
 
   display: grid;
 
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 
-  gap: 1.1rem;
+  gap: 0.85rem;
 
   justify-items: stretch;
+
+}
+
+
+
+@media (max-width: 1400px) {
+
+  .product-grid {
+
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+
+  }
 
 }
 
@@ -683,7 +698,7 @@ onUnmounted(() => {
 
   .product-grid {
 
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 
   }
 
@@ -864,7 +879,7 @@ onUnmounted(() => {
 
 .card-body {
 
-  padding: 1rem 1.1rem 1.15rem;
+  padding: 0.75rem 0.85rem 0.9rem;
 
 }
 
@@ -872,9 +887,9 @@ onUnmounted(() => {
 
 .card-body h2 {
 
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.25rem;
 
-  font-size: 1.05rem;
+  font-size: 0.92rem;
 
   line-height: 1.25;
 

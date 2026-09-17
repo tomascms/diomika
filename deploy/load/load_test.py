@@ -2,7 +2,7 @@
 """Load test leve do fluxo público (substituto prático do k6).
 
 Uso:
-  python deploy/load_test.py --url https://api.diomika.com --concurrency 20 --requests 200
+  python deploy/load/load_test.py --url https://api.diomika.com --concurrency 20 --requests 200
 """
 from __future__ import annotations
 

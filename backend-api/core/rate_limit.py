@@ -9,13 +9,12 @@ from collections import defaultdict
 from fastapi import HTTPException, Request
 from starlette.responses import Response
 
+from core.redis_client import get_redis, redis_available, reset_redis_client
+
 logger = logging.getLogger("diomika-api")
 
 _hits: dict[str, list[float]] = defaultdict(list)
 _last_cleanup = 0.0
-_redis = None
-_redis_next_try = 0.0
-_REDIS_RETRY_SEC = 20.0
 
 MAX_PUBLIC_BODY_LINES = 50
 MAX_LINE_QUANTITY = 50_000
@@ -51,10 +50,6 @@ def _peer_is_trusted_proxy(request: Request) -> bool:
     return any(_ip_in_entry(peer, entry) for entry in _trusted_proxy_entries())
 
 
-def redis_available() -> bool:
-    return _get_redis() is not None
-
-
 def get_client_ip(request: Request) -> str:
     if trust_proxy_headers() and _peer_is_trusted_proxy(request):
         forwarded_for = request.headers.get("x-forwarded-for") or request.headers.get("X-Forwarded-For")
@@ -83,7 +78,6 @@ def _is_public_catalog_read(method: str, path: str) -> bool:
 
 def _limits_for_path(method: str, path: str) -> tuple[str, int]:
     if path.startswith("/admin") or path.startswith("/system"):
-        # Backoffice faz muitas leituras/escritas; 30/min partia o uso normal.
         return "admin", int(os.getenv("RATE_LIMIT_ADMIN_PER_MIN", "300"))
     if _is_public_catalog_read(method, path):
         return "catalog", int(os.getenv("RATE_LIMIT_CATALOG_PER_MIN", "600"))
@@ -97,44 +91,6 @@ def _is_loopback_ip(ip: str) -> bool:
 
 def _window_seconds() -> int:
     return max(10, int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60")))
-
-
-def _get_redis():
-    """Cliente Redis lazy — opcional (REDIS_URL).
-
-    Se a 1.ª ligação falhar (Redis ainda a arrancar), volta a tentar após
-    `_REDIS_RETRY_SEC` em vez de ficar permanentemente em memória.
-    """
-    global _redis, _redis_next_try
-    if _redis is not None:
-        return _redis
-    now = time.time()
-    if now < _redis_next_try:
-        return None
-    url = (os.getenv("REDIS_URL") or "").strip()
-    if not url:
-        _redis_next_try = now + _REDIS_RETRY_SEC
-        return None
-    try:
-        import redis  # type: ignore
-
-        client = redis.Redis.from_url(url, decode_responses=True, socket_connect_timeout=1.5)
-        client.ping()
-        _redis = client
-        _redis_next_try = 0.0
-        logger.info("Rate limit: Redis activo")
-    except Exception as exc:
-        logger.warning("Rate limit: Redis indisponível (%s) — fallback in-memory; retry em %.0fs", exc, _REDIS_RETRY_SEC)
-        _redis = None
-        _redis_next_try = now + _REDIS_RETRY_SEC
-    return _redis
-
-
-def reset_redis_client() -> None:
-    """Força nova tentativa de ligação (testes / recuperação)."""
-    global _redis, _redis_next_try
-    _redis = None
-    _redis_next_try = 0.0
 
 
 def _maybe_cleanup(now: float) -> None:
@@ -161,8 +117,7 @@ def _record_and_check_memory(key: str, max_calls: int, window_seconds: int) -> b
 
 
 def _record_and_check_redis(key: str, max_calls: int, window_seconds: int) -> bool | None:
-    """True/False se Redis OK; None se falhar (usar memory)."""
-    client = _get_redis()
+    client = get_redis()
     if client is None:
         return None
     rkey = f"diomika:rl:{key}"
@@ -193,7 +148,6 @@ def check_global_rate_limit(request: Request) -> Response | None:
         return None
 
     client = get_client_ip(request)
-    # Admin/system já é localhost-only em produção — não limitar o backoffice local.
     if (path.startswith("/admin") or path.startswith("/system")) and _is_loopback_ip(client):
         return None
 
@@ -205,7 +159,6 @@ def check_global_rate_limit(request: Request) -> Response | None:
 
 
 def rate_limit(request: Request, key_prefix: str, max_calls: int = 5, window_seconds: int = 60):
-    """Limita pedidos por IP numa janela de tempo (formulários públicos)."""
     client = get_client_ip(request)
     key = f"{key_prefix}:{client}"
     if not _record_and_check(key, max_calls, window_seconds):
@@ -216,7 +169,6 @@ def rate_limit(request: Request, key_prefix: str, max_calls: int = 5, window_sec
 
 
 def rate_limit_absolute(key: str, max_calls: int = 5, window_seconds: int = 60):
-    """Rate limit por chave absoluta (ex.: username), independente de IP."""
     if not _record_and_check(key, max_calls, window_seconds):
         raise HTTPException(
             status_code=429,

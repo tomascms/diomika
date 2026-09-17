@@ -94,6 +94,9 @@ const save = async (modelId, { publish = false } = {}) => {
   error.value = ''
   const keptIds = new Set()
   const toSave = rows.value.filter((row) => String(row.numero || '').trim())
+  if (publish && !toSave.length) {
+    throw new Error('Adicione pelo menos uma cor (número + imagem) antes de publicar na loja.')
+  }
 
   await mapPool(toSave, 4, async (row) => {
     if (row.pendingFile) {
@@ -142,7 +145,10 @@ defineExpose({ save })
 <template>
   <section class="colors-panel">
     <h3>Cores do modelo</h3>
-    <p class="hint">Cada linha é uma cor com a sua imagem (variante na loja). Use «Publicar alterações» para gravar e tornar visível na loja.</p>
+    <p class="hint">
+      Obrigatório para aparecer na loja: pelo menos uma cor com número e imagem.
+      Os produtos (EAN/dimensões) só entram no site depois disto e de «Publicar na loja».
+    </p>
     <p v-if="loading" class="muted">A carregar cores…</p>
     <p v-if="error" class="err">{{ error }}</p>
 

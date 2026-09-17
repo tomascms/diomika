@@ -90,19 +90,16 @@ const fetchProduct = async () => {
     colors.value = []
     storefrontCtx.value = null
 
-    await catalog.loadMeta()
-
     const legacyId = route.params.legacyModelId
     const categorySlug = route.params.categorySlug
     const modelSlug = route.params.modelSlug
     const tipoQuery = route.query.tipo || null
 
-    let modelData
-    if (legacyId) {
-      modelData = await catalog.fetchModelDetail({ modelId: legacyId, tipo: tipoQuery })
-    } else {
-      modelData = await catalog.fetchModelDetail({ categorySlug, modelSlug, tipo: tipoQuery })
-    }
+    const detailPromise = legacyId
+      ? catalog.fetchModelDetail({ modelId: legacyId, tipo: tipoQuery })
+      : catalog.fetchModelDetail({ categorySlug, modelSlug, tipo: tipoQuery })
+
+    const [, modelData] = await Promise.all([catalog.loadMeta(), detailPromise])
 
     const tipo = modelData._tipo_catalogo || tipoQuery
     storefrontCtx.value = catalog.storefrontContext(tipo, modelData)

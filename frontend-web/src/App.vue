@@ -5,6 +5,7 @@ import { supabaseConfigured } from '@/lib/supabaseConfig'
 import AppErrorBoundary from '@/components/AppErrorBoundary.vue'
 import { useCart } from '@/composables/useCart'
 import { useCategories } from '@/composables/useCategories'
+import { useCatalog } from '@/composables/useCatalog'
 import { categoryProductsRoute } from '@/lib/catalogRoutes'
 import { prefetchRoute } from '@/router'
 import { COMPANY } from '@/lib/constants'
@@ -37,6 +38,7 @@ const onEscape = (e) => {
 let categoriesSubscription = null
 
 onMounted(async () => {
+  void useCatalog().loadMeta()
   try {
     await loadCategories()
   } catch {
@@ -158,6 +160,8 @@ onUnmounted(() => {
             <li><RouterLink to="/contact">Contacto</RouterLink></li>
             <li><RouterLink to="/carrinho">Pedido de orçamento</RouterLink></li>
             <li><RouterLink to="/privacidade">Privacidade</RouterLink></li>
+            <li><RouterLink to="/termos">Aviso legal</RouterLink></li>
+            <li><RouterLink to="/cookies">Cookies</RouterLink></li>
           </ul>
         </div>
 

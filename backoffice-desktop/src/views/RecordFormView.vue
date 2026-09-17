@@ -48,6 +48,54 @@ const isProductForm = computed(() =>
   catalogTypes.value.some((t) => t.product_table === table.value),
 )
 
+const modelCatalogTipo = computed(() =>
+  catalogTypes.value.find((t) => t.model_table === table.value) || null,
+)
+
+const storefrontCheck = ref(null)
+
+const storefrontIssues = computed(() => {
+  const s = storefrontCheck.value
+  if (!s) return []
+  const issues = []
+  if (!s.withEan) {
+    issues.push('Falta pelo menos um produto com EAN (crie variantes na tabela de produtos desta família).')
+  }
+  if (!s.withColorImg) {
+    if (s.withEan > 0) {
+      issues.push(
+        `Já tem ${s.withEan} produto(s) com EAN, mas falta uma cor com imagem — a loja não mostra o modelo sem isso.`,
+      )
+    } else {
+      issues.push('Falta pelo menos uma cor com imagem (secção «Cores do modelo» abaixo).')
+    }
+  }
+  if (s.withEan > 0 && s.withColorImg > 0 && !s.published) {
+    issues.push('Tudo pronto — falta clicar «Publicar na loja».')
+  }
+  return issues
+})
+
+const loadStorefrontCheck = async () => {
+  storefrontCheck.value = null
+  if (!isModelForm.value || isNew.value || !recordId.value) return
+  const cfg = modelCatalogTipo.value
+  if (!cfg?.product_table || !cfg?.colors_table) return
+  try {
+    const [products, colors] = await Promise.all([
+      api.listRecords(cfg.product_table, { id_modelo: recordId.value, limit: '50' }),
+      api.listModelColors(cfg.colors_table, recordId.value),
+    ])
+    storefrontCheck.value = {
+      withEan: products.filter((p) => String(p.ean || '').trim()).length,
+      withColorImg: colors.filter((c) => String(c.imagem || '').trim()).length,
+      published: formData.value.visibilidade === true,
+    }
+  } catch {
+    storefrontCheck.value = null
+  }
+}
+
 const title = computed(() =>
   isNew.value ? `Novo — ${schema.value?.label || table.value}` : `Editar — ${schema.value?.label || table.value}`,
 )
@@ -260,6 +308,7 @@ const load = async () => {
     }
     familyTipo.value = schemaData?.config?.ui_catalog_tipo || catalogTipo.value || ''
     await loadModelDiscriminatorOptions(formData.value.id_modelo)
+    await loadStorefrontCheck()
   } catch (e) {
     if (seq === loadSeq) error.value = e.message
   } finally {
@@ -339,6 +388,7 @@ const saveDraft = async () => {
     formData.value.visibilidade = false
     message.value = 'Rascunho guardado (oculto na loja).'
     if (isNew.value && savedId) await goToEdit(savedId)
+    await loadStorefrontCheck()
   } catch (e) {
     error.value = e.message || 'Não foi possível guardar o rascunho.'
   } finally {
@@ -388,6 +438,7 @@ const publish = async () => {
     formData.value.visibilidade = true
     message.value = 'Publicado. Pode criar outro sem voltar atrás.'
     if (isNew.value && savedId) await goToEdit(savedId)
+    await loadStorefrontCheck()
   } catch (e) {
     const msg = e.message || ''
     if (isNew.value && /502|504|timeout|abort|inacessível/i.test(msg)) {
@@ -500,6 +551,13 @@ watch(() => route.fullPath, load, { immediate: true })
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="message" class="ok">{{ message }}</p>
 
+    <div v-if="storefrontIssues.length" class="storefront-banner card">
+      <strong>Para aparecer na loja</strong>
+      <ul>
+        <li v-for="(issue, idx) in storefrontIssues" :key="idx">{{ issue }}</li>
+      </ul>
+    </div>
+
     <div v-if="isNew && isModelForm && !loading" class="create-flex card">
       <p class="create-flex-hint">
         Pode mudar a categoria (e a subcategoria) sem sair desta página — o formulário adapta-se.
@@ -598,6 +656,25 @@ watch(() => route.fullPath, load, { immediate: true })
 }
 .error { color: var(--danger); margin: 0 0 0.75rem; }
 .ok { color: var(--success, #1a7a3a); margin: 0 0 0.75rem; }
+.storefront-banner {
+  margin-bottom: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-left: 3px solid #c47a00;
+  background: rgba(196, 122, 0, 0.08);
+}
+.storefront-banner strong {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+}
+.storefront-banner ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  display: grid;
+  gap: 0.25rem;
+}
 .loading-banner { color: var(--text-muted); }
 .form-card { padding: 1.25rem; }
 .form-skeleton { display: grid; gap: 0.75rem; }

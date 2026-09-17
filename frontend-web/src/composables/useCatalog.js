@@ -20,6 +20,43 @@ import {
 import { parseDimensions } from '@/lib/images'
 
 const metaCache = ref(null)
+const LIST_CACHE_KEY = 'diomika_cat_models_v1'
+const LIST_TTL_MS = 5 * 60 * 1000
+
+function listCacheId(tipo, categoryId, activeFilters) {
+  return `${tipo}:${categoryId}:${JSON.stringify(activeFilters || {})}`
+}
+
+function readListCache(id) {
+  if (typeof sessionStorage === 'undefined') return null
+  try {
+    const raw = sessionStorage.getItem(LIST_CACHE_KEY)
+    if (!raw) return null
+    const bag = JSON.parse(raw)
+    const row = bag?.[id]
+    if (!row?.data || !row?.exp || Date.now() > row.exp) return null
+    return row.data
+  } catch {
+    return null
+  }
+}
+
+function writeListCache(id, data) {
+  if (typeof sessionStorage === 'undefined' || !Array.isArray(data)) return
+  try {
+    const raw = sessionStorage.getItem(LIST_CACHE_KEY)
+    const bag = raw ? JSON.parse(raw) : {}
+    bag[id] = { data, exp: Date.now() + LIST_TTL_MS }
+    const keys = Object.keys(bag)
+    if (keys.length > 80) {
+      keys.sort((a, b) => (bag[a].exp || 0) - (bag[b].exp || 0))
+      keys.slice(0, keys.length - 60).forEach((k) => delete bag[k])
+    }
+    sessionStorage.setItem(LIST_CACHE_KEY, JSON.stringify(bag))
+  } catch {
+    /* quota */
+  }
+}
 
 export function useCatalog() {
   const loadMeta = async (force = false) => {
@@ -76,20 +113,42 @@ export function useCatalog() {
     return qs ? `?${qs}` : ''
   }
 
-  const fetchCategoryModels = async (tipo, categoryId, activeFilters = null) => {
+  const fetchCategoryModels = async (tipo, categoryId, activeFilters = null, { force = false } = {}) => {
     await loadMeta()
+
+    const cacheId = listCacheId(tipo, categoryId, activeFilters)
+    const cached = !force ? readListCache(cacheId) : null
 
     let url = `/catalogo/${encodeURIComponent(tipo)}/modelos-catalogo/${categoryId}`
     url += buildFilterQuery(tipo, activeFilters)
 
-    try {
-      return await apiGet(url)
-    } catch (apiErr) {
-      if (supabaseConfigured) {
-        return catalogueModelsForCategory(tipo, categoryId, { filters: activeFilters || {} })
+    const loadFresh = async () => {
+      try {
+        return await apiGet(url)
+      } catch (apiErr) {
+        if (supabaseConfigured) {
+          return catalogueModelsForCategory(tipo, categoryId, { filters: activeFilters || {} })
+        }
+        throw apiErr
       }
-      throw apiErr
     }
+
+    if (cached) {
+      loadFresh()
+        .then((data) => writeListCache(cacheId, data))
+        .catch(() => {})
+      return cached
+    }
+
+    const data = await loadFresh()
+    writeListCache(cacheId, data)
+    return data
+  }
+
+  const searchCatalog = async (query, { limit = 40 } = {}) => {
+    const q = String(query || '').trim()
+    if (q.length < 2) return []
+    return apiGet(`/catalogo/search?q=${encodeURIComponent(q)}&limit=${limit}`)
   }
 
   const fetchModelDetail = async ({ categorySlug = null, modelSlug = null, modelId = null, tipo = null } = {}) => {
@@ -260,6 +319,10 @@ export function useCatalog() {
     return [...tables]
   }
 
+  const prefetchCategoryModels = (tipo, categoryId, activeFilters = null) => {
+    void fetchCategoryModels(tipo, categoryId, activeFilters).catch(() => {})
+  }
+
   return {
     metaCache,
     loadMeta,
@@ -270,6 +333,8 @@ export function useCatalog() {
     storefrontContext,
     badgeLabel,
     fetchCategoryModels,
+    prefetchCategoryModels,
+    searchCatalog,
     fetchModelDetail,
     buildPickerOptions,
     activeProduct,

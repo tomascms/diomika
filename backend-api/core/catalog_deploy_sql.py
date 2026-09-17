@@ -144,8 +144,58 @@ def generate_catalog_infra_sql() -> str:
             ]
         )
 
-    lines.extend(["", generate_catalog_fks_sql()])
+    lines.extend(["", generate_catalog_fks_sql(), "", generate_catalog_performance_sql()])
     return "\n".join(lines) + "\n"
+
+
+def generate_catalog_ean_lookup_sql() -> str:
+    """View unificada de EAN → tipo + produto + modelo."""
+    parts: list[str] = []
+    for tipo, cfg in sorted(CATALOG_TYPES.items()):
+        pt = cfg["product_table"]
+        mt = cfg["model_table"]
+        parts.append(
+            f"SELECT '{tipo}'::text AS tipo, p.id AS product_id, p.ean, p.id_modelo, "
+            f"p.visibilidade AS product_visivel, m.visibilidade AS model_visivel "
+            f"FROM {pt} p "
+            f"JOIN {mt} m ON m.id = p.id_modelo "
+            f"WHERE p.ean IS NOT NULL AND btrim(p.ean) <> ''"
+        )
+    union = "\nUNION ALL\n".join(parts)
+    return "\n".join(
+        [
+            "-- === Lookup EAN global (checkout / pesquisa) ===",
+            "DROP VIEW IF EXISTS catalog_ean_lookup;",
+            f"CREATE VIEW catalog_ean_lookup WITH (security_invoker = true) AS\n{union};",
+            "",
+        ]
+    )
+
+
+def generate_catalog_performance_sql() -> str:
+    lines = [
+        "-- === Índices de performance (listagens loja + admin) ===",
+        "CREATE INDEX IF NOT EXISTS idx_categories_slug ON categories (slug);",
+        "",
+    ]
+    for _tipo, cfg in sorted(CATALOG_TYPES.items()):
+        mt = cfg["model_table"]
+        pt = cfg["product_table"]
+        lines.extend(
+            [
+                f"CREATE INDEX IF NOT EXISTS idx_{mt}_cat_vis_created ON {mt} (id_categoria, visibilidade, created_at DESC);",
+                f"CREATE INDEX IF NOT EXISTS idx_{mt}_created ON {mt} (created_at DESC);",
+                f"CREATE INDEX IF NOT EXISTS idx_{mt}_visible ON {mt} (id_categoria, created_at DESC) WHERE visibilidade = true;",
+                f"CREATE INDEX IF NOT EXISTS idx_{pt}_modelo_vis ON {pt} (id_modelo, visibilidade);",
+                f"CREATE INDEX IF NOT EXISTS idx_{pt}_created ON {pt} (created_at DESC);",
+            ]
+        )
+        ct = cfg.get("colors_table")
+        if ct:
+            lines.append(f"CREATE INDEX IF NOT EXISTS idx_{ct}_created ON {ct} (created_at DESC);")
+        lines.append("")
+    lines.append(generate_catalog_ean_lookup_sql())
+    return "\n".join(lines)
 
 
 def write_catalog_infra_sql(path: Path | None = None) -> Path:

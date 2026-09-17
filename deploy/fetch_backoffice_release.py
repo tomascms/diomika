@@ -1,25 +1,19 @@
 #!/usr/bin/env python3
-"""Descarrega instaladores mac/linux/windows do GitHub Release publico cliente."""
+"""Descarrega instaladores do GitHub Release e prepara pasta cliente limpa."""
 from __future__ import annotations
 
-import shutil
+import subprocess
 import sys
 from pathlib import Path
-from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 TAG = "backoffice-cliente-latest"
 BASE = f"https://github.com/tomascms/diomika/releases/download/{TAG}"
-# Windows passa a ZIP (menos falsos positivos de antivirus que o .exe portatil).
+VERSION = "1.0.0"
 FILES = [
-    "Diomika-Backoffice-1.0.0-windows.zip",
-    "Diomika-Backoffice-1.0.0-mac.dmg",
-    "Diomika-Backoffice-1.0.0-linux.AppImage",
-]
-HELPERS = [
-    ROOT / "backoffice-desktop" / "packaging" / "Abrir-Windows.cmd",
-    ROOT / "backoffice-desktop" / "packaging" / "Abrir-Windows.ps1",
-    ROOT / "backoffice-desktop" / "packaging" / "LEIA-ME.txt",
+    f"Diomika-Backoffice-{VERSION}-windows.zip",
+    f"Diomika-Backoffice-{VERSION}-mac.dmg",
+    f"Diomika-Backoffice-{VERSION}-linux.AppImage",
 ]
 DEST_DIRS = [
     ROOT / "cliente-backoffice",
@@ -28,6 +22,8 @@ DEST_DIRS = [
 
 
 def download(url: str) -> bytes:
+    from urllib.request import Request, urlopen
+
     req = Request(url, headers={"User-Agent": "diomika-fetch-release"})
     with urlopen(req, timeout=300) as resp:
         return resp.read()
@@ -49,22 +45,15 @@ def main() -> int:
             out.write_bytes(data)
             print(f"  OK {out} ({len(data)} bytes)")
         ok += 1
-    if ok == 0:
-        print("ERRO: nenhum ficheiro descarregado — aguarda o workflow Backoffice release terminar.")
-        return 1
 
-    for dest in DEST_DIRS:
-        dest.mkdir(parents=True, exist_ok=True)
-        for helper in HELPERS:
-            if helper.is_file():
-                shutil.copy2(helper, dest / helper.name)
-                print(f"  Helper {dest / helper.name}")
-        for old in dest.glob("Diomika-Backoffice-*-windows.exe"):
-            try:
-                old.unlink()
-                print(f"  Removido legado: {old}")
-            except OSError as exc:
-                print(f"  AVISO ao remover {old}: {exc}")
+    prep = ROOT / "backoffice-desktop" / "scripts" / "prepare-cliente-pack.cjs"
+    if prep.is_file():
+        print("\nA preparar pacote cliente (limpeza + atalhos)…")
+        subprocess.run(["node", str(prep)], cwd=prep.parent.parent, check=False)
+
+    if ok == 0:
+        print("ERRO: nenhum ficheiro descarregado — aguarda o workflow Backoffice release.")
+        return 1
     return 0
 
 

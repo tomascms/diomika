@@ -1,39 +1,17 @@
-# Diomika Backoffice — ficheiros para o cliente #
+# Diomika Backoffice — ficheiros para o cliente
 
-Actualizado: 28/08/2026 (pacote Windows em ZIP — menos bloqueios de antivirus).
+Pacote limpo: 3 instaladores + credenciais + atalhos de abertura.
 
-| SO      | Ficheiro                                  |
-|---------|-------------------------------------------|
-| Windows | `Diomika-Backoffice-1.0.0-windows.zip` + `Abrir-Windows.cmd` |
-| macOS   | `Diomika-Backoffice-1.0.0-mac.dmg`        |
-| Linux   | `Diomika-Backoffice-1.0.0-linux.AppImage` |
+| SO      | Instalador                              | Como abrir              |
+|---------|-----------------------------------------|-------------------------|
+| Windows | `Diomika-Backoffice-*-windows.zip`      | `Abrir-Windows.cmd`     |
+| macOS   | `Diomika-Backoffice-*-mac.dmg`          | `Abrir-Mac.command`     |
+| Linux   | `Diomika-Backoffice-*-linux.AppImage`   | ver CREDENCIAIS.txt     |
 
-## Windows (recomendado) ##
-1. Extraia o `.zip` para esta pasta (ou para Documentos\Diomika).
-2. Duplo-clique em **`Abrir-Windows.cmd`** (não no .exe antigo portátil).
-   - Desbloqueia ficheiros marcados como “da Internet”.
-   - Tenta adicionar exclusão no Microsoft Defender (pede Admin se precisar).
-   - Abre o programa.
-3. Login com o utilizador/password que a Diomika lhe enviar.
-4. Precisa de internet (liga a `api.diomika.com`).
+Credenciais: `CREDENCIAIS.secret.txt`
 
-### Se o antivirus bloquear ###
-- **Microsoft Defender:** Definições → Proteção contra vírus → Exclusões → Adicionar pasta
-  (escolha a pasta `cliente-backoffice` ou a pasta extraída).
-- **Outro antivirus:** adicione a mesma pasta às exclusões / allowlist.
-- **SmartScreen** (“O Windows protegeu o seu PC”): Mais informações → Executar mesmo assim.
-- Apague o `.exe` portátil antigo se ainda existir — esse formato é o que mais dispara scans.
+Preparar pasta local:
+  node backoffice-desktop/scripts/prepare-cliente-pack.cjs
 
-## Catálogo ##
-- **Guardar rascunho** — oculto na loja.
-- **Publicar na loja** — só com cor (imagem) + produto com EAN.
-- **Criar outro** — novo produto sem voltar à lista.
-
-## Mac (primeira vez) ##
-Botão direito no `.app` → Abrir (Gatekeeper).
-
-## Linux ##
-`chmod +x Diomika-Backoffice-*-linux.AppImage` e executar.
-
-## Suporte ##
-Contacte a Diomika — suporte activo nesta fase.
+Ou descarregar release + preparar:
+  python deploy/fetch_backoffice_release.py

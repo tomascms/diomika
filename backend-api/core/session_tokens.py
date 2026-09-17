@@ -53,9 +53,9 @@ def _redis_required() -> bool:
 
 def _redis():
     try:
-        from core.rate_limit import _get_redis
+        from core.redis_client import get_redis
 
-        return _get_redis()
+        return get_redis()
     except Exception:
         return None
 

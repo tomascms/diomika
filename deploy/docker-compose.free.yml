@@ -10,7 +10,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
     # Só localhost na VM — rate-limit / não expor
     ports:
       - "127.0.0.1:6379:6379"
@@ -40,6 +40,8 @@ services:
       TRUST_PROXY: "1"
       REDIS_URL: redis://redis:6379/0
       SUPABASE_STORAGE_PRIVATE: "1"
+      CATALOG_CACHE_TTL: "3600"
+      UVICORN_WORKERS: "2"
     depends_on:
       redis:
         condition: service_healthy

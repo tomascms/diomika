@@ -38,6 +38,12 @@ python deploy/deploy_pages.py --pages-deploy --api-url https://api.diomika.com
 python deploy/verify_production.py
 ```
 
+**Testar localmente** (loja + backoffice, API cloud):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/dev.ps1
+```
+
 Docs: [`docs/INSTRUCOES.md`](docs/INSTRUCOES.md) (operar) · [`docs/RELATORIO_TECNICO.md`](docs/RELATORIO_TECNICO.md) (manual completo) · Scripts: [`deploy/README.md`](deploy/README.md)
 
 ## Config (servidor / developers)

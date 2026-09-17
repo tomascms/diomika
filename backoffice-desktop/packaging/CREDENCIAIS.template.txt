@@ -1,0 +1,17 @@
+Diomika Backoffice — acesso
+===========================
+
+Login: ver CREDENCIAIS.secret.txt (utilizador e password).
+
+Precisa de internet (api.diomika.com).
+
+Como abrir (use o atalho — evita bloqueios do sistema):
+
+  Windows → duplo-clique em Abrir-Windows.cmd
+  macOS   → botão direito em Abrir-Mac.command → Abrir (1.ª vez), depois duplo-clique
+  Linux   → chmod +x Diomika-Backoffice-*-linux.AppImage && ./Diomika-Backoffice-*-linux.AppImage
+
+Mac: se aparecer "desenvolvedor não identificado", use sempre Abrir-Mac.command
+ou Definições → Privacidade e Segurança → Abrir mesmo assim.
+
+Suporte: Diomika.
