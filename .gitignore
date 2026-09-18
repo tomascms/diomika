@@ -74,6 +74,9 @@ Thumbs.db
 # Build
 backoffice-desktop/release/
 backoffice-desktop/release-fresh/
+backoffice-desktop/_asar_check/
+backoffice-desktop/_extract_tmp/
+backoffice-desktop/.diomika/
 backoffice-desktop/electron/desktop-gate.cjs
 cliente-backoffice/
 *.timestamp-*-*.mjs

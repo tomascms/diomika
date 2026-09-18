@@ -1,26 +1,21 @@
 # Diomika Backoffice
 
-App de secretária **para o cliente**: um ficheiro, um clique, sem instalar Python/Node.
+App Electron (Win/Mac/Linux) para gestão do catálogo — liga a `https://api.diomika.com`.
 
-Liga à API de produção (`https://api.diomika.com`) — já online 24/7.
+Documentação completa: [`docs/INSTRUCOES.md`](../docs/INSTRUCOES.md) (secção Backoffice).
 
-## Entregar ao cliente
-
-| SO | Artefacto em `release/` |
-|----|-------------------------|
-| Windows | `Diomika-Backoffice-*-win-portable.exe` |
-| macOS | `Diomika-Backoffice-*-mac.dmg` (CI macOS) |
-| Linux | `Diomika-Backoffice-*-linux.AppImage` (CI Linux) |
+## Build
 
 ```bash
 npm ci
-npm run dist:win
-# Mac/Linux: GitHub Actions → "Backoffice release"
+npm run dist:cliente   # Windows + copia para cliente-backoffice/
 ```
 
-## Developers (só)
+## Dev
 
 ```bash
-# API local opcional
-DIOMIKA_API_ORIGIN=http://127.0.0.1:8001 npm run dev
+npm run dev:ui         # browser http://127.0.0.1:5174
+npm run dev            # Electron + Vite
 ```
+
+Abrir instalador local: `Abrir-Windows.cmd` ou `packaging/Abrir-Windows.cmd`.

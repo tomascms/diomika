@@ -74,18 +74,24 @@ function safeJoin(root, reqPath) {
   return full
 }
 
-const HOP_BY_HOP = new Set([
-  'connection',
-  'keep-alive',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailer',
-  'transfer-encoding',
-  'upgrade',
-  'host',
-  'content-length',
+// Só estes headers do renderer podem ir para electron.net — sec-fetch-* etc. causam ERR_INVALID_ARGUMENT
+const FORWARD_HEADERS = new Set([
+  'accept',
+  'content-type',
+  'authorization',
+  'x-api-key',
+  'idempotency-key',
 ])
+
+function copyForwardHeaders(req, upstream) {
+  for (const [key, value] of Object.entries(req.headers)) {
+    const lower = key.toLowerCase()
+    if (!FORWARD_HEADERS.has(lower)) continue
+    if (value === undefined || value === null) continue
+    if (Array.isArray(value)) value.forEach((v) => upstream.setHeader(key, v))
+    else upstream.setHeader(key, String(value))
+  }
+}
 
 function proxyToApi(req, res) {
   const targetUrl = apiTargetUrl(req.url)
@@ -97,18 +103,11 @@ function proxyToApi(req, res) {
     redirect: 'follow',
   })
 
-  // Sem gzip — evita incompatibilidade net.IncomingMessage ↔ zlib no Electron
   upstream.setHeader('accept-encoding', 'identity')
   upstream.setHeader('user-agent', 'DiomikaBackoffice/1.0')
+  upstream.setHeader('accept', 'application/json')
   if (DESKTOP_GATE) upstream.setHeader('x-diomika-desktop', DESKTOP_GATE)
-
-  for (const [key, value] of Object.entries(req.headers)) {
-    const lower = key.toLowerCase()
-    if (HOP_BY_HOP.has(lower) || lower === 'origin' || lower === 'referer') continue
-    if (value === undefined || value === null) continue
-    if (Array.isArray(value)) value.forEach((v) => upstream.setHeader(key, v))
-    else upstream.setHeader(key, String(value))
-  }
+  copyForwardHeaders(req, upstream)
 
   upstream.on('response', (upRes) => {
     const outHeaders = { ...upRes.headers }
@@ -116,11 +115,16 @@ function proxyToApi(req, res) {
     delete outHeaders['cross-origin-opener-policy']
     delete outHeaders['content-encoding']
     delete outHeaders['content-length']
+    delete outHeaders['transfer-encoding']
+    delete outHeaders['connection']
+    delete outHeaders['keep-alive']
     const chunks = []
     upRes.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
     upRes.on('end', () => {
+      const body = Buffer.concat(chunks)
+      if (body.length) outHeaders['content-length'] = String(body.length)
       if (!res.headersSent) res.writeHead(upRes.statusCode || 502, outHeaders)
-      res.end(Buffer.concat(chunks))
+      res.end(body)
     })
     upRes.on('error', () => {
       if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' })
