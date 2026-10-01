@@ -6,7 +6,7 @@ backend-api/sql/RUNBOOK_unified_catalog_migration.md).
 
 Uso (na raiz do repo, DEPOIS de aplicar 0001/0002 — ver RUNBOOK):
   python deploy/seed_catalog_demo.py
-  python deploy/seed_catalog_demo.py --legacy-schema-sync   # ver aviso abaixo
+
 """
 from __future__ import annotations
 
@@ -24,7 +24,6 @@ from core.env_loader import load_project_env  # noqa: E402
 load_project_env()
 
 from core.database import get_db  # noqa: E402
-from core.sql_runner import apply_sql_file  # noqa: E402
 from models.catalog_attributes import CATEGORY_ATTRIBUTE_SCHEMAS, validate_attributes  # noqa: E402
 from models.catalog_registry import CATALOG_TYPES  # noqa: E402
 from models.schemas import CATEGORY_DEFINITIONS, Categoria, generate_slug  # noqa: E402
@@ -66,36 +65,6 @@ def logo_png_url() -> str:
         png = buf.getvalue()
     dest = "seed/demo/diomika-logo.png"
     return upload_bytes(png, dest, "image/png")
-
-
-def legacy_schema_sync() -> None:
-    """Sync Pydantic→BD antigo + infra SQL por-família. Esquema unificado:
-    isto tentaria recriar/alterar as 13 famílias de tabelas antigas
-    (modelos_almofadas, ...), que o catálogo já não usa — ver RUNBOOK em
-    backend-api/sql/RUNBOOK_unified_catalog_migration.md. Só aqui por se
-    ainda houver tabelas operacionais não-catálogo a sincronizar; revê
-    core/schema_engine.py antes de usar."""
-    from core.catalog_deploy_sql import write_catalog_infra_sql
-    from core.schema_engine import bootstrap_database_schema, sync_schema
-
-    bootstrap_database_schema()
-    report = sync_schema(supabase=get_db(), apply=True, dry_run=False)
-    print(f"  {report.message}")
-    if report.created_tables:
-        print(f"  tabelas novas: {len(report.created_tables)}")
-
-    sql_dir = ROOT / "backend-api" / "sql"
-    deploy_dir = ROOT / "deploy"
-    write_catalog_infra_sql()
-    for rel in (
-        sql_dir / "migration_almofada_dimensoes_modelo.sql",
-        sql_dir / "migration_material_to_composicao.sql",
-        deploy_dir / "generated_catalog_infra.sql",
-        sql_dir / "realtime_publication.sql",
-    ):
-        if rel.is_file():
-            via = apply_sql_file(rel, interactive=False)
-            print(f"  SQL {rel.name} via {via}")
 
 
 def refresh_demo_images(logo_url: str) -> None:
@@ -442,11 +411,6 @@ def seed_demo(categories: dict[str, dict], logo_url: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--legacy-schema-sync",
-        action="store_true",
-        help="Sync Pydantic->BD antigo + infra SQL por-família [obsoleto para catálogo — ver aviso em legacy_schema_sync()]",
-    )
     parser.add_argument("--images-only", action="store_true", help="Só upload logo + imagens [TESTE]")
     args = parser.parse_args()
 
@@ -460,22 +424,13 @@ def main() -> int:
         print("\nOK imagens demo.\n")
         return 0
 
-    if args.legacy_schema_sync:
-        print("\n=== 2) Schema sync + SQL infra (legado — ver aviso em --help) ===\n")
-        legacy_schema_sync()
-    else:
-        print(
-            "\nEsquema do catálogo: assume-se que 0001/0002 já foram aplicados "
-            "(ver backend-api/sql/RUNBOOK_unified_catalog_migration.md).\n"
-        )
-
-    print("\n=== 3) Categorias ===\n")
+    print("\n=== 2) Categorias ===\n")
     categories = ensure_categories(logo_url)
 
-    print("\n=== 4) Produtos demo ===\n")
+    print("\n=== 3) Produtos demo ===\n")
     seed_demo(categories, logo_url)
 
-    print("\n=== 5) Imagens demo (logo em todas as cores) ===\n")
+    print("\n=== 4) Imagens demo (logo em todas as cores) ===\n")
     refresh_demo_images(logo_url)
 
     print("\nOK seed concluído.\n")

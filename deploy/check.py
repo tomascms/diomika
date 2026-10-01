@@ -55,7 +55,9 @@ def check_files() -> None:
         "backoffice-desktop/electron/main.cjs",
         "backoffice-desktop/electron/api-origin.cjs",
         "backend-api/sql/production_setup.sql",
-        "backend-api/sql/migration_v2_3_catalog.sql",
+        "backend-api/sql/0001_unified_catalog_schema.sql",
+        "backend-api/sql/0002_migrate_catalog_data.sql",
+        "backend-api/sql/RUNBOOK_unified_catalog_migration.md",
     ]
     for rel in required:
         check(f"Ficheiro {rel}", (ROOT / rel).is_file(), "ok" if (ROOT / rel).is_file() else "em falta")

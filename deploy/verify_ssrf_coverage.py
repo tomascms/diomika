@@ -15,7 +15,6 @@ FORBIDDEN = re.compile(r"(urllib\.request\.urlopen|requests\.(get|post|put|delet
 ALLOW_FILES = {
     # Já protegidos / hosts fixos internos
     "core/database.py",  # só Supabase URL de env
-    "core/sql_runner.py",  # admin tooling
     "utils/turnstile.py",  # challenges.cloudflare.com fixo
     "core/alerts.py",  # deve usar ssrf_guard — verificado abaixo
     "workers/email_worker.py",  # IMAP/SMTP não HTTP genérico

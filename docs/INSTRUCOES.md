@@ -46,7 +46,7 @@ Preferir `CLOUDFLARE_PAGES_API_TOKEN` (Account → **Cloudflare Pages → Edit/W
 | `deploy_vm.py` | API na VM + Docker + Tunnel |
 | `deploy_pages.py` | Build + Cloudflare Pages (`PAGES_PRODUCTION=1` = loja produção) |
 | `verify_production.py` | Uptime + smoke + segurança (+ e2e se Playwright instalado) |
-| `apply_production.py` | Schema Supabase + SQL infra (opcional `--seed-demo`) |
+| `seed_catalog_demo.py` | Categorias em falta + produtos de demonstração (`--images-only`) |
 | `monitor_check.py --alert` | Teste manual API+loja com alerta ntfy |
 | `security_audit_deep.py` | Auditoria de segurança expandida |
 

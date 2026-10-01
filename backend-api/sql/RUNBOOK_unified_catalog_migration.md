@@ -96,7 +96,6 @@ links partilhados — continuam válidas.
 
 **Não** definas `SCHEMA_BOOTSTRAP` — essa variável deixou de ter efeito (o
 motor de auto-migração no arranque foi removido; ver commit "Unify catalog
-schema"). `deploy/apply_production.py` e `deploy/seed_catalog_demo.py` já não
-chamam o sync automático Pydantic→BD por omissão; a flag
-`--legacy-schema-sync` existe só para as tabelas operacionais não-catálogo e
-não deve ser usada sem rever `core/schema_engine.py` primeiro.
+schema"). O motor de sync automático Pydantic→BD foi apagado do repo, tal
+como a SQL por-família que ele gerava: as migrações são agora os ficheiros
+numerados desta pasta, aplicados à mão.

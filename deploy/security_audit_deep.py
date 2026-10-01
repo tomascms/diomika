@@ -675,13 +675,12 @@ def build_rls_db(reg: Registry) -> None:
     )
     for pol in policies:
         must_contain(reg, cat, sql, pol)
-    # Esquema unificado: product_models/product_variants/product_model_colors
-    # substituem as tabelas por-família geradas por catalog_deploy_sql.py —
-    # a RLS destas 3 tabelas fica em 0001_unified_catalog_schema.sql.
+    # Esquema unificado: a RLS das 3 tabelas partilhadas (incluindo as cores,
+    # que antes tinham uma migração própria por família) fica toda no 0001.
     must_contain(reg, cat, "backend-api/sql/0001_unified_catalog_schema.sql", "ENABLE ROW LEVEL SECURITY")
     must_contain(reg, cat, "backend-api/sql/0001_unified_catalog_schema.sql", "deny_anon")
+    must_contain(reg, cat, "backend-api/sql/0001_unified_catalog_schema.sql", "product_model_colors_public_read")
     must_contain(reg, cat, ".github/workflows/ci.yml", "verify_rls.py")
-    must_contain(reg, cat, "backend-api/sql/migration_modelo_cores_por_categoria.sql", "ENABLE ROW LEVEL SECURITY")
 
 
 def build_secrets_ci(reg: Registry) -> None:
@@ -1000,7 +999,6 @@ def build_backups_ops(reg: Registry) -> None:
     must_exist(reg, cat, "docs/INSTRUCOES.md")
     must_match(reg, cat, "docs/INSTRUCOES.md", r"[Bb]ackup")
     must_exist(reg, cat, "deploy/deploy_vm.py")
-    must_exist(reg, cat, "deploy/apply_production.py")
     must_exist(reg, cat, "deploy/verify_production.py")
     must_exist(reg, cat, "deploy/create_gcp_vm.py")
     # Volume persistence for admin_users

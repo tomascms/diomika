@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI):
     # O esquema deixou de ser auto-migrado no arranque (ALTER TABLE/CREATE
     # TABLE em produção a cada boot era frágil e arriscado — ver auditoria).
     # Migrações são agora ficheiros SQL versionados em backend-api/sql/,
-    # aplicados manualmente (Supabase SQL Editor ou deploy/apply_production.py),
+    # aplicados manualmente no Supabase SQL Editor (ver o RUNBOOK em sql/),
     # nunca automaticamente aqui.
     from core.cache_warmup import warm_catalog_cache
 
