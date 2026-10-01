@@ -1,0 +1,95 @@
+name: Deploy loja (Cloudflare Pages)
+
+# Deploy da loja para Cloudflare Pages a partir do runner do GitHub, que tem
+# saída de rede aberta. Faz o mesmo que `deploy/deploy_pages.py --pages-deploy`
+# com PAGES_PRODUCTION=1, mas sem precisar de uma máquina local.
+#
+# Só corre quando alguém o manda correr (workflow_dispatch) — um push para main
+# não publica nada sozinho.
+#
+# Segredos necessários (Settings -> Secrets and variables -> Actions):
+#   CLOUDFLARE_API_TOKEN   token com permissão "Cloudflare Pages: Edit"
+#   CLOUDFLARE_ACCOUNT_ID  id da conta Cloudflare
+# Já configurados no repo (usados pelo ci.yml): SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+# Opcionais: VITE_TURNSTILE_SITE_KEY (sem ele o captcha do contacto não aparece),
+#            VITE_POSTHOG_KEY, VITE_POSTHOG_HOST
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: URL da API que o bundle vai chamar
+        required: false
+        default: https://api.diomika.com
+      pages_project:
+        description: Projeto Cloudflare Pages
+        required: false
+        default: diomika-loja
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend-web/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências da loja
+        working-directory: frontend-web
+        run: npm ci
+
+      - name: Build de produção
+        working-directory: frontend-web
+        env:
+          VITE_API_BASE_URL: ${{ inputs.api_url }}
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_STORAGE_BUCKET: product-images
+          VITE_STORAGE_PRIVATE: "1"
+          VITE_TURNSTILE_SITE_KEY: ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
+          VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
+          VITE_POSTHOG_HOST: ${{ secrets.VITE_POSTHOG_HOST }}
+          # NÃO activar: a transformação de imagens do Supabase é uma
+          # funcionalidade de plano pago e este projeto está no plano gratuito —
+          # ligá-la deixa todas as imagens da loja a falhar. (deploy_pages.py
+          # liga-a por omissão nos builds de produção; é um bug desse script.)
+          VITE_IMAGE_TRANSFORM: "0"
+        run: npm run build
+
+      - name: Cabeçalhos de produção
+        working-directory: frontend-web
+        run: |
+          if [ -f public/_headers.production ]; then
+            cp public/_headers.production dist/_headers
+            echo "_headers de produção aplicado"
+          fi
+
+      - name: Avisar se falta a chave Turnstile
+        env:
+          TURNSTILE: ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
+        run: |
+          if [ -z "$TURNSTILE" ]; then
+            echo "::warning::VITE_TURNSTILE_SITE_KEY vazio — o captcha do formulário de contacto não vai aparecer."
+          fi
+
+      - name: Verificar que não há secrets no bundle
+        run: python deploy/verify_bundle_secrets.py
+
+      - name: Publicar no Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: frontend-web
+          # `pages deploy dist` a partir de frontend-web para o `functions/`
+          # ao lado (middleware dos probes de path) ir incluído.
+          command: pages deploy dist --project-name=${{ inputs.pages_project }} --branch=production
