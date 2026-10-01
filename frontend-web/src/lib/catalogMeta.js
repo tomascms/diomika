@@ -1,3 +1,17 @@
+/**
+ * Esquema unificado: 3 tabelas físicas partilhadas por todas as categorias
+ * (discriminadas por `tipo_catalogo`). Os nomes `model_table`/`product_table`/
+ * `colors_table` dentro de `catalog_types` abaixo (e os que vêm de
+ * GET /catalogo/meta) são "virtuais" — servem o backoffice para encaminhar
+ * pedidos a /admin/crud/{tabela} — nunca uses esses campos para consultar o
+ * Supabase diretamente a partir da loja; usa estas constantes.
+ */
+export const PHYSICAL_CATALOG_TABLES = {
+  models: 'product_models',
+  variants: 'product_variants',
+  colors: 'product_model_colors',
+}
+
 /** Metadados do catálogo — fallback estático; em runtime a loja prefere GET /catalogo/meta. */
 export const CATALOG_META = {
   "catalog_types": [

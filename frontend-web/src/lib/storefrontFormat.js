@@ -1,3 +1,5 @@
+import { PHYSICAL_CATALOG_TABLES } from '@/lib/catalogMeta'
+
 export function formatStorefrontValue(spec, value) {
   if (value == null || value === '') return null
 
@@ -53,7 +55,10 @@ export function formatBadgeLabel(badge, model) {
 export function storefrontContextForModel(model, tipoConfig) {
   return model?._storefront || {
     mode: tipoConfig?.storefront_mode || 'variantes',
-    product_table: tipoConfig?.product_table,
+    // product_table aqui tem de ser o nome físico real (a chave sob a qual
+    // as variantes vêm embutidas na linha) — nunca o nome virtual de
+    // catalog_types, que só serve o encaminhamento do backoffice.
+    product_table: PHYSICAL_CATALOG_TABLES.variants,
     picker: tipoConfig?.storefront_picker,
     specs: tipoConfig?.storefront_specs || [],
     badge: tipoConfig?.storefront_badge,

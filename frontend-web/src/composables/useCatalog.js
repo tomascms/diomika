@@ -7,7 +7,7 @@ import {
   modelDetailForSlugs,
   modelDetailForTipo,
 } from '@/lib/catalogSupabase'
-import { getCatalogMeta, setLiveCatalogMeta } from '@/lib/catalogMeta'
+import { PHYSICAL_CATALOG_TABLES, getCatalogMeta, setLiveCatalogMeta } from '@/lib/catalogMeta'
 import { supabaseConfigured } from '@/lib/supabase'
 
 import {
@@ -310,13 +310,11 @@ export function useCatalog() {
   }
 
   const realtimeTables = () => {
-    const tables = new Set()
-    for (const t of metaCache.value?.catalog_types || []) {
-      if (t.colors_table) tables.add(t.colors_table)
-      if (t.model_table) tables.add(t.model_table)
-      if (t.product_table) tables.add(t.product_table)
-    }
-    return [...tables]
+    // Esquema unificado: 3 tabelas físicas partilhadas por todas as
+    // categorias — já não é preciso percorrer o catálogo a recolher nomes
+    // (que, em catalog_types, são nomes virtuais para o backoffice, não
+    // nomes de tabela reais para subscrever).
+    return [PHYSICAL_CATALOG_TABLES.models, PHYSICAL_CATALOG_TABLES.variants, PHYSICAL_CATALOG_TABLES.colors]
   }
 
   const prefetchCategoryModels = (tipo, categoryId, activeFilters = null) => {
