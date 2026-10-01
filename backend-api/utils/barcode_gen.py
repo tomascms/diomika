@@ -23,7 +23,9 @@ def generate_ean13(ean_code: str):
         buffer.seek(0)
 
         dest_path = f"barcodes/{expected_ean}.png"
-        public_url = upload_bytes(buffer.read(), dest_path, "image/png")
+        # optimize=False: um código de barras recomprimido/redimensionado
+        # como se fosse uma fotografia deixa de ser legível por um scanner.
+        public_url = upload_bytes(buffer.read(), dest_path, "image/png", optimize=False)
         return (public_url, expected_ean)
     except barcode.errors.BarcodeError:
         return None

@@ -96,6 +96,18 @@ def _require_public_category(id_categoria: str) -> bool:
     return is_visible(rows[0])
 
 
+def _flatten_attrs(row: dict) -> dict:
+    """Expõe os atributos específicos da categoria também no nível de topo do
+    dict — mantém a resposta da API da loja igual à de antes do esquema
+    unificado (ex.: `product.dimensoes`, `model.tipo_oculo`), para o
+    frontend-web não ter de saber que esses campos agora vivem em
+    `attributes` (jsonb, só relevante à escrita/validação no backoffice)."""
+    attrs = row.get("attributes")
+    if isinstance(attrs, dict) and attrs:
+        return {**attrs, **row}
+    return row
+
+
 def _finalize_model_products(row: dict, pt: str, mode: str) -> bool:
     """Ordena variantes visíveis; devolve False se não houver produto/cor publicáveis."""
     # Sem cores o detalhe não tem imagem — não listar o modelo na loja.
@@ -104,6 +116,7 @@ def _finalize_model_products(row: dict, pt: str, mode: str) -> bool:
 
     raw = row.get(pt)
     products = _visible_products(raw if isinstance(raw, list) else [raw] if raw else [])
+    products = [_flatten_attrs(p) for p in products]
 
     if mode == "unico":
         if not products:
@@ -114,13 +127,13 @@ def _finalize_model_products(row: dict, pt: str, mode: str) -> bool:
     if mode == "assento":
         if not products:
             return False
-        products.sort(key=lambda p: str((p.get("attributes") or {}).get("altura") or ""))
+        products.sort(key=lambda p: str(p.get("altura") or ""))
         row[pt] = products
         return True
 
     if not products:
         return False
-    products.sort(key=lambda p: str((p.get("attributes") or {}).get("dimensoes") or (p.get("attributes") or {}).get("segmento") or ""))
+    products.sort(key=lambda p: str(p.get("dimensoes") or p.get("segmento") or ""))
     row[pt] = products
     return True
 
@@ -215,6 +228,7 @@ def catalogue_models_for_tipo(
         if not _matches_product_filters(row, pt, product_filters):
             continue
 
+        row = _flatten_attrs(row)
         row["_tipo_catalogo"] = tipo
         row["_storefront"] = storefront_context_for_tipo(tipo, cfg)
         row["_storefront_mode"] = mode
@@ -287,6 +301,7 @@ def _normalize_model_detail_row(data: dict, *, tipo: str, cfg: dict, mode: str) 
     data["modelo_cores"] = _modelo_cores(data)
     if not _finalize_model_products(data, pt, mode):
         return None
+    data = _flatten_attrs(data)
     ctx = storefront_context_for_tipo(tipo, cfg)
     data["_tipo_catalogo"] = tipo
     data["_storefront"] = ctx

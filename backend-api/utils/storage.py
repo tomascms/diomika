@@ -98,8 +98,15 @@ def resolve_delivery_url(storage_path: str) -> str:
     return get_public_url(storage_path)
 
 
-def upload_bytes(data: bytes, dest_path: str, content_type: str = "image/png") -> str:
-    """Envia bytes para o storage (Supabase ou R2) e devolve URL."""
+def upload_bytes(data: bytes, dest_path: str, content_type: str = "image/png", *, optimize: bool = True) -> str:
+    """Envia bytes para o storage (Supabase ou R2) e devolve URL.
+
+    `optimize=True` (omissão) redimensiona/recomprime fotos de catálogo no
+    servidor — substitui a Image Transformation do Supabase (paga) por algo
+    que funciona em qualquer plano. Códigos de barras devem passar
+    `optimize=False`: precisam de ficar nítidos para serem lidos por um
+    scanner, não comprimidos como uma fotografia.
+    """
     from utils.image_validation import validate_upload_bytes
 
     dest_path = sanitize_storage_path(dest_path)
@@ -108,6 +115,11 @@ def upload_bytes(data: bytes, dest_path: str, content_type: str = "image/png") -
         raise ValueError(f"Ficheiro demasiado grande (máx. {max_bytes} bytes)")
 
     validate_upload_bytes(data, dest_path)
+
+    if optimize:
+        from utils.image_resize import optimize_for_web
+
+        data = optimize_for_web(data, dest_path)
 
     lower = dest_path.lower()
     if lower.endswith((".jpg", ".jpeg")):
