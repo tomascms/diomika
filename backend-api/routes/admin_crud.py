@@ -55,6 +55,7 @@ from models.ui_schema import get_form_fields
 from utils.barcode_gen import apply_barcode_url
 from utils.image_urls import content_type_for_path, resolve_image_value
 from utils.image_validation import validate_upload_bytes
+from utils.postgrest_filter import or_literal
 from utils.storage import upload_bytes
 
 logger = logging.getLogger("diomika-api")
@@ -691,18 +692,19 @@ def list_records(
         query = query.eq("id_modelo", id_modelo)
     needle = (q or "").strip()
     if needle:
+        pattern = or_literal(f"%{needle}%")
         if table_name in all_product_tables():
             tipo = tipo_for_table(table_name) or ""
             variant_attrs = (CATEGORY_ATTRIBUTE_SCHEMAS.get(tipo) or {}).get("variant_attributes") or {}
-            terms = [f"ean.ilike.%{needle}%"]
+            terms = [f"ean.ilike.{pattern}"]
             for attr_name in ("dimensoes", "altura"):
                 if attr_name in variant_attrs:
-                    terms.append(f"attributes->>{attr_name}.ilike.%{needle}%")
+                    terms.append(f"attributes->>{attr_name}.ilike.{pattern}")
             query = query.or_(",".join(terms))
         elif table_name in all_model_tables():
-            query = query.or_(f"nome.ilike.%{needle}%,slug.ilike.%{needle}%")
+            query = query.or_(f"nome.ilike.{pattern},slug.ilike.{pattern}")
         elif table_name == "categories":
-            query = query.or_(f"nome.ilike.%{needle}%,slug.ilike.%{needle}%")
+            query = query.or_(f"nome.ilike.{pattern},slug.ilike.{pattern}")
     try:
         res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
     except TypeError:

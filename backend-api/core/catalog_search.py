@@ -7,6 +7,7 @@ from core.catalog_storefront import models_detail_map_for_tipo
 from core.database import get_db
 from core.visibility import is_visible
 from models.schemas import PRODUCT_MODELS_TABLE
+from utils.postgrest_filter import or_literal
 
 logger = logging.getLogger("diomika-api")
 
@@ -30,7 +31,7 @@ def _search_models_by_name(q: str, *, limit: int) -> list[dict]:
             .table(PRODUCT_MODELS_TABLE)
             .select("id, nome, slug, tipo_catalogo, visibilidade, id_categoria, categories(id, nome, slug, tipo_catalogo)")
             .eq("visibilidade", True)
-            .or_(f"nome.ilike.%{needle}%,slug.ilike.%{needle}%")
+            .or_(f"nome.ilike.{or_literal(f'%{needle}%')},slug.ilike.{or_literal(f'%{needle}%')}")
             .limit(max(limit * 2, 16))
             .execute()
         )

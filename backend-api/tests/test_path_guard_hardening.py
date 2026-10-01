@@ -69,6 +69,38 @@ def test_mfa_optional_via_env(monkeypatch):
     get_settings.cache_clear()
 
 
+def test_mfa_required_by_default_in_production(monkeypatch):
+    """Sem ADMIN_MFA_REQUIRED definido, produção final passa a exigir MFA por
+    omissão (antes ficava só protegida por password, a menos que alguém
+    definisse a variável à mão)."""
+    monkeypatch.setenv("DIOMIKA_ENV", "production")
+    monkeypatch.delenv("DIOMIKA_BETA", raising=False)
+    monkeypatch.delenv("ADMIN_MFA_REQUIRED", raising=False)
+    from core.config import get_settings
+    from core.admin_users import mfa_required_globally
+
+    get_settings.cache_clear()
+    assert mfa_required_globally() is True
+
+    # Dev continua opcional por omissão — não bloqueia o fluxo local.
+    monkeypatch.setenv("DIOMIKA_ENV", "development")
+    get_settings.cache_clear()
+    assert mfa_required_globally() is False
+
+    # Beta também passa a exigir MFA por omissão: é precisamente o modo em
+    # que o admin fica acessível remotamente com menos barreiras de rede
+    # (core/local_only.py), por isso não pode ficar com MENOS exigência de
+    # autenticação do que a produção final.
+    monkeypatch.setenv("DIOMIKA_ENV", "production")
+    monkeypatch.setenv("DIOMIKA_BETA", "1")
+    get_settings.cache_clear()
+    assert mfa_required_globally() is True
+
+    monkeypatch.setenv("DIOMIKA_ENV", "development")
+    monkeypatch.delenv("DIOMIKA_BETA", raising=False)
+    get_settings.cache_clear()
+
+
 def test_session_secret_only_api_secret_key(monkeypatch):
     monkeypatch.setenv("DIOMIKA_ENV", "development")
     monkeypatch.delenv("API_SECRET_KEY", raising=False)

@@ -171,8 +171,22 @@ def _parse_locked(raw: str | None) -> datetime | None:
 
 
 def mfa_required_globally() -> bool:
-    """MFA opcional — activo só com ADMIN_MFA_REQUIRED=1."""
-    return (os.getenv("ADMIN_MFA_REQUIRED") or "").strip().lower() in ("1", "true", "yes")
+    """MFA obrigatório por omissão em produção final E em beta (antes era
+    preciso ADMIN_MFA_REQUIRED=1 explícito, e o modo beta ficava de fora —
+    nesse modo o admin fica acessível remotamente (ver core/local_only.py)
+    com só password a protegê-lo, o que tornava o MFA ainda mais necessário,
+    não menos). ADMIN_MFA_REQUIRED=1 força em qualquer ambiente;
+    ADMIN_MFA_REQUIRED=0 desliga mesmo em produção, se for mesmo essa a
+    escolha."""
+    raw = (os.getenv("ADMIN_MFA_REQUIRED") or "").strip().lower()
+    if raw in ("1", "true", "yes"):
+        return True
+    if raw in ("0", "false", "no"):
+        return False
+
+    from core.config import get_settings
+
+    return get_settings().is_production
 
 
 def _totp_ok(secret: str, code: str) -> bool:

@@ -36,7 +36,20 @@ def desktop_gate_ok(request: Request) -> bool:
 
 
 def privileged_access_ok(request: Request) -> bool:
-    """Loopback (ops na VM) ou app desktop com gate válido."""
+    """Loopback (ops na VM) ou app desktop com gate válido.
+
+    Em dev e em beta, este gate de rede fica desligado de propósito — em
+    beta ainda não há domínio/VM fixos, por isso o admin precisa de ser
+    acessível de fora do loopback. Isso significa que, nesses modos, a
+    única barreira real contra um admin exposto publicamente é a
+    autenticação (password + MFA) em core/admin_users.py — por isso
+    mfa_required_globally() exige MFA em beta tal como em produção final,
+    não só nesta última. Se o teu "beta" for mesmo um link privado que só
+    tu conheces (não divulgado, DNS não público), o risco é baixo; se for
+    um soft-launch já acessível ao público, considera manter esta função
+    tão restritiva como em produção final (tirar o `settings.is_beta` da
+    condição abaixo) e usar antes um túnel/VPN para administração remota.
+    """
     settings = get_settings()
     if not settings.is_production or settings.is_beta:
         return True
