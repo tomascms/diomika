@@ -5,6 +5,7 @@ import { api } from '@/lib/api'
 import { workspace } from '@/composables/useWorkspace'
 import SchemaForm from '@/components/SchemaForm.vue'
 import ModelColorsPanel from '@/components/ModelColorsPanel.vue'
+import ModelVariantsPanel from '@/components/ModelVariantsPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,6 +21,7 @@ const relations = ref({})
 const pendingFiles = ref({})
 const fieldOptions = ref({})
 const colorsPanel = ref(null)
+const variantsPanel = ref(null)
 const schemaFormRef = ref(null)
 const loading = ref(true)
 const saving = ref(false)
@@ -51,6 +53,7 @@ const isProductForm = computed(() =>
 const modelCatalogTipo = computed(() =>
   catalogTypes.value.find((t) => t.model_table === table.value) || null,
 )
+const productTableForModel = computed(() => modelCatalogTipo.value?.product_table || null)
 
 const storefrontCheck = ref(null)
 
@@ -59,7 +62,7 @@ const storefrontIssues = computed(() => {
   if (!s) return []
   const issues = []
   if (!s.withEan) {
-    issues.push('Falta pelo menos um produto com EAN (crie variantes na tabela de produtos desta família).')
+    issues.push('Falta pelo menos um produto com EAN (secção «Produtos (EAN)» abaixo).')
   }
   if (!s.withColorImg) {
     if (s.withEan > 0) {
@@ -155,10 +158,13 @@ const navigateNewPhysical = async (physicalTable, categoryId) => {
     return
   }
   switchingSchema = true
+  // Preserva nome/descrição e quaisquer atributos que a família nova também
+  // tenha (ex.: "composicao" existe em quase todas as famílias de têxteis) —
+  // em vez de descartar tudo o resto do formulário ao mudar de categoria.
   formCarry = {
     nome: formData.value.nome,
     descricao: formData.value.descricao,
-    composicao: formData.value.composicao,
+    attributes: { ...formData.value.attributes },
   }
   createIdempotencyKey.value = crypto.randomUUID()
   pendingFiles.value = {}
@@ -384,6 +390,16 @@ const saveDraft = async () => {
         return
       }
     }
+    if (embedColors.value && variantsPanel.value) {
+      try {
+        await variantsPanel.value.save(String(savedId), { publish: false })
+      } catch (e) {
+        message.value = `Rascunho guardado, mas produtos: ${e.message}`
+        saving.value = false
+        if (isNew.value && savedId) await goToEdit(savedId)
+        return
+      }
+    }
 
     formData.value.visibilidade = false
     message.value = 'Rascunho guardado (oculto na loja).'
@@ -423,6 +439,16 @@ const publish = async () => {
         await colorsPanel.value.save(String(savedId), { publish: true })
       } catch (e) {
         message.value = `Dados guardados, mas cores: ${e.message}`
+        saving.value = false
+        if (isNew.value && savedId) await goToEdit(savedId)
+        return
+      }
+    }
+    if (embedColors.value && variantsPanel.value) {
+      try {
+        await variantsPanel.value.save(String(savedId), { publish: true })
+      } catch (e) {
+        message.value = `Dados guardados, mas produtos: ${e.message}`
         saving.value = false
         if (isNew.value && savedId) await goToEdit(savedId)
         return
@@ -598,6 +624,12 @@ watch(() => route.fullPath, load, { immediate: true })
         ref="colorsPanel"
         :model-id="savedModelId"
         :colors-table="colorsTable"
+      />
+      <ModelVariantsPanel
+        v-if="embedColors"
+        ref="variantsPanel"
+        :model-id="savedModelId"
+        :product-table="productTableForModel"
       />
       <div class="actions actions-sticky">
         <button class="btn btn-ghost" type="button" :disabled="saving" @click="saveDraft">
