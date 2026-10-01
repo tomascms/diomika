@@ -1,58 +1,31 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { api } from '@/lib/api'
 import ImageField from '@/components/ImageField.vue'
 
-const props = defineProps({
-  plan: { type: Object, required: true },
-})
-
 const emit = defineEmits(['created', 'error'])
 
-const selectedSlug = ref('')
+const tipos = ref([])
+const tipoCatalogo = ref('')
 const nome = ref('')
-const slug = ref('')
-const carrinhoStep = ref('')
-const carrinhoMin = ref('')
 const imagem = ref('')
 const imageFile = ref(null)
+const carrinhoStep = ref('')
+const carrinhoMin = ref('')
 const saving = ref(false)
+const loadingTipos = ref(true)
 
-const selected = computed(() => props.plan.missing.find((m) => m.slug === selectedSlug.value) || props.plan.missing[0])
-
-const tipoLabel = computed(() => {
-  const tipo = selected.value?.tipo_catalogo
-  if (!tipo) return '—'
-  const map = {
-    almofada: 'Almofadas',
-    assento: 'Assentos',
-    guarda_chuva: 'Guarda-chuvas',
-    oculo: 'Óculos',
-    toalha_mesa: 'Toalhas de mesa',
-    material_cozinha: 'Material de cozinha',
-    regional: 'Regional',
+onMounted(async () => {
+  try {
+    const data = await api.categoryTipos()
+    tipos.value = data.tipos || []
+    if (tipos.value.length) tipoCatalogo.value = tipos.value[0].tipo
+  } catch (e) {
+    emit('error', e.message)
+  } finally {
+    loadingTipos.value = false
   }
-  return map[tipo] || String(tipo).replace(/_/g, ' ')
 })
-
-const fillFromSelection = () => {
-  const item = selected.value
-  if (!item) return
-  selectedSlug.value = item.slug
-  nome.value = item.nome || ''
-  // Slug canónico da definição — evita drift com o plano / URLs
-  slug.value = item.slug || ''
-  carrinhoStep.value = String(item.carrinho_step ?? '')
-  carrinhoMin.value = String(item.carrinho_min ?? '')
-  imagem.value = ''
-  imageFile.value = null
-}
-
-watch(() => props.plan, () => {
-  if (props.plan?.missing?.length) selectedSlug.value = props.plan.missing[0].slug
-  fillFromSelection()
-}, { immediate: true })
-watch(selectedSlug, fillFromSelection)
 
 const onImageFile = (file) => {
   imageFile.value = file
@@ -62,23 +35,27 @@ const create = async () => {
   saving.value = true
   emit('error', '')
   try {
+    if (!nome.value.trim()) throw new Error('Indique o nome da categoria.')
+    if (!tipoCatalogo.value) throw new Error('Escolha a família de produto.')
     let imageUrl = imagem.value
     if (imageFile.value) {
       const up = await api.uploadImage('categories', 'imagem', imageFile.value)
       imageUrl = up.url
     }
     if (!imageUrl) throw new Error('Escolha uma imagem para a categoria.')
-    await api.createCategory({
-      definition_slug: selected.value.slug,
+    await api.createRecord('categories', {
       nome: nome.value.trim(),
-      // Sempre o slug da definição — não permitir override livre
-      slug_override: selected.value.slug,
       imagem: imageUrl,
+      tipo_catalogo: tipoCatalogo.value,
       carrinho_step: carrinhoStep.value ? Number(carrinhoStep.value) : undefined,
       carrinho_min: carrinhoMin.value ? Number(carrinhoMin.value) : undefined,
     })
+    nome.value = ''
+    imagem.value = ''
+    imageFile.value = null
+    carrinhoStep.value = ''
+    carrinhoMin.value = ''
     emit('created')
-    fillFromSelection()
   } catch (e) {
     emit('error', e.message)
   } finally {
@@ -89,40 +66,41 @@ const create = async () => {
 
 <template>
   <div class="card panel">
-    <h3>Criar categorias em falta</h3>
-    <p class="hint">{{ plan.message }}</p>
+    <h3>Nova categoria</h3>
+    <p class="hint">
+      Dá-lhe um nome e uma imagem, e escolhe a família de produto que vai conter (define que
+      campos os modelos desta categoria têm). Podes criar quantas categorias quiseres para a
+      mesma família — ex.: "Almofadas" e "Almofadas de Natal" podem coexistir.
+    </p>
 
-    <label>Categoria pendente</label>
-    <select v-model="selectedSlug" class="input">
-      <option v-for="item in plan.missing" :key="item.slug" :value="item.slug">
-        {{ item.nome }}
-      </option>
+    <label for="cat-nome">Nome</label>
+    <input id="cat-nome" v-model="nome" class="input" placeholder="ex: Almofadas de Natal" />
+
+    <label for="cat-imagem">Imagem</label>
+    <ImageField id="cat-imagem" v-model="imagem" @file-selected="onImageFile" />
+
+    <label for="cat-tipo">Família de produto</label>
+    <select id="cat-tipo" v-model="tipoCatalogo" class="input" :disabled="loadingTipos">
+      <option v-for="t in tipos" :key="t.tipo" :value="t.tipo">{{ t.label }}</option>
     </select>
-
-    <label>Nome</label>
-    <input v-model="nome" class="input" />
-
-    <label>Slug (URL)</label>
-    <input v-model="slug" class="input" readonly />
-
-    <label>Imagem</label>
-    <ImageField v-model="imagem" @file-selected="onImageFile" />
+    <p class="hint small">
+      Uma família nova (com campos diferentes das 12 atuais) precisa de uma alteração de código —
+      todo o resto de uma categoria é livre.
+    </p>
 
     <div class="grid-2">
       <div>
-        <label>Passo carrinho</label>
-        <input v-model="carrinhoStep" class="input" type="number" />
+        <label for="cat-step">Passo carrinho</label>
+        <input id="cat-step" v-model="carrinhoStep" class="input" type="number" placeholder="6" />
       </div>
       <div>
-        <label>Mínimo carrinho</label>
-        <input v-model="carrinhoMin" class="input" type="number" />
+        <label for="cat-min">Mínimo carrinho</label>
+        <input id="cat-min" v-model="carrinhoMin" class="input" type="number" placeholder="6" />
       </div>
     </div>
 
-    <p class="tipo">Família: <strong>{{ tipoLabel }}</strong></p>
-
-    <button class="btn btn-primary" :disabled="saving" @click="create">
-      {{ saving ? 'A criar…' : 'Criar categoria selecionada' }}
+    <button class="btn btn-primary" :disabled="saving || loadingTipos" @click="create">
+      {{ saving ? 'A criar…' : 'Criar categoria' }}
     </button>
   </div>
 </template>
@@ -131,7 +109,7 @@ const create = async () => {
 .panel { padding: 1.2rem 1.25rem; margin-bottom: 1rem; display: grid; gap: 0.65rem; }
 .panel h3 { margin: 0; font-family: var(--font-display); font-weight: 560; }
 .hint { color: var(--text-muted); font-size: 0.9rem; margin: 0; }
+.hint.small { font-size: 0.78rem; }
 label { font-size: 0.84rem; font-weight: 600; color: var(--text-muted); }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-.tipo { font-size: 0.85rem; color: var(--accent-hover); margin: 0; font-weight: 600; }
 </style>

@@ -14,7 +14,6 @@ const route = useRoute()
 const router = useRouter()
 const { tableConfig, workspace } = useWorkspace()
 
-const plan = ref(null)
 const rows = ref([])
 const loading = ref(true)
 const loadingMore = ref(false)
@@ -47,21 +46,16 @@ const canImportExport = computed(() => !isCategories.value && !isMerged.value)
 const catalogTypes = computed(() => workspace.value?.catalog?.catalog_types || [])
 const categoryDefinitions = computed(() => workspace.value?.catalog?.category_definitions || {})
 
-const modelTables = computed(() =>
-  (catalogTypes.value || []).map((t) => t.model_table).filter(Boolean),
-)
-
-const embeddedModel = (row) => {
-  for (const mt of modelTables.value) {
-    if (row[mt]) return row[mt]
-  }
-  return null
-}
+// Esquema unificado: a relação "modelo" embutida numa linha de produto vem
+// sempre sob o nome físico da tabela (product_models), seja qual for a
+// família — já não é preciso adivinhar entre N tabelas.
+const embeddedModel = (row) => row?.product_models || null
 
 const recordLabel = (row) => {
   if (table.value === 'produtos') {
     const model = embeddedModel(row)
-    const parts = [model?.nome, row.dimensoes, row.altura, row.segmento, row.ean].filter(Boolean)
+    const attrs = row.attributes || {}
+    const parts = [model?.nome, attrs.dimensoes, attrs.altura, attrs.segmento, row.ean].filter(Boolean)
     return parts.join(' · ') || '—'
   }
   return row.nome || row.ean || String(row.id).slice(0, 8)
@@ -77,12 +71,13 @@ const categoryLabel = (row) => {
 
 const rowSearchText = (row) => {
   const model = embeddedModel(row)
+  const attrs = row.attributes || {}
   const parts = [
     row.nome,
     row.ean,
-    row.dimensoes,
-    row.altura,
-    row.segmento,
+    attrs.dimensoes,
+    attrs.altura,
+    attrs.segmento,
     row.slug,
     row._categoria_label,
     row.categories?.nome,
@@ -113,15 +108,6 @@ const filteredRows = computed(() => {
   if (!q) return rows.value
   return rows.value.filter((r) => rowSearchText(r).includes(q))
 })
-
-const loadPlan = async () => {
-  if (!isCategories.value) return
-  try {
-    plan.value = await api.categoriesPlan()
-  } catch {
-    plan.value = null
-  }
-}
 
 const newPhysicalTipo = ref('')
 
@@ -221,7 +207,6 @@ const onCategoryCreated = async () => {
   message.value = 'Categoria criada.'
   error.value = ''
   await loadRows()
-  await loadPlan()
 }
 
 const openRow = (row) => {
@@ -383,7 +368,6 @@ watch(table, (next, prev) => {
     totalApprox.value = null
   }
   void loadRows()
-  void loadPlan()
   void ensureCategories()
 }, { immediate: true })
 
@@ -413,16 +397,7 @@ onActivated(() => {
 
 <template>
   <div class="page-view">
-    <CategoryCreatePanel
-      v-if="isCategories && plan?.can_create"
-      :plan="plan"
-      @created="onCategoryCreated"
-      @error="error = $event"
-    />
-
-    <p v-else-if="isCategories && plan && !plan.can_create" class="notice">
-      Catálogo completo — abre uma categoria para editar.
-    </p>
+    <CategoryCreatePanel v-if="isCategories" @created="onCategoryCreated" @error="error = $event" />
 
     <div class="toolbar toolbar-panel">
       <input v-model="filterText" class="input search" type="search" placeholder="Filtrar registos…" />

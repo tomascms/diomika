@@ -24,7 +24,7 @@ def build_unified_catalog_table_map(*, model_schema, variant_schema, colors_sche
         for f in attribute_form_fields(tipo, "model"):
             if f["widget"] == "enum":
                 model_filters.append(
-                    {"field": f"attributes.{f['attr_name']}", "label": f["label"], "type": "enum", "options": f["enum_options"] or [], "labels": f["enum_labels"] or {}}
+                    {"field": f"attributes.{f['name']}", "label": f["label"], "type": "enum", "options": f["enum_options"] or [], "labels": f["enum_labels"] or {}}
                 )
 
         out[mt] = {

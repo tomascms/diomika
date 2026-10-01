@@ -74,12 +74,12 @@ settings.validate_startup()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from core.background_workers import start_background_workers, stop_background_workers
-    from core.schema_engine import bootstrap_database_schema
 
-    if (os.getenv("SCHEMA_BOOTSTRAP") or "1").strip().lower() not in ("0", "false", "no"):
-        bootstrap_database_schema(logger)
-    else:
-        logger.info("SCHEMA_BOOTSTRAP=0 — skip bootstrap (replica ou init já feito)")
+    # O esquema deixou de ser auto-migrado no arranque (ALTER TABLE/CREATE
+    # TABLE em produção a cada boot era frágil e arriscado — ver auditoria).
+    # Migrações são agora ficheiros SQL versionados em backend-api/sql/,
+    # aplicados manualmente (Supabase SQL Editor ou deploy/apply_production.py),
+    # nunca automaticamente aqui.
     from core.cache_warmup import warm_catalog_cache
 
     await asyncio.to_thread(warm_catalog_cache)

@@ -328,7 +328,14 @@ def _widget_for(name: str, desc: dict) -> str:
 
 def attribute_form_fields(tipo: str, level: AttrLevel) -> List[dict]:
     """Campos no mesmo formato que models.ui_schema.get_form_fields produz
-    para campos fixos — para o backoffice conseguir fundir os dois."""
+    para campos fixos — para o backoffice conseguir fundir os dois.
+
+    `name` é o nome do atributo "nu" (ex.: "tipo", não "attributes.tipo"):
+    o formulário genérico do backoffice submete um objecto plano
+    `{[field.name]: valor}}`, e é `catalog_registry.fold_attributes()` que
+    reconhece esses nomes nus e os dobra em `attributes: {...}` antes da
+    validação Pydantic — um "attributes.tipo" como nome não seria reconhecido
+    nem pelo formulário nem pelo fold."""
     cfg = CATEGORY_ATTRIBUTE_SCHEMAS.get(tipo) or {}
     attrs = cfg.get(f"{level}_attributes") or {}
     out = []
@@ -337,8 +344,7 @@ def attribute_form_fields(tipo: str, level: AttrLevel) -> List[dict]:
             continue
         out.append(
             {
-                "name": f"attributes.{name}",
-                "attr_name": name,
+                "name": name,
                 "label": desc.get("label") or name.replace("_", " ").title(),
                 "widget": _widget_for(name, desc),
                 "required": bool(desc.get("required")),

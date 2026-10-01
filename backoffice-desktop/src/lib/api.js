@@ -242,14 +242,16 @@ export const api = {
   deleteRecord: (table, id, hard = false) =>
     request('DELETE', `/admin/crud/${table}/${id}`, { params: { hard: String(hard) } }),
   uploadImage: (table, field, file) => uploadFile(table, field, file),
-  createCategory: (body) => request('POST', '/system/categories/create', { body }),
+  // Criar categoria é CRUD real: createRecord('categories', {...}) — qualquer
+  // nome/imagem, para qualquer família (categoryTipos() alimenta o dropdown
+  // de família), sem limite a uma categoria por família.
+  categoryTipos: () => request('GET', '/system/categories/tipos'),
   mergedList: async (viewKey, params = {}) => {
     const data = await request('GET', `/catalogo/admin/merged/${viewKey}`, {
       params: { limit: '40', offset: '0', ...params },
     })
     return normalizeMergedPage(data)
   },
-  categoriesPlan: () => request('GET', '/system/categories/plan'),
   orderPicker: (categoryId) => request('GET', `/system/order-picker/${categoryId}`),
   createOrder: (body) => request('POST', '/encomendas-internas', { body }),
   orderPdf: (id) => downloadBlob(`/encomendas-internas/${id}/pdf`),

@@ -15,7 +15,6 @@ from core.auth import (
 from core.config import get_settings
 from core.database import get_db
 from core.local_only import admin_must_be_local
-from core.schema_engine import sync_schema
 from models.catalog_registry import catalog_metadata
 from models.catalog_views import CATALOG_VIEWS
 from models.schemas import TABLE_MAP, sidebar_tables
@@ -104,169 +103,24 @@ def form_schema(request: Request, table_name: str, role=Depends(require_admin)):
     }
 
 
-@router.post("/schema/sync")
-def run_schema_sync(request: Request, dry_run: bool = False, role=Depends(require_ops)):
-    """Sincroniza TABLE_MAP (Pydantic) com a base de dados Supabase — chave ops."""
-    try:
-        report = sync_schema(supabase=get_db(), apply=not dry_run, dry_run=dry_run)
-        audit_request(request, action="schema_sync", resource="system", detail={"dry_run": dry_run})
-        return {
-            "status": "ok",
-            "applied": report.applied,
-            "message": report.message,
-            "created_tables": report.created_tables,
-            "added_columns": report.added_columns,
-            "sql_executed": report.sql_executed,
-            "sql_pending": report.sql_pending,
-            "seeded_categories": report.seeded_categories,
-            "new_field_warnings": report.new_field_warnings,
-            "incomplete_records": report.incomplete_records,
-            "schema_hash": report.schema_hash,
-        }
-    except Exception as e:
-        logger.exception("Schema sync failed")
-        raise HTTPException(status_code=500, detail="Erro ao sincronizar schema") from e
+@router.get("/categories/tipos", dependencies=[Depends(require_catalog_role)])
+def categories_available_tipos():
+    """Famílias de produto disponíveis para uma categoria nova — CRUD real:
+    uma categoria pode ser criada com qualquer nome/imagem, para qualquer
+    família (incluindo várias categorias para a mesma família, ex. "Almofadas
+    de Natal" e "Almofadas" podem coexistir). A criação em si usa o CRUD
+    genérico (POST /admin/crud/categories) — este endpoint só alimenta o
+    dropdown de família no formulário."""
+    from models.catalog_registry import CATALOG_TYPES
 
-
-@router.post("/apply-deploy-sql")
-def apply_deploy_sql(request: Request, role=Depends(require_ops)):
-    """Aplica deploy/supabase_pre_deploy.sql (dev local — desactivado em producao)."""
-    if get_settings().is_production:
-        raise HTTPException(status_code=403, detail="Endpoint desactivado em producao")
-
-    from core.sql_runner import apply_sql_file
-    from paths import PROJECT_ROOT
-
-    sql_path = PROJECT_ROOT / "deploy" / "supabase_pre_deploy.sql"
-    try:
-        via = apply_sql_file(sql_path, interactive=False)
-        audit_request(request, action="apply_deploy_sql", resource="system", detail={"via": str(via)})
-        return {"status": "ok", "via": via}
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail="Não foi possível aplicar SQL.") from exc
-
-
-@router.get("/schema/status", dependencies=[Depends(require_ops)])
-def schema_status():
-    """Estado do schema sem aplicar alterações."""
-    report = sync_schema(supabase=get_db(), apply=False, dry_run=True)
-    return {
-        "message": report.message,
-        "created_tables": report.created_tables,
-        "added_columns": report.added_columns,
-        "sql_pending": report.sql_pending,
-        "seeded_categories": report.seeded_categories,
-        "new_field_warnings": report.new_field_warnings,
-        "incomplete_records": report.incomplete_records,
-        "schema_hash": report.schema_hash,
-    }
-
-
-@router.get("/categories/plan", dependencies=[Depends(require_catalog_role)])
-def categories_creation_plan():
-    from core.category_flow import build_category_creation_plan
-
-    rows = get_db().table("categories").select("*").execute().data or []
-    return build_category_creation_plan(rows)
-
-
-@router.post("/categories/create")
-def create_category_from_form(request: Request, body: dict, role=Depends(require_catalog_role)):
-    """Cria categoria pendente — com imagem e regras de carrinho (como backoffice legado)."""
-    from core.category_flow import build_category_creation_plan
-    from core.cqrs.commands.catalog import CreateCategoryCommand, create_category
-    from models.schemas import CATEGORY_DEFINITIONS, Categoria, generate_slug
-
-    slug_key = str(body.get("definition_slug") or body.get("slug") or "").strip().lower()
-    definition = CATEGORY_DEFINITIONS.get(slug_key)
-    if not definition:
-        raise HTTPException(status_code=404, detail="Slug não definido em CATEGORY_DEFINITIONS")
-
-    rows = get_db().table("categories").select("*").execute().data or []
-    plan = build_category_creation_plan(rows)
-    if not plan.get("can_create"):
-        raise HTTPException(status_code=400, detail="Todas as categorias do schema já existem.")
-    allowed = {item["slug"] for item in plan.get("missing", [])}
-    if slug_key not in allowed:
-        raise HTTPException(status_code=400, detail="Esta categoria já existe ou não pode ser criada.")
-
-    nome = str(body.get("nome") or definition.get("nome") or "").strip()
-    slug_override = str(body.get("slug_override") or slug_key).strip().lower()
-    imagem = str(body.get("imagem") or "").strip()
-    if not nome:
-        raise HTTPException(status_code=400, detail="Nome é obrigatório.")
-    if not imagem:
-        raise HTTPException(status_code=400, detail="Imagem é obrigatória — escolha um ficheiro.")
-
-    from utils.image_urls import is_http_url, resolve_image_value
-
-    if not is_http_url(imagem):
-        imagem = resolve_image_value(imagem, "categories", "imagem")
-
-    try:
-        step = int(body["carrinho_step"]) if body.get("carrinho_step") not in (None, "") else definition.get("carrinho_step")
-        min_val = int(body["carrinho_min"]) if body.get("carrinho_min") not in (None, "") else definition.get("carrinho_min")
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail="Passo e mínimo devem ser números válidos.") from exc
-
-    payload = Categoria(
-        nome=nome,
-        slug=generate_slug(slug_override or nome),
-        imagem=imagem,
-        tipo_catalogo=definition.get("tipo_catalogo"),
-        carrinho_step=step,
-        carrinho_min=min_val,
-    )
-    result = create_category(CreateCategoryCommand(payload=payload.model_dump()))
-    audit_request(
-        request,
-        action="create",
-        resource="categories",
-        resource_id=str((result or {}).get("id") or ""),
-        detail={"slug": slug_key},
-    )
-    return result
-
-
-@router.post("/categories/seed/{slug}")
-def seed_category_from_definition(request: Request, slug: str, role=Depends(require_catalog_role)):
-    from models.schemas import CATEGORY_DEFINITIONS, Categoria
-
-    settings = get_settings()
-    if settings.is_production and not settings.is_beta:
-        raise HTTPException(
-            status_code=403,
-            detail="Seed com placeholder desactivado em produção final — use /categories/create.",
-        )
-    definition = CATEGORY_DEFINITIONS.get(slug)
-    if not definition:
-        raise HTTPException(status_code=404, detail="Slug não definido em CATEGORY_DEFINITIONS")
-    payload = Categoria(
-        nome=definition["nome"],
-        slug=slug,
-        imagem="https://via.placeholder.com/800x200?text=Categoria",
-        tipo_catalogo=definition.get("tipo_catalogo"),
-        carrinho_step=definition.get("carrinho_step"),
-        carrinho_min=definition.get("carrinho_min"),
-    )
-    from core.cqrs.commands.catalog import CreateCategoryCommand, create_category
-
-    result = create_category(CreateCategoryCommand(payload=payload.model_dump()))
-    audit_request(
-        request,
-        action="seed",
-        resource="categories",
-        resource_id=str((result or {}).get("id") or ""),
-        detail={"slug": slug},
-    )
-    return result
+    return {"tipos": [{"tipo": tipo, "label": cfg["label"]} for tipo, cfg in sorted(CATALOG_TYPES.items())]}
 
 
 @router.get("/order-picker/{category_id}", dependencies=[Depends(require_pedidos)])
 def order_picker_for_category(category_id: str):
     """Dados para criar linhas de encomenda — genérico por tipo de catálogo."""
     from models.catalog_registry import CATALOG_TYPES, storefront_mode_for_tipo, tipo_label
-    from models.schemas import aggregated_tipos_for_tipo
+    from models.schemas import PRODUCT_MODEL_COLORS_TABLE, PRODUCT_MODELS_TABLE, PRODUCT_VARIANTS_TABLE, aggregated_tipos_for_tipo
 
     cat_res = get_db().table("categories").select("*").eq("id", category_id).execute()
     if not cat_res.data:
@@ -282,21 +136,19 @@ def order_picker_for_category(category_id: str):
     db = get_db()
 
     def _assento_lines(physical: str) -> list[dict]:
-        cfg = CATALOG_TYPES[physical]
-        mt = cfg["model_table"]
-        pt = cfg["product_table"]
         models_res = (
-            db.table(mt)
-            .select("id, nome, alturas")
+            db.table(PRODUCT_MODELS_TABLE)
+            .select("id, nome, attributes")
             .eq("id_categoria", category_id)
+            .eq("tipo_catalogo", physical)
             .eq("visibilidade", True)
             .execute()
         )
         lines = []
         for m in models_res.data or []:
             products = (
-                db.table(pt)
-                .select("ean, altura")
+                db.table(PRODUCT_VARIANTS_TABLE)
+                .select("ean, attributes")
                 .eq("id_modelo", m["id"])
                 .eq("visibilidade", True)
                 .execute()
@@ -304,9 +156,9 @@ def order_picker_for_category(category_id: str):
                 or []
             )
             products = [p for p in products if str(p.get("ean") or "").strip()]
-            products.sort(key=lambda p: str(p.get("altura") or ""))
+            products.sort(key=lambda p: str((p.get("attributes") or {}).get("altura") or ""))
             cores = (
-                db.table(cfg.get("colors_table") or "modelo_assento_cores")
+                db.table(PRODUCT_MODEL_COLORS_TABLE)
                 .select("numero, nome")
                 .eq("id_modelo", m["id"])
                 .eq("visibilidade", True)
@@ -319,21 +171,24 @@ def order_picker_for_category(category_id: str):
                     "modelo_id": m["id"],
                     "modelo_nome": m["nome"],
                     "ean": (products[0].get("ean") if products else None),
-                    "products": [{"ean": p["ean"], "altura": p.get("altura")} for p in products],
-                    "alturas": [p.get("altura") for p in products if p.get("altura")] or (m.get("alturas") or []),
+                    "products": [
+                        {"ean": p["ean"], "altura": (p.get("attributes") or {}).get("altura")} for p in products
+                    ],
+                    "alturas": [
+                        (p.get("attributes") or {}).get("altura") for p in products if (p.get("attributes") or {}).get("altura")
+                    ]
+                    or ((m.get("attributes") or {}).get("alturas") or []),
                     "cores": cores,
                 }
             )
         return lines
 
     def _variant_products(physical: str) -> list[dict]:
-        cfg = CATALOG_TYPES[physical]
-        mt = cfg["model_table"]
-        pt = cfg["product_table"]
         models = (
-            db.table(mt)
+            db.table(PRODUCT_MODELS_TABLE)
             .select("id, nome")
             .eq("id_categoria", category_id)
+            .eq("tipo_catalogo", physical)
             .eq("visibilidade", True)
             .execute()
             .data
@@ -344,27 +199,25 @@ def order_picker_for_category(category_id: str):
         if not model_ids:
             return []
         products = (
-            db.table(pt)
-            .select("ean, dimensoes, segmento, id_modelo")
+            db.table(PRODUCT_VARIANTS_TABLE)
+            .select("ean, attributes, id_modelo")
             .in_("id_modelo", model_ids)
             .eq("visibilidade", True)
             .execute()
             .data
             or []
         )
+        cores_res = (
+            db.table(PRODUCT_MODEL_COLORS_TABLE)
+            .select("id_modelo, numero, nome")
+            .in_("id_modelo", model_ids)
+            .eq("visibilidade", True)
+            .execute()
+        )
         cores_map: dict[str, list] = {}
-        colors_table = cfg.get("colors_table")
-        if colors_table:
-            cores_res = (
-                db.table(colors_table)
-                .select("id_modelo, numero, nome")
-                .in_("id_modelo", model_ids)
-                .eq("visibilidade", True)
-                .execute()
-            )
-            for c in cores_res.data or []:
-                mid = str(c["id_modelo"])
-                cores_map.setdefault(mid, []).append({"numero": c["numero"], "nome": c.get("nome") or ""})
+        for c in cores_res.data or []:
+            mid = str(c["id_modelo"])
+            cores_map.setdefault(mid, []).append({"numero": c["numero"], "nome": c.get("nome") or ""})
         family = tipo_label(physical)
         enriched = []
         for p in products:
@@ -372,7 +225,8 @@ def order_picker_for_category(category_id: str):
                 continue
             mid = str(p.get("id_modelo") or "")
             modelo = model_by_id.get(mid) or {}
-            dim = p.get("dimensoes") or p.get("segmento") or ""
+            attrs = p.get("attributes") or {}
+            dim = attrs.get("dimensoes") or attrs.get("segmento") or ""
             enriched.append(
                 {
                     "ean": p["ean"],
