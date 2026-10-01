@@ -60,6 +60,19 @@ sessão MCP, por exemplo), divide-o: tabelas → índices → triggers → polí
 e os blocos `DO $$` com muitas instruções podem exceder o limite e ser
 revertidos.
 
+## 0004 — garantias de integridade (APLICADO, com uma exceção)
+
+Aplicado: o trigger que faz a variante herdar o `tipo_catalogo` do modelo-pai
+(testado em produção — forçar um tipo errado numa variante devolve o tipo do
+modelo), e as restrições `CHECK` de forma dos dados (`attributes` tem de ser
+objeto JSON, `tipo_catalogo` com forma de slug, `ean` com 13 dígitos).
+
+**Falta** correr as três últimas linhas do ficheiro (`DROP INDEX` dos índices
+redundantes). `DROP INDEX` precisa de lock exclusivo e excedia sempre o limite
+de 60 s da ligação usada; no SQL Editor do Supabase, que não tem esse limite,
+correm de imediato. Não há pressa — com 29 modelos / 68 variantes / 33 cores o
+custo destes índices é irrelevante.
+
 ## Passo 6 — limpeza (ainda NÃO feito)
 
 Só depois de a loja e o backoffice correrem bem sobre o esquema novo durante
