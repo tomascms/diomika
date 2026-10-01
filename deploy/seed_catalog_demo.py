@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-Aplica schema, infra SQL, categorias em falta e produtos de demonstração.
+Garante categorias em falta e produtos de demonstração no esquema de catálogo
+unificado (product_models/product_variants/product_model_colors — ver
+backend-api/sql/RUNBOOK_unified_catalog_migration.md).
 
-Uso (na raiz do repo):
+Uso (na raiz do repo, DEPOIS de aplicar 0001/0002 — ver RUNBOOK):
   python deploy/seed_catalog_demo.py
-  python deploy/seed_catalog_demo.py --skip-schema
+  python deploy/seed_catalog_demo.py --legacy-schema-sync   # ver aviso abaixo
 """
 from __future__ import annotations
 
@@ -12,7 +14,7 @@ import argparse
 import sys
 from io import BytesIO
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend-api"))
@@ -21,13 +23,11 @@ from core.env_loader import load_project_env  # noqa: E402
 
 load_project_env()
 
-from core.category_flow import build_category_creation_plan  # noqa: E402
-from core.cqrs.commands.catalog import CreateCategoryCommand, create_category  # noqa: E402
 from core.database import get_db  # noqa: E402
-from core.schema_engine import bootstrap_database_schema, sync_schema  # noqa: E402
 from core.sql_runner import apply_sql_file  # noqa: E402
+from models.catalog_attributes import CATEGORY_ATTRIBUTE_SCHEMAS, validate_attributes  # noqa: E402
 from models.catalog_registry import CATALOG_TYPES  # noqa: E402
-from models.schemas import CATEGORY_DEFINITIONS, generate_slug  # noqa: E402
+from models.schemas import CATEGORY_DEFINITIONS, Categoria, generate_slug  # noqa: E402
 from utils.barcode_gen import apply_barcode_url  # noqa: E402
 from utils.storage import upload_bytes  # noqa: E402
 
@@ -68,11 +68,24 @@ def logo_png_url() -> str:
     return upload_bytes(png, dest, "image/png")
 
 
-def apply_extra_sql() -> None:
+def legacy_schema_sync() -> None:
+    """Sync Pydantic→BD antigo + infra SQL por-família. Esquema unificado:
+    isto tentaria recriar/alterar as 13 famílias de tabelas antigas
+    (modelos_almofadas, ...), que o catálogo já não usa — ver RUNBOOK em
+    backend-api/sql/RUNBOOK_unified_catalog_migration.md. Só aqui por se
+    ainda houver tabelas operacionais não-catálogo a sincronizar; revê
+    core/schema_engine.py antes de usar."""
+    from core.catalog_deploy_sql import write_catalog_infra_sql
+    from core.schema_engine import bootstrap_database_schema, sync_schema
+
+    bootstrap_database_schema()
+    report = sync_schema(supabase=get_db(), apply=True, dry_run=False)
+    print(f"  {report.message}")
+    if report.created_tables:
+        print(f"  tabelas novas: {len(report.created_tables)}")
+
     sql_dir = ROOT / "backend-api" / "sql"
     deploy_dir = ROOT / "deploy"
-    from core.catalog_deploy_sql import write_catalog_infra_sql
-
     write_catalog_infra_sql()
     for rel in (
         sql_dir / "migration_almofada_dimensoes_modelo.sql",
@@ -97,6 +110,7 @@ def refresh_demo_images(logo_url: str) -> None:
         models = (
             db.table(mt)
             .select("id, nome")
+            .eq("tipo_catalogo", tipo)
             .ilike("nome", "[TESTE]%")
             .execute()
             .data
@@ -130,10 +144,12 @@ def refresh_demo_images(logo_url: str) -> None:
 
 
 def ensure_categories(logo_url: str) -> dict[str, dict]:
+    """Categorias são agora CRUD real (sem "plano" pré-calculado) — valida
+    com o mesmo modelo Pydantic (Categoria) que /admin/crud/categories usa e
+    insere diretamente."""
     db = get_db()
     rows = db.table("categories").select("*").execute().data or []
     by_tipo = {str(r.get("tipo_catalogo")): r for r in rows if r.get("tipo_catalogo")}
-    plan = build_category_creation_plan(rows)
     defaults = {
         "guarda-chuvas": {"carrinho_step": 12, "carrinho_min": 12},
         "oculos": {"carrinho_step": 12, "carrinho_min": 12},
@@ -154,9 +170,11 @@ def ensure_categories(logo_url: str) -> dict[str, dict]:
             "visibilidade": True,
             **extra,
         }
-        res = create_category(CreateCategoryCommand(payload=payload))
-        row = (res or {}).get("data") or res
-        if isinstance(row, dict) and row.get("id"):
+        validated = Categoria(**payload)
+        data = {k: (str(v) if isinstance(v, UUID) else v) for k, v in validated.model_dump().items()}
+        ins = db.table("categories").insert(data).execute()
+        row = (ins.data or [{}])[0]
+        if row.get("id"):
             by_tipo[tipo] = row
             print(f"  categoria criada: {definition['nome']} ({tipo})")
     rows = db.table("categories").select("*").execute().data or []
@@ -209,10 +227,11 @@ def upsert_color(db, table: str, id_modelo: str, numero: int, nome: str, imagem:
 
 
 def upsert_product(db, table: str, payload: dict) -> None:
+    attrs = payload.get("attributes") or {}
     q = db.table(table).select("id").eq("id_modelo", payload["id_modelo"])
     for key in ("dimensoes", "altura", "segmento"):
-        if key in payload and payload[key] is not None:
-            q = q.eq(key, payload[key])
+        if attrs.get(key) is not None:
+            q = q.eq(f"attributes->>{key}", attrs[key])
     existing = q.limit(1).execute().data or []
     data = dict(payload)
     apply_barcode_url(data)
@@ -238,13 +257,18 @@ def seed_demo(categories: dict[str, dict], logo_url: str) -> None:
         if not cat:
             print(f"  ! categoria em falta para {tipo}")
             return
-        model_payload = {
-            **model_payload,
+        model_attr_names = set((CATEGORY_ATTRIBUTE_SCHEMAS.get(tipo) or {}).get("model_attributes") or {})
+        raw_attrs = {k: v for k, v in model_payload.items() if k in model_attr_names}
+        fixed = {k: v for k, v in model_payload.items() if k not in model_attr_names}
+        model_row = {
+            **fixed,
             "id_categoria": cat["id"],
+            "tipo_catalogo": tipo,
             "visibilidade": True,
             "slug": generate_slug(model_payload["nome"]),
+            "attributes": validate_attributes(tipo, "model", raw_attrs),
         }
-        model = upsert_model(db, mt, model_payload)
+        model = upsert_model(db, mt, model_row)
         mid = str(model["id"])
         upsert_color(db, ct, mid, 1, color_name, logo_url)
         upsert_color(db, ct, mid, 2, f"{color_name} 2", logo_url)
@@ -254,9 +278,10 @@ def seed_demo(categories: dict[str, dict], logo_url: str) -> None:
                 pt,
                 {
                     "id_modelo": mid,
+                    "tipo_catalogo": tipo,
                     "ean": next_ean(),
                     "visibilidade": True,
-                    **prod,
+                    "attributes": validate_attributes(tipo, "variant", prod),
                 },
             )
         print(f"  demo OK: {tipo} — {model_payload['nome']}")
@@ -368,14 +393,19 @@ def seed_demo(categories: dict[str, dict], logo_url: str) -> None:
             ),
         ]:
             cfg = CATALOG_TYPES[tipo]
+            model_attr_names = set((CATEGORY_ATTRIBUTE_SCHEMAS.get(tipo) or {}).get("model_attributes") or {})
+            raw_attrs = {k: v for k, v in model_data.items() if k in model_attr_names}
+            fixed = {k: v for k, v in model_data.items() if k not in model_attr_names}
             model = upsert_model(
                 db,
                 cfg["model_table"],
                 {
-                    **model_data,
+                    **fixed,
                     "id_categoria": cid,
+                    "tipo_catalogo": tipo,
                     "visibilidade": True,
                     "slug": generate_slug(model_data["nome"]),
+                    "attributes": validate_attributes(tipo, "model", raw_attrs),
                 },
             )
             mid = str(model["id"])
@@ -385,7 +415,13 @@ def seed_demo(categories: dict[str, dict], logo_url: str) -> None:
                 upsert_product(
                     db,
                     cfg["product_table"],
-                    {"id_modelo": mid, "ean": next_ean(), "visibilidade": True, **p},
+                    {
+                        "id_modelo": mid,
+                        "tipo_catalogo": tipo,
+                        "ean": next_ean(),
+                        "visibilidade": True,
+                        "attributes": validate_attributes(tipo, "variant", p),
+                    },
                 )
             print(f"  demo OK: {tipo} (cozinha) — {model_data['nome']}")
 
@@ -406,7 +442,11 @@ def seed_demo(categories: dict[str, dict], logo_url: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--skip-schema", action="store_true")
+    parser.add_argument(
+        "--legacy-schema-sync",
+        action="store_true",
+        help="Sync Pydantic->BD antigo + infra SQL por-família [obsoleto para catálogo — ver aviso em legacy_schema_sync()]",
+    )
     parser.add_argument("--images-only", action="store_true", help="Só upload logo + imagens [TESTE]")
     args = parser.parse_args()
 
@@ -420,14 +460,14 @@ def main() -> int:
         print("\nOK imagens demo.\n")
         return 0
 
-    if not args.skip_schema:
-        print("\n=== 2) Schema sync + SQL infra ===\n")
-        bootstrap_database_schema()
-        report = sync_schema(supabase=get_db(), apply=True, dry_run=False)
-        print(f"  {report.message}")
-        if report.created_tables:
-            print(f"  tabelas novas: {len(report.created_tables)}")
-        apply_extra_sql()
+    if args.legacy_schema_sync:
+        print("\n=== 2) Schema sync + SQL infra (legado — ver aviso em --help) ===\n")
+        legacy_schema_sync()
+    else:
+        print(
+            "\nEsquema do catálogo: assume-se que 0001/0002 já foram aplicados "
+            "(ver backend-api/sql/RUNBOOK_unified_catalog_migration.md).\n"
+        )
 
     print("\n=== 3) Categorias ===\n")
     categories = ensure_categories(logo_url)

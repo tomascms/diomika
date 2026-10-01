@@ -675,8 +675,11 @@ def build_rls_db(reg: Registry) -> None:
     )
     for pol in policies:
         must_contain(reg, cat, sql, pol)
-    must_contain(reg, cat, "backend-api/core/catalog_deploy_sql.py", "ENABLE ROW LEVEL SECURITY")
-    must_contain(reg, cat, "backend-api/core/catalog_deploy_sql.py", "deny_anon")
+    # Esquema unificado: product_models/product_variants/product_model_colors
+    # substituem as tabelas por-família geradas por catalog_deploy_sql.py —
+    # a RLS destas 3 tabelas fica em 0001_unified_catalog_schema.sql.
+    must_contain(reg, cat, "backend-api/sql/0001_unified_catalog_schema.sql", "ENABLE ROW LEVEL SECURITY")
+    must_contain(reg, cat, "backend-api/sql/0001_unified_catalog_schema.sql", "deny_anon")
     must_contain(reg, cat, ".github/workflows/ci.yml", "verify_rls.py")
     must_contain(reg, cat, "backend-api/sql/migration_modelo_cores_por_categoria.sql", "ENABLE ROW LEVEL SECURITY")
 
