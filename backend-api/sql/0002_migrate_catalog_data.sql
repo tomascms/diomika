@@ -115,13 +115,13 @@ BEGIN
   IF to_regclass('public.modelos_guarda_chuvas') IS NOT NULL THEN
     INSERT INTO product_models (id, id_categoria, tipo_catalogo, nome, slug, descricao, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_categoria, 'guarda_chuva', nome, COALESCE(slug, ''), COALESCE(descricao, ''), '{}'::jsonb,
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM modelos_guarda_chuvas ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.guarda_chuva') IS NOT NULL THEN
     INSERT INTO product_variants (id, id_modelo, tipo_catalogo, ean, barcode_url, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_modelo, 'guarda_chuva', ean, barcode_url, '{}'::jsonb,
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM guarda_chuva ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.modelo_guarda_chuva_cores') IS NOT NULL THEN
@@ -137,14 +137,14 @@ BEGIN
     INSERT INTO product_models (id, id_categoria, tipo_catalogo, nome, slug, descricao, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_categoria, 'oculo', nome, COALESCE(slug, ''), COALESCE(descricao, ''),
            jsonb_build_object('tipo_oculo', tipo_oculo),
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM modelos_oculos ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.oculo') IS NOT NULL THEN
     INSERT INTO product_variants (id, id_modelo, tipo_catalogo, ean, barcode_url, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_modelo, 'oculo', ean, barcode_url,
            jsonb_build_object('segmento', segmento),
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM oculo ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.modelo_oculo_cores') IS NOT NULL THEN
@@ -160,14 +160,14 @@ BEGIN
     INSERT INTO product_models (id, id_categoria, tipo_catalogo, nome, slug, descricao, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_categoria, 'toalha_mesa', nome, COALESCE(slug, ''), COALESCE(descricao, ''),
            jsonb_build_object('tipo_produto', tipo_produto, 'material', material, 'composicao', COALESCE(composicao, '{}'::jsonb), 'dimensoes', COALESCE(to_jsonb(dimensoes), '[]'::jsonb)),
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM modelos_toalhas_mesa ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.toalha_mesa') IS NOT NULL THEN
     INSERT INTO product_variants (id, id_modelo, tipo_catalogo, ean, barcode_url, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_modelo, 'toalha_mesa', ean, barcode_url,
            jsonb_build_object('dimensoes', dimensoes),
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM toalha_mesa ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.modelo_toalha_mesa_cores') IS NOT NULL THEN
@@ -183,13 +183,13 @@ BEGIN
     INSERT INTO product_models (id, id_categoria, tipo_catalogo, nome, slug, descricao, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_categoria, 'avental', nome, COALESCE(slug, ''), COALESCE(descricao, ''),
            jsonb_build_object('composicao', COALESCE(composicao, '{}'::jsonb)),
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM modelos_aventais ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.avental') IS NOT NULL THEN
     INSERT INTO product_variants (id, id_modelo, tipo_catalogo, ean, barcode_url, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_modelo, 'avental', ean, barcode_url, '{}'::jsonb,
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM avental ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.modelo_avental_cores') IS NOT NULL THEN
@@ -205,13 +205,13 @@ BEGIN
     INSERT INTO product_models (id, id_categoria, tipo_catalogo, nome, slug, descricao, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_categoria, 'luva', nome, COALESCE(slug, ''), COALESCE(descricao, ''),
            jsonb_build_object('composicao', COALESCE(composicao, '{}'::jsonb)),
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM modelos_luvas ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.luva') IS NOT NULL THEN
     INSERT INTO product_variants (id, id_modelo, tipo_catalogo, ean, barcode_url, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_modelo, 'luva', ean, barcode_url, '{}'::jsonb,
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM luva ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.modelo_luva_cores') IS NOT NULL THEN
@@ -227,13 +227,13 @@ BEGIN
     INSERT INTO product_models (id, id_categoria, tipo_catalogo, nome, slug, descricao, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_categoria, 'pega', nome, COALESCE(slug, ''), COALESCE(descricao, ''),
            jsonb_build_object('composicao', COALESCE(composicao, '{}'::jsonb)),
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM modelos_pegas ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.pega') IS NOT NULL THEN
     INSERT INTO product_variants (id, id_modelo, tipo_catalogo, ean, barcode_url, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_modelo, 'pega', ean, barcode_url, '{}'::jsonb,
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM pega ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.modelo_pega_cores') IS NOT NULL THEN
@@ -249,14 +249,14 @@ BEGIN
     INSERT INTO product_models (id, id_categoria, tipo_catalogo, nome, slug, descricao, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_categoria, 'pano_cozinha', nome, COALESCE(slug, ''), COALESCE(descricao, ''),
            jsonb_build_object('composicao', COALESCE(composicao, '{}'::jsonb), 'dimensoes', COALESCE(to_jsonb(dimensoes), '[]'::jsonb)),
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM modelos_panos_cozinha ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.pano_cozinha') IS NOT NULL THEN
     INSERT INTO product_variants (id, id_modelo, tipo_catalogo, ean, barcode_url, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_modelo, 'pano_cozinha', ean, barcode_url,
            jsonb_build_object('dimensoes', dimensoes),
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM pano_cozinha ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.modelo_pano_cozinha_cores') IS NOT NULL THEN
@@ -272,14 +272,14 @@ BEGIN
     INSERT INTO product_models (id, id_categoria, tipo_catalogo, nome, slug, descricao, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_categoria, 'protetor_colchao', nome, COALESCE(slug, ''), COALESCE(descricao, ''),
            jsonb_build_object('composicao', COALESCE(composicao, '{}'::jsonb), 'dimensoes', COALESCE(to_jsonb(dimensoes), '[]'::jsonb)),
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM modelos_protetores_colchao ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.protetor_colchao') IS NOT NULL THEN
     INSERT INTO product_variants (id, id_modelo, tipo_catalogo, ean, barcode_url, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_modelo, 'protetor_colchao', ean, barcode_url,
            jsonb_build_object('dimensoes', dimensoes),
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM protetor_colchao ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.modelo_protetor_colchao_cores') IS NOT NULL THEN
@@ -295,14 +295,14 @@ BEGIN
     INSERT INTO product_models (id, id_categoria, tipo_catalogo, nome, slug, descricao, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_categoria, 'passadeira', nome, COALESCE(slug, ''), COALESCE(descricao, ''),
            jsonb_build_object('composicao', COALESCE(composicao, '{}'::jsonb), 'dimensoes', COALESCE(to_jsonb(dimensoes), '[]'::jsonb)),
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM modelos_passadeiras ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.passadeira') IS NOT NULL THEN
     INSERT INTO product_variants (id, id_modelo, tipo_catalogo, ean, barcode_url, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_modelo, 'passadeira', ean, barcode_url,
            jsonb_build_object('dimensoes', dimensoes),
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM passadeira ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.modelo_passadeira_cores') IS NOT NULL THEN
@@ -318,14 +318,14 @@ BEGIN
     INSERT INTO product_models (id, id_categoria, tipo_catalogo, nome, slug, descricao, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_categoria, 'regional', nome, COALESCE(slug, ''), COALESCE(descricao, ''),
            jsonb_build_object('subtipo', subtipo, 'composicao', COALESCE(composicao, '{}'::jsonb), 'dimensoes', COALESCE(to_jsonb(dimensoes), 'null'::jsonb)),
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM modelos_regionais ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.regional') IS NOT NULL THEN
     INSERT INTO product_variants (id, id_modelo, tipo_catalogo, ean, barcode_url, attributes, visibilidade, created_at, updated_at)
     SELECT id, id_modelo, 'regional', ean, barcode_url,
            jsonb_build_object('dimensoes', dimensoes),
-           COALESCE(visibilidade, false), COALESCE(created_at, now()), COALESCE(updated_at, now())
+           COALESCE(visibilidade, false), COALESCE(created_at, now()), now()  -- tabela legada sem updated_at
     FROM regional ON CONFLICT (id) DO NOTHING;
   END IF;
   IF to_regclass('public.modelo_regional_cores') IS NOT NULL THEN
