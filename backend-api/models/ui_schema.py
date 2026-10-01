@@ -108,10 +108,18 @@ def relation_table(field_name: str, field: FieldInfo, table_config: dict | None 
 
 
 def get_form_fields(schema_class: type[BaseModel], table_config: dict, table_name: str | None = None) -> List[dict]:
-    """Lista de campos para renderizar no formulário do backoffice."""
+    """Lista de campos para renderizar no formulário do backoffice.
+
+    Campos fixos (iguais em todas as categorias: nome, descricao, ean, ...)
+    vêm da classe Pydantic partilhada. Campos específicos da categoria (tipo,
+    composição, dimensões, ...) vêm de `ui_attribute_fields`, pré-calculado em
+    table_map_builder.py a partir do registo de atributos da categoria —
+    fundidos aqui para o backoffice continuar a ver um formulário único."""
     ctx = {**table_config, "_table_name": table_name}
     fields = []
     for name, field in schema_class.model_fields.items():
+        if name == "attributes":
+            continue  # representado pelos campos de ui_attribute_fields abaixo
         if is_field_hidden(name, field, table_config):
             continue
         fields.append(
@@ -128,6 +136,7 @@ def get_form_fields(schema_class: type[BaseModel], table_config: dict, table_nam
                 "placeholder": field_extra(field).get("ui_placeholder") or "",
             }
         )
+    fields.extend(table_config.get("ui_attribute_fields") or [])
     return fields
 
 
@@ -138,10 +147,11 @@ def get_list_display(item: dict, table_config: dict) -> str:
     if table_config.get("ui_list_formatter") == "order_cliente":
         return item.get("referencia_cliente") or item.get("nome") or "—"
     if table_config.get("ui_list_formatter") in ("produto", "assento"):
-        from models.catalog_registry import model_table_for_tipo
+        from models.schemas import PRODUCT_MODELS_TABLE
 
-        mt = model_table_for_tipo(table_config.get("ui_catalog_tipo")) or ""
-        modelo = item.get(mt) if mt else None
+        # A relação "modelo" embutida numa linha de produto vem sempre sob o
+        # nome da tabela física (product_models), não o nome virtual.
+        modelo = item.get(PRODUCT_MODELS_TABLE)
         if isinstance(modelo, list) and modelo:
             modelo = modelo[0]
         if not isinstance(modelo, dict):
@@ -215,30 +225,6 @@ def build_schema_snapshot(table_map: dict) -> dict:
             "config": {k: v for k, v in info.items() if k != "schema"},
         }
     return snapshot
-
-
-def list_catalog_model_schemas() -> list[dict]:
-    """Resumo legível: tipo de catálogo → classe Pydantic de modelo."""
-    from models.catalog_registry import CATALOGO_TIPOS
-
-    rows = []
-    for tipo, cfg in CATALOGO_TIPOS.items():
-        schema = cfg["model_schema"]
-        fields = [
-            field_label(n, f)
-            for n, f in schema.model_fields.items()
-            if not is_field_hidden(n, f, {})
-        ]
-        rows.append(
-            {
-                "tipo": tipo,
-                "label": cfg["label"],
-                "schema_class": schema.__name__,
-                "table": cfg["model_table"],
-                "fields": fields,
-            }
-        )
-    return rows
 
 
 def snapshot_hash(snapshot: dict) -> str:

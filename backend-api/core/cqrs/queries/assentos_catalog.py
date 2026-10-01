@@ -1,14 +1,14 @@
-"""Queries — catálogo de assentos (detalhe de modelo para encomendas)."""
-from __future__ import annotations
+"""Queries — catálogo de assentos (detalhe de modelo para encomendas).
 
-import json
+Esquema unificado: 1 tabela de modelos, 1 de variantes, 1 de cores — já não
+há tabelas "modelos_assentos"/"assento"/"modelo_assento_cores" próprias."""
+from __future__ import annotations
 
 from core.database import get_db
 from core.visibility import is_visible
 
 
 def _modelo_cores(data: dict) -> list[dict]:
-    """Cores próprias do modelo (sempre id_modelo)."""
     cores = [c for c in (data.get("modelo_cores") or []) if c.get("visibilidade", True)]
     cores.sort(key=lambda c: c.get("numero", 0))
     return cores
@@ -22,7 +22,7 @@ def _attach_cores(rows: list[dict]) -> None:
     by_model: dict[str, list] = {mid: [] for mid in model_ids}
     if model_ids:
         for cor in (
-            db.table("modelo_assento_cores")
+            db.table("product_model_colors")
             .select("id_modelo, numero, nome, imagem, visibilidade")
             .in_("id_modelo", model_ids)
             .execute()
@@ -39,9 +39,10 @@ def _attach_cores(rows: list[dict]) -> None:
 def assento_model_detail(id_modelo: str):
     db = get_db()
     res = (
-        db.table("modelos_assentos")
-        .select("*, categories(*), assento(*)")
+        db.table("product_models")
+        .select("*, categories(*), product_variants(*)")
         .eq("id", id_modelo)
+        .eq("tipo_catalogo", "assento")
         .single()
         .execute()
     )
@@ -51,21 +52,16 @@ def assento_model_detail(id_modelo: str):
     if not is_visible(data):
         return None
     _attach_cores([data])
-    assento_rows = [
-        a
-        for a in (data.get("assento") or [])
-        if a.get("visibilidade", True) and str(a.get("ean") or "").strip()
+    variant_rows = [
+        v
+        for v in (data.get("product_variants") or [])
+        if v.get("visibilidade", True) and str(v.get("ean") or "").strip()
     ]
-    assento_rows.sort(key=lambda a: str(a.get("altura") or ""))
-    data["assento"] = assento_rows
+    variant_rows.sort(key=lambda v: str((v.get("attributes") or {}).get("altura") or ""))
+    data["assento"] = variant_rows
     data["modelo_cores"] = _modelo_cores(data)
-    if not assento_rows or not data["modelo_cores"]:
+    if not variant_rows or not data["modelo_cores"]:
         return None
-    alturas = data.get("alturas") or []
-    if isinstance(alturas, str):
-        try:
-            alturas = json.loads(alturas)
-        except Exception:
-            alturas = []
+    alturas = (data.get("attributes") or {}).get("alturas") or []
     data["alturas"] = sorted(alturas)
     return data

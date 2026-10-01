@@ -143,10 +143,10 @@ def invalidate_catalog_change(
     """Invalidação cirúrgica após writes admin — limpa listas/modelos afectados."""
     from core.database import get_db
     from models.catalog_registry import (
-        CATALOG_TYPES,
+        all_colors_tables,
         all_model_tables,
         all_product_tables,
-        model_table_for_tipo,
+        physical_table_for,
         tipo_for_table,
     )
     from models.schemas import CATEGORY_DEFINITIONS
@@ -196,31 +196,27 @@ def invalidate_catalog_change(
         return
 
     tipo = tipo_for_table(table_name)
-    mt = model_table_for_tipo(tipo) if tipo else None
+    physical = physical_table_for(table_name)
 
     if table_name in all_model_tables():
         id_categoria = str(row.get("id_categoria") or "").strip()
         if not id_categoria and rid:
-            fetched = db.table(table_name).select("id_categoria").eq("id", rid).limit(1).execute().data
+            fetched = db.table(physical).select("id_categoria").eq("id", rid).limit(1).execute().data
             id_categoria = str((fetched or [{}])[0].get("id_categoria") or "")
         _invalidate_listings(tipo, id_categoria or None)
         _invalidate_model(tipo, rid or None)
         return
 
-    if table_name in all_product_tables() or table_name in {cfg.get("colors_table") for cfg in CATALOG_TYPES.values()}:
+    if table_name in all_product_tables() or table_name in all_colors_tables():
         id_modelo = str(row.get("id_modelo") or "").strip()
         if not id_modelo and rid:
-            fetched = db.table(table_name).select("id_modelo").eq("id", rid).limit(1).execute().data
+            fetched = db.table(physical).select("id_modelo").eq("id", rid).limit(1).execute().data
             id_modelo = str((fetched or [{}])[0].get("id_modelo") or "")
-        if id_modelo and not mt:
-            for t, cfg in CATALOG_TYPES.items():
-                if table_name in (cfg["product_table"], cfg.get("colors_table")):
-                    tipo = t
-                    mt = cfg["model_table"]
-                    break
         id_categoria = ""
-        if mt and id_modelo:
-            fetched = db.table(mt).select("id_categoria").eq("id", id_modelo).limit(1).execute().data
+        if id_modelo:
+            from models.schemas import PRODUCT_MODELS_TABLE
+
+            fetched = db.table(PRODUCT_MODELS_TABLE).select("id_categoria").eq("id", id_modelo).limit(1).execute().data
             id_categoria = str((fetched or [{}])[0].get("id_categoria") or "")
             _invalidate_model(tipo, id_modelo)
         _invalidate_listings(tipo, id_categoria or None)

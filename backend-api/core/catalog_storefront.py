@@ -1,200 +1,109 @@
-"""Queries genéricas de catálogo para a loja — derivadas de CATALOG_TYPES."""
+"""Queries genéricas de catálogo para a loja — esquema unificado.
+
+3 tabelas físicas para todas as categorias (product_models, product_variants,
+product_model_colors); os campos que variavam por família (dimensoes, altura,
+segmento, ...) vivem agora em `attributes` (jsonb) em vez de serem colunas
+próprias de 13 tabelas — por isso já não há um lookup de "qual é a tabela de
+cores desta família" nem um loop sobre 13 tabelas para encontrar um EAN.
+"""
 
 from __future__ import annotations
 
 from core.database import get_db
-
 from core.visibility import is_visible
-
-from models.catalog_registry import CATALOG_TYPES, colors_table_for_tipo, is_valid_tipo
-
+from models.catalog_registry import CATALOG_TYPES, is_valid_tipo
+from models.schemas import PRODUCT_MODEL_COLORS_TABLE, PRODUCT_MODELS_TABLE, PRODUCT_VARIANTS_TABLE
 from models.storefront_meta import attach_storefront_fields, storefront_context_for_tipo
+
+DEFAULT_PAGE_LIMIT = 24
+MAX_PAGE_LIMIT = 60
+
 
 def _has_ean(row: dict | None) -> bool:
     return bool(str((row or {}).get("ean") or "").strip())
+
 
 def _visible_products(rows: list[dict] | None) -> list[dict]:
     """Produtos publicáveis: visíveis e com EAN (sem EAN não entram na loja)."""
     return [row for row in (rows or []) if is_visible(row) and _has_ean(row)]
 
+
 def _modelo_cores(data: dict) -> list[dict]:
-
     cores = [c for c in (data.get("modelo_cores") or []) if is_visible(c)]
-
     cores.sort(key=lambda c: c.get("numero", 0))
-
     return cores
 
-def _product_select_fields(product_schema) -> str:
-    fields = ["id", "ean", "barcode_url", "visibilidade"]
-    for fname in product_schema.model_fields:
-        if fname in fields or fname in ("id", "id_modelo", "barcode_url", "visibilidade"):
-            continue
-        if fname in ("dimensoes", "altura", "segmento"):
-            fields.append(fname)
-    return ", ".join(fields)
+
+def _product_select_fields() -> str:
+    return "id, ean, barcode_url, visibilidade, attributes"
+
 
 def _category_select() -> str:
-
     return "id, nome, carrinho_step, carrinho_min, slug, tipo_catalogo"
 
-def _attach_modelo_cores(rows: list[dict], *, tipo: str | None = None) -> None:
 
-    """Cores do modelo — tabela dedicada por família de catálogo."""
-
+def _attach_modelo_cores(rows: list[dict]) -> None:
+    """Cores do modelo — tabela única, partilhada por todas as famílias."""
     if not rows:
-
         return
-
-    colors_table = colors_table_for_tipo(tipo) if tipo else None
-
-    if not colors_table:
-
-        return
-
-    db = get_db()
-
     model_ids = [str(row["id"]) for row in rows if row.get("id")]
-
     cores_by_model: dict[str, list[dict]] = {mid: [] for mid in model_ids}
-
     if model_ids:
-
         direct = (
-
-            db.table(colors_table)
-
+            get_db()
+            .table(PRODUCT_MODEL_COLORS_TABLE)
             .select("id_modelo, numero, nome, imagem, visibilidade")
-
             .in_("id_modelo", model_ids)
-
             .execute()
-
             .data
-
             or []
-
         )
-
         for cor in direct:
-
             mid = str(cor.get("id_modelo") or "")
-
             if mid in cores_by_model:
-
                 cores_by_model[mid].append(cor)
-
     for row in rows:
-
         mid = str(row.get("id") or "")
-
         row["modelo_cores"] = _modelo_cores({"modelo_cores": cores_by_model.get(mid, [])})
 
-def _lookup_cor_nome(db, *, id_modelo: str | None, numero_cor: int, tipo: str | None = None) -> str:
 
+def _lookup_cor_nome(db, *, id_modelo: str | None, numero_cor: int) -> str:
     cor_nome = f"Cor {numero_cor}"
-
     if not id_modelo:
-
         return cor_nome
-
-    colors_table = colors_table_for_tipo(tipo)
-
-    if not colors_table:
-
-        for t in CATALOG_TYPES:
-
-            colors_table = colors_table_for_tipo(t)
-
-            if not colors_table:
-
-                continue
-
-            cr = (
-
-                db.table(colors_table)
-
-                .select("nome, numero")
-
-                .eq("id_modelo", str(id_modelo))
-
-                .eq("numero", numero_cor)
-
-                .limit(1)
-
-                .execute()
-
-            )
-
-            if cr.data:
-
-                return cr.data[0].get("nome") or cor_nome
-
-        return cor_nome
-
     cr = (
-
-        db.table(colors_table)
-
+        db.table(PRODUCT_MODEL_COLORS_TABLE)
         .select("nome, numero")
-
         .eq("id_modelo", str(id_modelo))
-
         .eq("numero", numero_cor)
-
         .limit(1)
-
         .execute()
-
     )
-
     if cr.data:
-
         return cr.data[0].get("nome") or cor_nome
-
     return cor_nome
 
+
 def _require_public_category(id_categoria: str) -> bool:
-
     """Categoria tem de existir e estar visível na loja (anti-IDOR por UUID oculto)."""
-
     try:
-
-        res = (
-
-            get_db()
-
-            .table("categories")
-
-            .select("id,visibilidade")
-
-            .eq("id", id_categoria)
-
-            .limit(1)
-
-            .execute()
-
-        )
-
+        res = get_db().table("categories").select("id,visibilidade").eq("id", id_categoria).limit(1).execute()
     except Exception:
-
         return False
-
     rows = res.data or []
-
     if not rows:
-
         return False
-
     return is_visible(rows[0])
 
-def _finalize_model_products(row: dict, cfg: dict, pt: str, mode: str) -> bool:
+
+def _finalize_model_products(row: dict, pt: str, mode: str) -> bool:
     """Ordena variantes visíveis; devolve False se não houver produto/cor publicáveis."""
     # Sem cores o detalhe não tem imagem — não listar o modelo na loja.
     if not _modelo_cores(row):
         return False
 
-    products = _visible_products(row.get(pt) if isinstance(row.get(pt), list) else [row.get(pt)] if row.get(pt) else [])
+    raw = row.get(pt)
+    products = _visible_products(raw if isinstance(raw, list) else [raw] if raw else [])
 
     if mode == "unico":
         if not products:
@@ -205,18 +114,20 @@ def _finalize_model_products(row: dict, cfg: dict, pt: str, mode: str) -> bool:
     if mode == "assento":
         if not products:
             return False
-        products.sort(key=lambda p: str(p.get("altura") or ""))
+        products.sort(key=lambda p: str((p.get("attributes") or {}).get("altura") or ""))
         row[pt] = products
         return True
 
     if not products:
         return False
-    products.sort(key=lambda p: str(p.get("dimensoes") or p.get("segmento") or ""))
+    products.sort(key=lambda p: str((p.get("attributes") or {}).get("dimensoes") or (p.get("attributes") or {}).get("segmento") or ""))
     row[pt] = products
     return True
 
-# Campos na tabela de produto — filtrar depois do select do modelo.
-_PRODUCT_FILTER_FIELDS = frozenset({"dimensoes", "altura", "segmento", "ean"})
+
+# Campos de atributo que podem ser filtrados ao nível da variante (não do modelo).
+_PRODUCT_FILTER_ATTRS = frozenset({"dimensoes", "altura", "segmento"})
+
 
 def _split_filters(filters: dict[str, str] | None) -> tuple[dict[str, str], dict[str, str]]:
     model_filters: dict[str, str] = {}
@@ -225,11 +136,14 @@ def _split_filters(filters: dict[str, str] | None) -> tuple[dict[str, str], dict
         if not field or field.startswith("_") or value is None or not str(value).strip():
             continue
         text = str(value)
-        if field in _PRODUCT_FILTER_FIELDS:
+        if field == "ean":
+            continue  # EAN já é um campo próprio, não um atributo
+        if field in _PRODUCT_FILTER_ATTRS:
             product_filters[field] = text
         else:
             model_filters[field] = text
     return model_filters, product_filters
+
 
 def _matches_product_filters(row: dict, pt: str, product_filters: dict[str, str]) -> bool:
     if not product_filters:
@@ -239,9 +153,11 @@ def _matches_product_filters(row: dict, pt: str, product_filters: dict[str, str]
     for product in products:
         if not isinstance(product, dict):
             continue
-        if all(str(product.get(field) or "") == value for field, value in product_filters.items()):
+        attrs = product.get("attributes") or {}
+        if all(str(attrs.get(field) or "") == value for field, value in product_filters.items()):
             return True
     return False
+
 
 def catalogue_models_for_tipo(
     tipo: str,
@@ -250,67 +166,72 @@ def catalogue_models_for_tipo(
     filters: dict[str, str] | None = None,
     filter_field: str | None = None,
     filter_value: str | None = None,
+    limit: int = DEFAULT_PAGE_LIMIT,
+    offset: int = 0,
 ) -> list[dict]:
-
     if not is_valid_tipo(tipo):
-
         return []
-
     if not _require_public_category(id_categoria):
-
         return []
 
     cfg = CATALOG_TYPES[tipo]
-
     mode = cfg.get("storefront_mode") or "variantes"
-
-    mt = cfg["model_table"]
-
-    pt = cfg["product_table"]
-
-    product_fields = _product_select_fields(cfg["product_schema"])
+    pt = PRODUCT_VARIANTS_TABLE
 
     active_filters = dict(filters or {})
     if filter_field and filter_value:
         active_filters[filter_field] = filter_value
 
     model_filters, product_filters = _split_filters(active_filters)
+    limit = min(max(int(limit or DEFAULT_PAGE_LIMIT), 1), MAX_PAGE_LIMIT)
+    offset = max(int(offset or 0), 0)
 
     query = (
         get_db()
-        .table(mt)
-        .select(f"*, categories({_category_select()}), {pt}({product_fields})")
+        .table(PRODUCT_MODELS_TABLE)
+        .select(f"*, categories({_category_select()}), {pt}({_product_select_fields()})")
         .eq("id_categoria", id_categoria)
+        .eq("tipo_catalogo", tipo)
         .eq("visibilidade", True)
     )
 
     for field, value in model_filters.items():
-        query = query.eq(field, value)
+        query = query.eq(f"attributes->>{field}", value)
 
-    rows = query.order("nome").execute().data or []
-    _attach_modelo_cores(rows, tipo=tipo)
+    # Pede 1 a mais do que o limite para saber se há próxima página sem outro round-trip.
+    rows = (
+        query.order("nome").range(offset, offset + limit).execute().data or []
+    )
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    _attach_modelo_cores(rows)
     out: list[dict] = []
 
     for row in rows:
-        row = attach_storefront_fields(dict(row), cfg)
+        row = attach_storefront_fields(dict(row), tipo, cfg)
         row["modelo_cores"] = _modelo_cores(row)
-        if not _finalize_model_products(row, cfg, pt, mode):
+        if not _finalize_model_products(row, pt, mode):
             continue
         if not _matches_product_filters(row, pt, product_filters):
             continue
 
         row["_tipo_catalogo"] = tipo
-        row["_storefront"] = storefront_context_for_tipo(cfg)
+        row["_storefront"] = storefront_context_for_tipo(tipo, cfg)
         row["_storefront_mode"] = mode
         out.append(row)
 
+    if out:
+        out[-1]["_has_more"] = has_more
     return out
+
 
 def catalogue_models_aggregated(
     virtual_tipo: str,
     id_categoria: str,
     *,
     filters: dict[str, str] | None = None,
+    limit: int = DEFAULT_PAGE_LIMIT,
+    offset: int = 0,
 ) -> list[dict]:
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -327,7 +248,7 @@ def catalogue_models_aggregated(
     def _fetch(physical: str) -> list[dict]:
         if family and physical != family:
             return []
-        rows = catalogue_models_for_tipo(physical, id_categoria, filters=db_filters)
+        rows = catalogue_models_for_tipo(physical, id_categoria, filters=db_filters, limit=limit, offset=offset)
         batch: list[dict] = []
         for row in rows:
             row["_tipo_catalogo"] = physical
@@ -344,12 +265,14 @@ def catalogue_models_aggregated(
     out.sort(key=lambda r: str(r.get("nome") or ""))
     return out
 
+
 def model_detail_for_tipo_query(tipo: str, id_modelo: str) -> dict | None:
     batch = models_detail_map_for_tipo(tipo, [id_modelo])
     return batch.get(str(id_modelo))
 
+
 def _normalize_model_detail_row(data: dict, *, tipo: str, cfg: dict, mode: str) -> dict | None:
-    pt = cfg["product_table"]
+    pt = PRODUCT_VARIANTS_TABLE
     if not data or not is_visible(data):
         return None
     parent = data.get("categories") if isinstance(data.get("categories"), dict) else None
@@ -359,23 +282,17 @@ def _normalize_model_detail_row(data: dict, *, tipo: str, cfg: dict, mode: str) 
         return None
     if isinstance(data.get("categories"), dict):
         cat = data["categories"]
-        data["categories"] = {
-            k: cat.get(k)
-            for k in ("id", "nome", "carrinho_step", "carrinho_min", "slug", "tipo_catalogo")
-        }
-    data = attach_storefront_fields(dict(data), cfg)
+        data["categories"] = {k: cat.get(k) for k in ("id", "nome", "carrinho_step", "carrinho_min", "slug", "tipo_catalogo")}
+    data = attach_storefront_fields(dict(data), tipo, cfg)
     data["modelo_cores"] = _modelo_cores(data)
-    raw_products = data.get(pt)
-    if isinstance(raw_products, dict):
-        raw_products = [raw_products]
-    _visible_products(raw_products)
-    if not _finalize_model_products(data, cfg, pt, mode):
+    if not _finalize_model_products(data, pt, mode):
         return None
-    ctx = storefront_context_for_tipo(cfg)
+    ctx = storefront_context_for_tipo(tipo, cfg)
     data["_tipo_catalogo"] = tipo
     data["_storefront"] = ctx
     data["_storefront_mode"] = mode
     return data
+
 
 def models_detail_map_for_tipo(tipo: str, model_ids: list[str]) -> dict[str, dict]:
     """Batch fetch — evita N+1 na pesquisa."""
@@ -383,26 +300,27 @@ def models_detail_map_for_tipo(tipo: str, model_ids: list[str]) -> dict[str, dic
         return {}
     cfg = CATALOG_TYPES[tipo]
     mode = cfg.get("storefront_mode") or "variantes"
-    mt = cfg["model_table"]
-    pt = cfg["product_table"]
+    pt = PRODUCT_VARIANTS_TABLE
     ids = [str(i) for i in model_ids if i]
     if not ids:
         return {}
     res = (
         get_db()
-        .table(mt)
+        .table(PRODUCT_MODELS_TABLE)
         .select(f"*, categories(*), {pt}(*)")
+        .eq("tipo_catalogo", tipo)
         .in_("id", ids)
         .execute()
     )
     rows = res.data or []
-    _attach_modelo_cores(rows, tipo=tipo)
+    _attach_modelo_cores(rows)
     out: dict[str, dict] = {}
     for row in rows:
         normalized = _normalize_model_detail_row(row, tipo=tipo, cfg=cfg, mode=mode)
         if normalized and row.get("id"):
             out[str(row["id"])] = normalized
     return out
+
 
 def _resolve_public_category_id(category_slug: str) -> str | None:
     db = get_db()
@@ -419,94 +337,68 @@ def _resolve_public_category_id(category_slug: str) -> str | None:
         return None
     return str(row[0]["id"])
 
-def model_detail_for_slugs_query(tipo: str, category_slug: str, model_slug: str) -> dict | None:
-    from models.schemas import aggregated_tipos_for_tipo
 
-    if aggregated_tipos_for_tipo(tipo):
-        category_id = _resolve_public_category_id(category_slug)
-        if not category_id:
-            return None
-        model_key = (model_slug or "").strip()
-        if not model_key:
-            return None
-        for physical in aggregated_tipos_for_tipo(tipo) or []:
-            cfg = CATALOG_TYPES[physical]
-            mt = cfg["model_table"]
-            query = (
-                get_db()
-                .table(mt)
-                .select("id")
-                .eq("id_categoria", category_id)
-                .eq("visibilidade", True)
-            )
-            if len(model_key) == 36 and model_key.count("-") == 4:
-                query = query.eq("id", model_key)
-            else:
-                query = query.eq("slug", model_key)
-            res = query.limit(1).execute()
-            row = (res.data or [None])[0]
-            if not row and not (len(model_key) == 36 and model_key.count("-") == 4):
-                res = (
-                    get_db()
-                    .table(mt)
-                    .select("id")
-                    .eq("id_categoria", category_id)
-                    .eq("visibilidade", True)
-                    .ilike("nome", model_key)
-                    .limit(1)
-                    .execute()
-                )
-                row = (res.data or [None])[0]
-            if row:
-                data = model_detail_for_tipo_query(physical, str(row["id"]))
-                if data:
-                    data["_tipo_catalogo"] = physical
-                    data["_category_tipo"] = tipo
-                    data["_familia_label"] = cfg["label"]
-                    return data
-        return None
-
-    if not is_valid_tipo(tipo):
-        return None
-    category_id = _resolve_public_category_id(category_slug)
-    if not category_id:
-        return None
-
-    cfg = CATALOG_TYPES[tipo]
-    mt = cfg["model_table"]
-    model_key = (model_slug or "").strip()
-    if not model_key:
-        return None
-
+def _find_model_id_by_slug(category_id: str, tipo: str, model_key: str) -> str | None:
     query = (
         get_db()
-        .table(mt)
-        .select(f"*, categories(*), {cfg['product_table']}(*)")
+        .table(PRODUCT_MODELS_TABLE)
+        .select("id")
         .eq("id_categoria", category_id)
+        .eq("tipo_catalogo", tipo)
         .eq("visibilidade", True)
     )
     if len(model_key) == 36 and model_key.count("-") == 4:
         query = query.eq("id", model_key)
     else:
         query = query.eq("slug", model_key)
-
-    res = query.limit(1).execute()
-    data = (res.data or [None])[0]
-    if not data and not (len(model_key) == 36 and model_key.count("-") == 4):
-        res = (
+    row = (query.limit(1).execute().data or [None])[0]
+    if not row and not (len(model_key) == 36 and model_key.count("-") == 4):
+        row = (
             get_db()
-            .table(mt)
-            .select(f"*, categories(*), {cfg['product_table']}(*)")
+            .table(PRODUCT_MODELS_TABLE)
+            .select("id")
             .eq("id_categoria", category_id)
+            .eq("tipo_catalogo", tipo)
             .eq("visibilidade", True)
             .ilike("nome", model_key)
             .limit(1)
             .execute()
-        )
-        data = (res.data or [None])[0]
-    if not data:
+            .data
+            or [None]
+        )[0]
+    return str(row["id"]) if row else None
+
+
+def model_detail_for_slugs_query(tipo: str, category_slug: str, model_slug: str) -> dict | None:
+    from models.schemas import aggregated_tipos_for_tipo
+
+    model_key = (model_slug or "").strip()
+    if not model_key:
         return None
-    return model_detail_for_tipo_query(tipo, str(data["id"]))
+    category_id = _resolve_public_category_id(category_slug)
+    if not category_id:
+        return None
+
+    aggregated = aggregated_tipos_for_tipo(tipo)
+    if aggregated:
+        for physical in aggregated:
+            model_id = _find_model_id_by_slug(category_id, physical, model_key)
+            if model_id:
+                data = model_detail_for_tipo_query(physical, model_id)
+                if data:
+                    data["_tipo_catalogo"] = physical
+                    data["_category_tipo"] = tipo
+                    data["_familia_label"] = CATALOG_TYPES[physical]["label"]
+                    return data
+        return None
+
+    if not is_valid_tipo(tipo):
+        return None
+    model_id = _find_model_id_by_slug(category_id, tipo, model_key)
+    if not model_id:
+        return None
+    return model_detail_for_tipo_query(tipo, model_id)
+
 
 def _resolve_ean_hit(db, ean: str) -> tuple[str, dict] | None:
     """Lookup via view catalog_ean_lookup; None se view indisponível."""
@@ -524,33 +416,24 @@ def _resolve_ean_hit(db, ean: str) -> tuple[str, dict] | None:
     if not row or not row.get("product_visivel") or not row.get("model_visivel"):
         return None
     tipo = str(row.get("tipo") or "")
-    mid = str(row.get("id_modelo") or "")
-    if not tipo or not mid or tipo not in CATALOG_TYPES:
+    if not tipo or tipo not in CATALOG_TYPES:
         return None
-    cfg = CATALOG_TYPES[tipo]
-    pt = cfg["product_table"]
-    mt = cfg["model_table"]
-    item_res = db.table(pt).select(f"*, {mt}(*)").eq("ean", ean).limit(1).execute()
+    item_res = (
+        db.table(PRODUCT_VARIANTS_TABLE)
+        .select(f"*, {PRODUCT_MODELS_TABLE}(*)")
+        .eq("ean", ean)
+        .limit(1)
+        .execute()
+    )
     item = (item_res.data or [None])[0]
     if not item or not is_visible(item):
         return None
     return tipo, item
 
-def _product_line_from_item(
-    db,
-    *,
-    tipo: str,
-    item: dict,
-    ean: str,
-    numero_cor: int,
-    altura: str | None,
-) -> dict | None:
-    cfg = CATALOG_TYPES.get(tipo) or {}
-    mt = cfg.get("model_table")
-    mode = cfg.get("storefront_mode") or "variantes"
-    if not mt:
-        return None
-    modelo = item.get(mt) or {}
+
+def _product_line_from_item(db, *, tipo: str, item: dict, ean: str, numero_cor: int, altura: str | None) -> dict | None:
+    mode = (CATALOG_TYPES.get(tipo) or {}).get("storefront_mode") or "variantes"
+    modelo = item.get(PRODUCT_MODELS_TABLE) or {}
     if isinstance(modelo, list) and modelo:
         modelo = modelo[0]
     if not isinstance(modelo, dict):
@@ -558,13 +441,9 @@ def _product_line_from_item(
     if modelo and not is_visible(modelo):
         return None
     id_modelo = item.get("id_modelo")
-    cor_nome = _lookup_cor_nome(
-        db,
-        id_modelo=str(id_modelo) if id_modelo else None,
-        numero_cor=numero_cor,
-        tipo=tipo,
-    )
-    dim = altura or item.get("dimensoes") or ""
+    cor_nome = _lookup_cor_nome(db, id_modelo=str(id_modelo) if id_modelo else None, numero_cor=numero_cor)
+    item_attrs = item.get("attributes") or {}
+    dim = altura or item_attrs.get("dimensoes") or ""
     if mode == "assento" and altura:
         dim = altura
     return {
@@ -577,25 +456,29 @@ def _product_line_from_item(
         "tipo_produto": tipo,
     }
 
+
 def _find_product_by_ean(db, ean: str) -> tuple[str, dict] | None:
     hit = _resolve_ean_hit(db, ean)
     if hit:
         return hit
-    for tipo, cfg in CATALOG_TYPES.items():
-        pt = cfg["product_table"]
-        mt = cfg["model_table"]
-        row = db.table(pt).select(f"*, {mt}(*)").eq("ean", ean).limit(1).execute()
-        item = (row.data or [None])[0]
-        if not item or not is_visible(item):
-            continue
-        return tipo, item
-    return None
+    row = (
+        db.table(PRODUCT_VARIANTS_TABLE)
+        .select(f"*, {PRODUCT_MODELS_TABLE}(*)")
+        .eq("ean", ean)
+        .limit(1)
+        .execute()
+        .data
+        or [None]
+    )[0]
+    if not row or not is_visible(row):
+        return None
+    tipo = row.get("tipo_catalogo")
+    return (tipo, row) if tipo else None
+
 
 def resolve_product_line(ean: str, numero_cor: int, altura: str | None = None) -> dict:
     """Resolve EAN + cor (+ altura) para qualquer tipo registado."""
-    lines = resolve_product_lines_batch(
-        [{"ean": ean, "numero_cor": numero_cor, "altura": altura or ""}]
-    )
+    lines = resolve_product_lines_batch([{"ean": ean, "numero_cor": numero_cor, "altura": altura or ""}])
     return lines[0] if lines else {
         "ean": ean,
         "numero_cor": numero_cor,
@@ -604,37 +487,35 @@ def resolve_product_line(ean: str, numero_cor: int, altura: str | None = None) -
         "cor_nome": f"Cor {numero_cor}",
     }
 
+
 def resolve_product_lines_batch(linhas: list[dict]) -> list[dict]:
-    """Batch EAN lookup — evita N+1 em PDFs com muitas linhas."""
+    """Batch EAN lookup — 1 query para todos os EANs (esquema unificado:
+    já não há N+1 por família de catálogo)."""
     if not linhas:
         return []
     db = get_db()
     eans = list({str(l.get("ean") or "").strip() for l in linhas if str(l.get("ean") or "").strip()})
     ean_hits: dict[str, tuple[str, dict]] = {}
     if eans:
-        try:
-            res = (
-                db.table("catalog_ean_lookup")
-                .select("tipo, ean, id_modelo, product_visivel, model_visivel")
-                .in_("ean", eans)
-                .execute()
-            )
-            for row in res.data or []:
-                ean = str(row.get("ean") or "")
-                if not ean or not row.get("product_visivel") or not row.get("model_visivel"):
-                    continue
-                tipo = str(row.get("tipo") or "")
-                if tipo not in CATALOG_TYPES:
-                    continue
-                cfg = CATALOG_TYPES[tipo]
-                pt = cfg["product_table"]
-                mt = cfg["model_table"]
-                item_res = db.table(pt).select(f"*, {mt}(*)").eq("ean", ean).limit(1).execute()
-                item = (item_res.data or [None])[0]
-                if item and is_visible(item):
-                    ean_hits[ean] = (tipo, item)
-        except Exception:
-            ean_hits = {}
+        items = (
+            db.table(PRODUCT_VARIANTS_TABLE)
+            .select(f"*, {PRODUCT_MODELS_TABLE}(*)")
+            .in_("ean", eans)
+            .execute()
+            .data
+            or []
+        )
+        for item in items:
+            ean = str(item.get("ean") or "")
+            tipo = item.get("tipo_catalogo")
+            if not ean or not tipo or not is_visible(item):
+                continue
+            modelo = item.get(PRODUCT_MODELS_TABLE) or {}
+            if isinstance(modelo, list) and modelo:
+                modelo = modelo[0]
+            if isinstance(modelo, dict) and modelo and not is_visible(modelo):
+                continue
+            ean_hits[ean] = (tipo, item)
 
     missing = [e for e in eans if e not in ean_hits]
     for ean in missing:
@@ -650,18 +531,9 @@ def resolve_product_lines_batch(linhas: list[dict]) -> list[dict]:
         found = ean_hits.get(ean)
         if found:
             tipo, item = found
-            line = _product_line_from_item(
-                db, tipo=tipo, item=item, ean=ean, numero_cor=numero_cor, altura=altura
-            )
+            line = _product_line_from_item(db, tipo=tipo, item=item, ean=ean, numero_cor=numero_cor, altura=altura)
             if line:
                 out.append({**linha, **line})
                 continue
-        out.append({
-            **linha,
-            "ean": ean,
-            "numero_cor": numero_cor,
-            "modelo": "?",
-            "dimensoes": "?",
-            "cor_nome": f"Cor {numero_cor}",
-        })
+        out.append({**linha, "ean": ean, "numero_cor": numero_cor, "modelo": "?", "dimensoes": "?", "cor_nome": f"Cor {numero_cor}"})
     return out

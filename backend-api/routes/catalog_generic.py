@@ -1,4 +1,9 @@
-"""Rotas genéricas de catálogo — uma URL por tipo registado em CATALOG_TYPES."""
+"""Rotas genéricas de catálogo — uma URL por tipo registado em CATALOG_TYPES.
+
+Esquema unificado: a lista "merged" do backoffice (todas as categorias juntas)
+deixou de precisar de um fan-out paralelo a N tabelas físicas + merge/sort em
+memória — é 1 query paginada no servidor à tabela única, com `tipo_catalogo`
+como filtro opcional."""
 from __future__ import annotations
 
 import asyncio
@@ -7,30 +12,21 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from core.auth import require_catalog_role
-from core.local_only import admin_must_be_local
 from core.cache import catalog_cache_ttl, get_or_set
 from core.catalog_service import catalogue_for_category, model_detail_for_slugs, model_detail_for_tipo
 from core.database import get_db
+from core.local_only import admin_must_be_local
 from models.catalog_registry import (
     CATALOG_TYPES,
     admin_merged_select_query,
-    all_model_tables,
-    all_product_tables,
-    catalog_metadata,
     is_valid_storefront_tipo,
     is_valid_tipo,
-    list_select_query,
-    model_table_for_tipo,
-    product_table_for_tipo,
-    tipo_for_table,
     tipo_label,
 )
 from models.catalog_views import is_catalog_view
-from models.schemas import aggregated_tipos_for_tipo
+from models.schemas import PRODUCT_MODELS_TABLE, PRODUCT_VARIANTS_TABLE, aggregated_tipos_for_tipo
 
 logger = logging.getLogger("diomika-api")
-
-_ADMIN_MERGED_CACHE_TTL = catalog_cache_ttl()
 
 router = APIRouter(prefix="/catalogo", tags=["Catálogo"])
 
@@ -38,6 +34,8 @@ router = APIRouter(prefix="/catalogo", tags=["Catálogo"])
 @router.get("/meta")
 async def get_catalog_meta():
     """Tipos, tabelas e modos de vitrine — derivado de CATALOG_TYPES."""
+    from models.catalog_registry import catalog_metadata
+
     ttl = catalog_cache_ttl()
     return await asyncio.to_thread(get_or_set, "catalog:meta", float(ttl), catalog_metadata)
 
@@ -74,31 +72,33 @@ def _require_tipo(tipo: str) -> dict:
 
 @router.get("/modelo-detalhe/{id_modelo}")
 async def get_storefront_model_detail_auto(id_modelo: str):
-    """Detalhe de modelo — deteta o tipo automaticamente (URLs legadas da loja)."""
+    """Detalhe de modelo — deteta o tipo automaticamente (URLs legadas da loja).
+
+    Esquema unificado: o tipo já é uma coluna no próprio registo — 1 query,
+    não 1 por família em paralelo."""
     ttl = catalog_cache_ttl()
     cache_key = f"catalog:modelo-auto:{id_modelo}"
 
     def load():
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
-        def try_tipo(tipo: str):
-            try:
-                data = model_detail_for_tipo(tipo, id_modelo)
-                if data:
-                    data["_tipo_catalogo"] = tipo
-                    data["_storefront_mode"] = CATALOG_TYPES[tipo].get("storefront_mode") or "variantes"
-                    return data
-            except HTTPException:
-                return None
-            return None
-
-        with ThreadPoolExecutor(max_workers=min(5, len(CATALOG_TYPES))) as pool:
-            futures = [pool.submit(try_tipo, t) for t in CATALOG_TYPES]
-            for fut in as_completed(futures):
-                data = fut.result()
-                if data:
-                    return data
-        raise HTTPException(status_code=404, detail="Modelo não encontrado")
+        row = (
+            get_db()
+            .table(PRODUCT_MODELS_TABLE)
+            .select("tipo_catalogo")
+            .eq("id", id_modelo)
+            .limit(1)
+            .execute()
+            .data
+            or [None]
+        )[0]
+        tipo = row.get("tipo_catalogo") if row else None
+        if not tipo or tipo not in CATALOG_TYPES:
+            raise HTTPException(status_code=404, detail="Modelo não encontrado")
+        data = model_detail_for_tipo(tipo, id_modelo)
+        if not data:
+            raise HTTPException(status_code=404, detail="Modelo não encontrado")
+        data["_tipo_catalogo"] = tipo
+        data["_storefront_mode"] = CATALOG_TYPES[tipo].get("storefront_mode") or "variantes"
+        return data
 
     try:
         return await asyncio.to_thread(get_or_set, cache_key, float(ttl), load)
@@ -110,8 +110,15 @@ async def get_storefront_model_detail_auto(id_modelo: str):
 
 
 @router.get("/{tipo}/modelos-catalogo/{id_categoria}")
-async def list_storefront_catalog(tipo: str, id_categoria: str, request: Request, filter_tipo: str | None = None):
-    """Lista modelos para a loja (vitrine) — visível apenas."""
+async def list_storefront_catalog(
+    tipo: str,
+    id_categoria: str,
+    request: Request,
+    filter_tipo: str | None = None,
+    limit: int = 24,
+    offset: int = 0,
+):
+    """Lista modelos para a loja (vitrine) — visível apenas, paginada no servidor."""
     _require_tipo(tipo)
     query_filters = {
         key[7:]: value
@@ -120,7 +127,7 @@ async def list_storefront_catalog(tipo: str, id_categoria: str, request: Request
     }
     filter_key = "|".join(f"{k}={v}" for k, v in sorted(query_filters.items()))
     ttl = catalog_cache_ttl()
-    cache_key = f"catalog:list:{tipo}:{id_categoria}:{filter_tipo or ''}:{filter_key}"
+    cache_key = f"catalog:list:{tipo}:{id_categoria}:{filter_tipo or ''}:{filter_key}:{limit}:{offset}"
 
     def load():
         return catalogue_for_category(
@@ -128,6 +135,8 @@ async def list_storefront_catalog(tipo: str, id_categoria: str, request: Request
             id_categoria,
             filters=query_filters or None,
             tipo_filter=filter_tipo,
+            limit=limit,
+            offset=offset,
         )
 
     try:
@@ -181,161 +190,75 @@ async def get_storefront_model_detail(tipo: str, id_modelo: str):
         raise HTTPException(status_code=500, detail="Erro ao carregar modelo") from exc
 
 
-def _model_ids_by_table_for_category(categoria_id: str) -> dict[str, list[str]]:
-    """Uma passagem por família — evita N× a mesma query na lista merged de produtos."""
-    db = get_db()
-    out: dict[str, list[str]] = {}
-    for cfg in CATALOG_TYPES.values():
-        mt = cfg["model_table"]
-        rows = (
-            db.table(mt)
-            .select("id")
-            .eq("id_categoria", categoria_id)
-            .execute()
-            .data
-            or []
-        )
-        ids = [str(row["id"]) for row in rows if row.get("id")]
-        if ids:
-            out[mt] = ids
-    return out
+def _resolve_merged_tipos(tipo_catalogo: str | None) -> list[str] | None:
+    """None = sem filtro (todas as famílias). Lista vazia = família inexistente."""
+    if not tipo_catalogo:
+        return None
+    aggregated = aggregated_tipos_for_tipo(tipo_catalogo)
+    if aggregated:
+        return list(aggregated)
+    return [tipo_catalogo] if is_valid_tipo(tipo_catalogo) else []
 
 
-def _fetch_merged_table_page(
+def _load_merged_page(
     *,
     view_key: str,
-    ptable: str,
     visible_only: bool,
-    per_table: int,
+    limit: int,
+    offset: int,
     categoria_id: str | None,
     modelo_id: str | None,
-    model_ids_by_mt: dict[str, list[str]] | None = None,
-) -> list[dict]:
-    mt = model_table_for_tipo(tipo_for_table(ptable))
-
-    if categoria_id and view_key == "produtos" and mt:
-        model_ids = (model_ids_by_mt or {}).get(mt, [])
-        if not model_ids:
-            return []
-
+    tipos: list[str] | None,
+) -> tuple[list[dict], int]:
+    physical = PRODUCT_MODELS_TABLE if view_key == "modelos" else PRODUCT_VARIANTS_TABLE
     db = get_db()
 
-    def _run(select_q: str):
-        query = db.table(ptable).select(select_q)
-        if visible_only:
-            query = query.eq("visibilidade", True)
-        if categoria_id and view_key == "modelos":
-            query = query.eq("id_categoria", categoria_id)
-        if categoria_id and view_key == "produtos" and mt:
-            query = query.in_("id_modelo", model_ids)
-        if modelo_id and view_key == "produtos":
-            query = query.eq("id_modelo", modelo_id)
-        try:
-            return query.order("created_at", desc=True).limit(per_table).execute()
-        except TypeError:
-            return query.order("created_at", ascending=False).limit(per_table).execute()
+    query = db.table(physical).select(admin_merged_select_query(physical), count="exact")
+    if visible_only:
+        query = query.eq("visibilidade", True)
+    if tipos is not None:
+        if not tipos:
+            return [], 0
+        query = query.in_("tipo_catalogo", tipos)
+    if categoria_id and view_key == "modelos":
+        query = query.eq("id_categoria", categoria_id)
+    if categoria_id and view_key == "produtos":
+        model_ids = [
+            str(r["id"])
+            for r in db.table(PRODUCT_MODELS_TABLE).select("id").eq("id_categoria", categoria_id).execute().data or []
+        ]
+        if not model_ids:
+            return [], 0
+        query = query.in_("id_modelo", model_ids)
+    if modelo_id and view_key == "produtos":
+        query = query.eq("id_modelo", modelo_id)
 
     try:
-        try:
-            res = _run(admin_merged_select_query(ptable))
-        except Exception as lean_exc:
-            logger.warning("Merged lean select falhou %s/%s: %s — fallback *", view_key, ptable, lean_exc)
-            res = _run(list_select_query(ptable))
-    except Exception as exc:
-        logger.error("Merged list %s/%s: %s", view_key, ptable, exc)
-        return []
+        res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+    except TypeError:
+        res = query.order("created_at", ascending=False).range(offset, offset + limit - 1).execute()
 
-    familia = tipo_label(tipo_for_table(ptable))
-    out: list[dict] = []
-    for item in res.data or []:
-        item["_ptable"] = ptable
-        item["_tipo_catalogo"] = tipo_for_table(ptable)
-        item["_familia_label"] = familia
+    rows = res.data or []
+    total = getattr(res, "count", None)
+    if total is None:
+        total = offset + len(rows)
+
+    from models.catalog_registry import model_table_for_tipo, product_table_for_tipo
+
+    for item in rows:
+        tipo = item.get("tipo_catalogo")
+        item["_ptable"] = (model_table_for_tipo(tipo) if view_key == "modelos" else product_table_for_tipo(tipo)) or physical
+        item["_tipo_catalogo"] = tipo
+        item["_familia_label"] = tipo_label(tipo)
         cat_nome = None
         if isinstance(item.get("categories"), dict):
             cat_nome = item["categories"].get("nome")
-        elif mt and isinstance(item.get(mt), dict):
-            emb_cat = item[mt].get("categories")
+        elif isinstance(item.get(PRODUCT_MODELS_TABLE), dict):
+            emb_cat = item[PRODUCT_MODELS_TABLE].get("categories")
             if isinstance(emb_cat, dict):
                 cat_nome = emb_cat.get("nome")
-        item["_categoria_label"] = cat_nome or familia
-        out.append(item)
-    return out
-
-
-def _merged_cache_key(
-    *,
-    view_key: str,
-    visible_only: bool,
-    categoria_id: str | None,
-    modelo_id: str | None,
-    tipo_catalogo: str | None,
-) -> str:
-    return (
-        f"admin:merged:{view_key}:"
-        f"v{int(visible_only)}:"
-        f"c{categoria_id or ''}:"
-        f"m{modelo_id or ''}:"
-        f"t{tipo_catalogo or ''}"
-    )
-
-
-def _resolve_merged_tables(
-    view_key: str,
-    tipo_catalogo: str | None,
-) -> list[str]:
-    if tipo_catalogo and aggregated_tipos_for_tipo(tipo_catalogo):
-        tables = (
-            [model_table_for_tipo(t) for t in aggregated_tipos_for_tipo(tipo_catalogo) or []]
-            if view_key == "modelos"
-            else [product_table_for_tipo(t) for t in aggregated_tipos_for_tipo(tipo_catalogo) or []]
-        )
-        return [t for t in tables if t]
-    if tipo_catalogo and is_valid_tipo(tipo_catalogo):
-        physical = (
-            model_table_for_tipo(tipo_catalogo)
-            if view_key == "modelos"
-            else product_table_for_tipo(tipo_catalogo)
-        )
-        return [physical] if physical else []
-    return [t for t in (all_model_tables() if view_key == "modelos" else all_product_tables()) if t]
-
-
-def _load_merged_rows_sync(
-    *,
-    view_key: str,
-    tables: list[str],
-    visible_only: bool,
-    per_table: int,
-    categoria_id: str | None,
-    modelo_id: str | None,
-) -> list[dict]:
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
-    rows: list[dict] = []
-    model_ids_by_mt = (
-        _model_ids_by_table_for_category(categoria_id)
-        if categoria_id and view_key == "produtos"
-        else None
-    )
-    with ThreadPoolExecutor(max_workers=min(5, max(len(tables), 1))) as pool:
-        futures = [
-            pool.submit(
-                _fetch_merged_table_page,
-                view_key=view_key,
-                ptable=ptable,
-                visible_only=visible_only,
-                per_table=per_table,
-                categoria_id=categoria_id,
-                modelo_id=modelo_id,
-                model_ids_by_mt=model_ids_by_mt,
-            )
-            for ptable in tables
-        ]
-        for fut in as_completed(futures):
-            rows.extend(fut.result())
-    rows.sort(key=lambda r: r.get("created_at") or "", reverse=True)
-    return rows
+        item["_categoria_label"] = cat_nome or item["_familia_label"]
+    return rows, total
 
 
 @router.get(
@@ -351,59 +274,28 @@ async def admin_merged_list(
     modelo_id: str | None = None,
     tipo_catalogo: str | None = None,
 ):
-    """Lista merged para backoffice (modelos ou produtos) — paginada."""
+    """Lista merged para backoffice (modelos ou produtos) — paginada no servidor."""
     if not is_catalog_view(view_key):
         raise HTTPException(status_code=400, detail="Vista inválida")
     limit = min(max(limit, 1), 200)
     offset = max(offset, 0)
+    tipos = _resolve_merged_tipos(tipo_catalogo)
 
-    tables = _resolve_merged_tables(view_key, tipo_catalogo)
-    if not tables:
-        return {"items": [], "limit": limit, "offset": offset, "count": 0, "total_approx": 0}
-
-    # Por tabela: bastam linhas recentes para ordenação global; cache evita repetir em cada página.
-    n_tables = len(tables)
-    need = limit + offset
-    if n_tables == 1:
-        per_table = min(max(need, 20), 120)
-    else:
-        per_table = min(max(need // n_tables + 10, 16), 50)
-
-    cache_key = _merged_cache_key(
-        view_key=view_key,
-        visible_only=visible_only,
-        categoria_id=categoria_id,
-        modelo_id=modelo_id,
-        tipo_catalogo=tipo_catalogo,
+    cache_key = (
+        f"admin:merged:{view_key}:v{int(visible_only)}:c{categoria_id or ''}:"
+        f"m{modelo_id or ''}:t{tipo_catalogo or ''}:l{limit}:o{offset}"
     )
 
-    def _load_cached() -> list[dict]:
-        return _load_merged_rows_sync(
+    def _load() -> tuple[list[dict], int]:
+        return _load_merged_page(
             view_key=view_key,
-            tables=tables,
             visible_only=visible_only,
-            per_table=per_table,
+            limit=limit,
+            offset=offset,
             categoria_id=categoria_id,
             modelo_id=modelo_id,
+            tipos=tipos,
         )
 
-    rows = await asyncio.to_thread(get_or_set, cache_key, float(_ADMIN_MERGED_CACHE_TTL), _load_cached)
-    if offset + limit > len(rows) and per_table < 100:
-        per_table = min(max(need, per_table + 30), 100)
-        rows = await asyncio.to_thread(
-            _load_merged_rows_sync,
-            view_key=view_key,
-            tables=tables,
-            visible_only=visible_only,
-            per_table=per_table,
-            categoria_id=categoria_id,
-            modelo_id=modelo_id,
-        )
-    page = rows[offset : offset + limit]
-    return {
-        "items": page,
-        "limit": limit,
-        "offset": offset,
-        "count": len(page),
-        "total_approx": len(rows),
-    }
+    rows, total = await asyncio.to_thread(get_or_set, cache_key, float(catalog_cache_ttl()), _load)
+    return {"items": rows, "limit": limit, "offset": offset, "count": len(rows), "total_approx": total}

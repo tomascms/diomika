@@ -1,7 +1,15 @@
 """
-Registo de tipos de catálogo — lê CATALOG_TYPES de schemas.py.
+Registo de tipos de catálogo — lê CATALOG_TYPES de schemas.py e
+CATEGORY_ATTRIBUTE_SCHEMAS de catalog_attributes.py.
 
-Não dupliques tipos aqui: edita models/schemas.py (CATALOG_TYPES + TABLE_MAP + CATEGORY_DEFINITIONS).
+Esquema unificado: só 3 tabelas físicas para todas as categorias
+(product_models, product_variants, product_model_colors), discriminadas por
+`tipo_catalogo`. Os nomes de tabela "virtuais" (ex.: "modelos_almofadas",
+"almofada") continuam a existir como chaves em TABLE_MAP — compatíveis com as
+rotas /admin/crud/{table} já existentes — e resolvem para a tabela física +
+filtro via `physical_table_for()` / `tipo_for_table()`.
+
+Não dupliques tipos aqui: edita models/catalog_attributes.py.
 """
 from __future__ import annotations
 
@@ -11,6 +19,9 @@ from pydantic import BaseModel
 
 from models.schemas import (
     CATALOG_TYPES,
+    PRODUCT_MODEL_COLORS_TABLE,
+    PRODUCT_MODELS_TABLE,
+    PRODUCT_VARIANTS_TABLE,
     TIPO_CATALOGO_LABELS,
     aggregated_tipos_for_tipo,
     is_registered_tipo,
@@ -32,7 +43,6 @@ def tipo_label(tipo: str | None) -> str:
         return ""
     if tipo in CATALOG_TYPES:
         return CATALOG_TYPES[tipo].get("label") or TIPO_CATALOGO_LABELS.get(tipo, tipo)
-    # Tipos virtuais (ex.: material_cozinha) — label vem das definições de categoria
     from models.schemas import CATEGORY_DEFINITIONS
 
     for definition in CATEGORY_DEFINITIONS.values():
@@ -41,41 +51,100 @@ def tipo_label(tipo: str | None) -> str:
     return TIPO_CATALOGO_LABELS.get(tipo, tipo)
 
 
+# --- Nomes de tabela virtuais (1 por tipo_catalogo) <-> tabela física real ---
+
+def _table_entry(table: str | None) -> dict | None:
+    if not table:
+        return None
+    from models.schemas import TABLE_MAP
+
+    return TABLE_MAP.get(table)
+
+
+def physical_table_for(table: str | None) -> str | None:
+    """Tabela física real (product_models/product_variants/product_model_colors)
+    para um nome de tabela virtual. Tabelas não-catálogo (categories, infra,
+    operações) são já o seu próprio nome físico."""
+    entry = _table_entry(table)
+    if entry and entry.get("_physical_table"):
+        return entry["_physical_table"]
+    return table
+
+
+def tipo_for_table(table: str | None) -> str | None:
+    """tipo_catalogo correspondente a um nome de tabela virtual."""
+    entry = _table_entry(table)
+    if entry:
+        return entry.get("_tipo_catalogo")
+    return None
+
+
+def level_for_table(table: str | None) -> str | None:
+    """'model' | 'variant' | 'colors' para um nome de tabela virtual de catálogo."""
+    entry = _table_entry(table)
+    return entry.get("_level") if entry else None
+
+
+def is_catalog_virtual_table(table: str | None) -> bool:
+    return level_for_table(table) is not None
+
+
+def fold_attributes(table: str | None, body: dict) -> dict:
+    """Aceita campos de atributo soltos no nível de topo de um registo (ex.:
+    `tipo`, `dimensoes` vindos de um CSV ou de um pedido antigo) e dobra-os em
+    `attributes: {...}`, como o esquema unificado espera. Campos que não
+    pertencem ao registo de atributos da categoria ficam no nível de topo."""
+    from models.catalog_attributes import CATEGORY_ATTRIBUTE_SCHEMAS
+
+    tipo = tipo_for_table(table)
+    level = level_for_table(table)
+    if not tipo or level not in ("model", "variant"):
+        return body
+    attr_names = set((CATEGORY_ATTRIBUTE_SCHEMAS.get(tipo) or {}).get(f"{level}_attributes") or {})
+    if not attr_names:
+        return body
+    out = dict(body)
+    attrs = dict(out.get("attributes") or {})
+    for name in attr_names:
+        if name in out and name not in attrs:
+            attrs[name] = out.pop(name)
+    out["attributes"] = attrs
+    return out
+
+
 def model_table_for_tipo(tipo: str | None) -> str | None:
     if not is_valid_tipo(tipo):
         return None
-    return CATALOG_TYPES[tipo]["model_table"]
+    from models.catalog_attributes import VIRTUAL_TABLE_NAMES
+
+    return VIRTUAL_TABLE_NAMES[tipo]["model"]
 
 
 def product_table_for_tipo(tipo: str | None) -> str | None:
     if not is_valid_tipo(tipo):
         return None
-    return CATALOG_TYPES[tipo]["product_table"]
+    from models.catalog_attributes import VIRTUAL_TABLE_NAMES
+
+    return VIRTUAL_TABLE_NAMES[tipo]["variant"]
 
 
 def colors_table_for_tipo(tipo: str | None) -> str | None:
     if not is_valid_tipo(tipo):
         return None
-    return CATALOG_TYPES[tipo].get("colors_table")
+    from models.catalog_attributes import VIRTUAL_TABLE_NAMES
+
+    return VIRTUAL_TABLE_NAMES[tipo]["colors"]
+
+
+def colors_table_for_model_table(model_table: str | None) -> str | None:
+    tipo = tipo_for_table(model_table)
+    return colors_table_for_tipo(tipo) if tipo else None
 
 
 def colors_schema_for_tipo(tipo: str | None) -> Type[BaseModel] | None:
     if not is_valid_tipo(tipo):
         return None
     return CATALOG_TYPES[tipo].get("colors_schema")
-
-
-def all_colors_tables() -> list[str]:
-    return [cfg["colors_table"] for cfg in CATALOG_TYPES.values() if cfg.get("colors_table")]
-
-
-def colors_table_for_model_table(model_table: str | None) -> str | None:
-    if not model_table:
-        return None
-    for cfg in CATALOG_TYPES.values():
-        if cfg["model_table"] == model_table:
-            return cfg.get("colors_table")
-    return None
 
 
 def model_schema_for_tipo(tipo: str | None) -> Type[BaseModel] | None:
@@ -90,51 +159,49 @@ def product_schema_for_tipo(tipo: str | None) -> Type[BaseModel] | None:
     return CATALOG_TYPES[tipo]["product_schema"]
 
 
-def tipo_for_table(ptable: str | None) -> str | None:
-    if not ptable:
-        return None
-    for tipo, cfg in CATALOG_TYPES.items():
-        tables = (cfg["model_table"], cfg["product_table"], cfg.get("colors_table"))
-        if ptable in tables:
-            return tipo
-    return None
-
-
 def all_model_tables() -> list[str]:
-    return [cfg["model_table"] for cfg in CATALOG_TYPES.values()]
+    from models.catalog_attributes import VIRTUAL_TABLE_NAMES
+
+    return [v["model"] for v in VIRTUAL_TABLE_NAMES.values()]
 
 
 def all_product_tables() -> list[str]:
-    return [cfg["product_table"] for cfg in CATALOG_TYPES.values()]
+    from models.catalog_attributes import VIRTUAL_TABLE_NAMES
+
+    return [v["variant"] for v in VIRTUAL_TABLE_NAMES.values()]
+
+
+def all_colors_tables() -> list[str]:
+    from models.catalog_attributes import VIRTUAL_TABLE_NAMES
+
+    return [v["colors"] for v in VIRTUAL_TABLE_NAMES.values()]
 
 
 def all_catalog_tables() -> list[str]:
-    out: list[str] = []
-    for cfg in CATALOG_TYPES.values():
-        out.append(cfg["model_table"])
-        out.append(cfg["product_table"])
-        if cfg.get("colors_table"):
-            out.append(cfg["colors_table"])
-    return out
+    return all_model_tables() + all_product_tables() + all_colors_tables()
 
 
-def is_model_table(ptable: str | None) -> bool:
-    return ptable in all_model_tables()
+def is_model_table(table: str | None) -> bool:
+    return level_for_table(table) == "model"
 
 
-def is_product_table(ptable: str | None) -> bool:
-    return ptable in all_product_tables()
+def is_product_table(table: str | None) -> bool:
+    return level_for_table(table) == "variant"
 
 
-def product_readonly_on_edit(ptable: str | None) -> bool:
-    tipo = tipo_for_table(ptable)
+def is_colors_table(table: str | None) -> bool:
+    return level_for_table(table) == "colors"
+
+
+def product_readonly_on_edit(table: str | None) -> bool:
+    tipo = tipo_for_table(table)
     if not tipo:
         return False
     return bool(CATALOG_TYPES[tipo].get("product_readonly_on_edit"))
 
 
-def apply_barcode_on_save(ptable: str | None) -> bool:
-    tipo = tipo_for_table(ptable)
+def apply_barcode_on_save(table: str | None) -> bool:
+    tipo = tipo_for_table(table)
     if not tipo:
         return False
     return bool(CATALOG_TYPES[tipo].get("apply_barcode_on_save"))
@@ -151,64 +218,45 @@ def is_assento_tipo(tipo: str | None) -> bool:
 
 
 def list_select_query(table: str) -> str:
-    """Query Supabase para listas do backoffice — derivada do registo."""
-    tipo = tipo_for_table(table)
-    if not tipo:
-        return "*"
-    cfg = CATALOG_TYPES[tipo]
-    mt = cfg["model_table"]
-    if table == cfg["product_table"]:
-        model_fields = ["nome"]
-        disc = cfg.get("model_discriminator_field")
-        if disc:
-            model_fields.append(disc)
-        # Categoria via modelo — produtos não têm FK directo para categories
-        return f"*, {mt}({', '.join(model_fields)}, categories(nome))"
-    if table == mt:
+    """Query Supabase para listas do backoffice/loja — esquema unificado:
+    `attributes` (jsonb) já vem dentro de `*`, não há mais colunas por família."""
+    physical = physical_table_for(table)
+    if physical == PRODUCT_VARIANTS_TABLE:
+        return f"*, {PRODUCT_MODELS_TABLE}(nome, attributes, categories(nome))"
+    if physical == PRODUCT_MODELS_TABLE:
         return "*, categories(nome)"
+    if physical == PRODUCT_MODEL_COLORS_TABLE:
+        return f"*, {PRODUCT_MODELS_TABLE}(nome)"
     return "*"
 
 
 def admin_merged_select_query(table: str) -> str:
-    """Select leve para listas merged do admin.
-
-    Colunas por família — pedir campos inexistentes (ex.: altura em almofada)
-    faz o PostgREST falhar e a lista merged ficar vazia.
-    """
+    """Select leve para listas merged do admin."""
     return admin_list_select_query(table, embed_category=True)
 
 
 def admin_list_select_query(table: str, *, embed_category: bool = False) -> str:
-    """Select leve para listagens do backoffice (sem * nem embeds pesados)."""
+    """Select leve para listagens do backoffice (sem * nem embeds pesados).
+    Esquema unificado: `attributes` substitui as colunas por-família, por isso
+    pedir uma coluna inexistente numa categoria deixou de ser possível."""
     if table == "categories":
         return "id, nome, tipo_catalogo, visibilidade, slug, created_at"
+    physical = physical_table_for(table)
     tipo = tipo_for_table(table)
-    if not tipo:
-        return "id, nome, visibilidade, created_at"
-    cfg = CATALOG_TYPES[tipo]
-    mt = cfg["model_table"]
-    if table == cfg["product_table"]:
-        cols = ["id", "ean", "visibilidade", "created_at", "id_modelo"]
-        if tipo == "assento":
-            cols.append("altura")
-        elif tipo == "oculo":
-            cols.append("segmento")
-        elif tipo in ("almofada", "toalha_mesa", "pano_cozinha", "regional", "protetor_colchao", "passadeira"):
-            cols.append("dimensoes")
+    if physical == PRODUCT_VARIANTS_TABLE:
+        cols = ["id", "ean", "tipo_catalogo", "attributes", "visibilidade", "created_at", "id_modelo"]
         if embed_category:
-            return f"{', '.join(cols)}, {mt}(nome, categories(nome))"
-        return f"{', '.join(cols)}, {mt}(nome)"
-    if table == mt:
-        cols = ["id", "nome", "visibilidade", "created_at", "id_categoria"]
-        disc = cfg.get("model_discriminator_field")
-        if disc:
-            cols.append(disc)
+            return f"{', '.join(cols)}, {PRODUCT_MODELS_TABLE}(nome, categories(nome))"
+        return f"{', '.join(cols)}, {PRODUCT_MODELS_TABLE}(nome)"
+    if physical == PRODUCT_MODELS_TABLE:
+        cols = ["id", "nome", "tipo_catalogo", "attributes", "visibilidade", "created_at", "id_categoria"]
         if embed_category:
             return f"{', '.join(cols)}, categories(nome)"
         return ", ".join(cols)
-    colors = cfg.get("colors_table")
-    if colors and table == colors:
+    if physical == PRODUCT_MODEL_COLORS_TABLE:
         return "id, numero, nome, visibilidade, id_modelo, created_at"
+    if not tipo:
+        return "id, visibilidade, created_at"
     return "id, visibilidade, created_at"
 
 
@@ -216,41 +264,14 @@ def relation_options_select_query(table: str) -> str:
     """Mínimo para dropdowns de relação no formulário."""
     if table == "categories":
         return "id, nome, tipo_catalogo"
-    tipo = tipo_for_table(table)
-    if not tipo:
-        return "id, nome"
-    cfg = CATALOG_TYPES[tipo]
-    if table == cfg["model_table"]:
-        return "id, nome"
-    if table == cfg["product_table"]:
-        return "id, ean, id_modelo"
-    colors = cfg.get("colors_table")
-    if colors and table == colors:
+    physical = physical_table_for(table)
+    if physical == PRODUCT_MODELS_TABLE:
+        return "id, nome, tipo_catalogo"
+    if physical == PRODUCT_VARIANTS_TABLE:
+        return "id, ean, id_modelo, tipo_catalogo"
+    if physical == PRODUCT_MODEL_COLORS_TABLE:
         return "id, numero, nome, id_modelo"
     return "id, nome"
-
-def infer_model_ptable(item: dict) -> str | None:
-    if item.get("_ptable") in all_model_tables():
-        return item["_ptable"]
-    for cfg in CATALOG_TYPES.values():
-        field = cfg.get("model_discriminator_field")
-        if field and item.get(field) is not None:
-            return cfg["model_table"]
-    return None
-
-
-def infer_product_ptable(item: dict) -> str | None:
-    if item.get("_ptable") in all_product_tables():
-        return item["_ptable"]
-    for cfg in CATALOG_TYPES.values():
-        rel = cfg["model_table"]
-        if item.get(rel) is not None:
-            return cfg["product_table"]
-    return None
-
-
-def embedded_model_keys(item: dict) -> list[str]:
-    return [cfg["model_table"] for cfg in CATALOG_TYPES.values() if item.get(cfg["model_table"]) is not None]
 
 
 def aggregated_family_filter(tipo: str | None) -> dict | None:
@@ -261,11 +282,7 @@ def aggregated_family_filter(tipo: str | None) -> dict | None:
         "field": "_tipo_catalogo",
         "label": "Subcategoria",
         "options": tipos,
-        "labels": {
-            t: CATALOG_TYPES[t]["label"]
-            for t in tipos
-            if t in CATALOG_TYPES
-        },
+        "labels": {t: CATALOG_TYPES[t]["label"] for t in tipos if t in CATALOG_TYPES},
     }
 
 
@@ -273,11 +290,7 @@ def storefront_filters_for_model_tipo(tipo: str | None) -> list[dict]:
     if not is_valid_tipo(tipo):
         return []
     cfg = CATALOG_TYPES[tipo]
-    if cfg.get("storefront_filters"):
-        return list(cfg["storefront_filters"])
-    from models.storefront_meta import storefront_filters_for_model
-
-    return storefront_filters_for_model(cfg["model_schema"])
+    return list(cfg["storefront_filters"]) if cfg.get("storefront_filters") else []
 
 
 def storefront_filters_for_category_tipo(tipo: str | None) -> list[dict]:
@@ -292,34 +305,22 @@ def catalog_metadata() -> dict:
     from models.schemas import CATEGORY_DEFINITIONS
     from models.storefront_meta import storefront_context_for_tipo
 
-    def _product_select(cfg: dict) -> str:
-        fields = ["id", "ean", "barcode_url", "visibilidade"]
-        schema = cfg.get("product_schema")
-        if schema is not None:
-            for fname in schema.model_fields:
-                if fname in fields or fname in ("id", "id_modelo", "barcode_url", "visibilidade", "created_at", "updated_at"):
-                    continue
-                if fname in ("dimensoes", "altura", "segmento"):
-                    fields.append(fname)
-        return ", ".join(fields)
-
     tipos = []
     for key, cfg in CATALOG_TYPES.items():
-        ctx = storefront_context_for_tipo(cfg)
+        ctx = storefront_context_for_tipo(key, cfg)
         tipos.append(
             {
                 "tipo": key,
                 "label": cfg.get("label") or key,
-                "model_table": cfg["model_table"],
-                "product_table": cfg["product_table"],
-                "colors_table": cfg.get("colors_table"),
+                "model_table": model_table_for_tipo(key),
+                "product_table": product_table_for_tipo(key),
+                "colors_table": colors_table_for_tipo(key),
                 "storefront_mode": ctx["mode"],
                 "storefront_filters": storefront_filters_for_model_tipo(key),
                 "storefront_picker": ctx["picker"],
                 "storefront_specs": ctx["specs"],
                 "storefront_badge": ctx["badge"],
                 "order_picker_mode": ctx["mode"],
-                "product_select": _product_select(cfg),
             }
         )
 

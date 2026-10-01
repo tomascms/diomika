@@ -23,8 +23,6 @@ router = APIRouter(
 
 CATALOG_EXPORTABLE = {
     "categories",
-    "modelo_almofada_cores",
-    "modelo_assento_cores",
     "pedidos_orcamento",
     "encomendas_internas",
     "contact_messages",
@@ -32,9 +30,9 @@ CATALOG_EXPORTABLE = {
 
 
 def _exportable_tables() -> set[str]:
-    from models.catalog_registry import all_model_tables, all_product_tables
+    from models.catalog_registry import all_colors_tables, all_model_tables, all_product_tables
 
-    return CATALOG_EXPORTABLE | set(all_model_tables()) | set(all_product_tables())
+    return CATALOG_EXPORTABLE | set(all_model_tables()) | set(all_product_tables()) | set(all_colors_tables())
 
 
 def _schema_for(table_name: str):
@@ -68,13 +66,19 @@ def _normalize_row(row: dict) -> dict:
 
 @router.get("/export/{table_name}")
 def export_csv(request: Request, table_name: str):
+    from models.catalog_registry import physical_table_for, tipo_for_table
+
     exportable = _exportable_tables()
     if table_name not in exportable:
         raise HTTPException(status_code=404, detail="Categoria não exportável")
     role = getattr(request.state, "api_role", "admin")
     assert_table_action(table_name, "read", role)
 
-    rows = get_db().table(table_name).select("*").order("created_at", desc=True).execute().data or []
+    query = get_db().table(physical_table_for(table_name)).select("*")
+    tipo = tipo_for_table(table_name)
+    if tipo:
+        query = query.eq("tipo_catalogo", tipo)
+    rows = query.order("created_at", desc=True).execute().data or []
     audit_request(request, action="export", resource=table_name, detail={"rows": len(rows)})
     if not rows:
         return StreamingResponse(
@@ -106,6 +110,8 @@ async def import_csv(
     dry_run: bool = False,
 ):
     """Importa CSV — valida via schema Pydantic; upsert por id quando presente."""
+    from models.catalog_registry import fold_attributes, physical_table_for, tipo_for_table
+
     exportable = _exportable_tables()
     if table_name not in exportable:
         raise HTTPException(status_code=404, detail="Categoria não importável")
@@ -113,6 +119,8 @@ async def import_csv(
         raise HTTPException(status_code=400, detail="Importação não permitida para esta tabela")
     role = getattr(request.state, "api_role", "admin")
     assert_table_action(table_name, "create", role)
+    physical_table = physical_table_for(table_name)
+    tipo = tipo_for_table(table_name)
 
     schema = _schema_for(table_name)
     raw = await file.read()
@@ -137,6 +145,9 @@ async def import_csv(
             skipped += 1
             continue
         record_id = payload.pop("id", None)
+        payload = fold_attributes(table_name, payload)
+        if tipo:
+            payload["tipo_catalogo"] = tipo
         try:
             validated = schema.model_validate(payload)
             data = validated.model_dump(mode="json")
@@ -153,10 +164,10 @@ async def import_csv(
 
         try:
             if record_id:
-                db.table(table_name).update(data).eq("id", record_id).execute()
+                db.table(physical_table).update(data).eq("id", record_id).execute()
                 updated += 1
             else:
-                db.table(table_name).insert(data).execute()
+                db.table(physical_table).insert(data).execute()
                 created += 1
         except Exception as exc:
             errors.append(f"Linha {idx}: {str(exc)[:120]}")

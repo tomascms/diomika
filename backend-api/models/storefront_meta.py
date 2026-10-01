@@ -1,10 +1,19 @@
-"""Metadados de vitrine derivados automaticamente dos schemas Pydantic."""
+"""Metadados de vitrine — esquema unificado: derivados do registo de atributos
+por categoria (models/catalog_attributes.py), não de introspecção Pydantic.
+
+Antes do refactor, cada família tinha a sua própria classe Pydantic e esta
+função lia `model_schema.model_fields` para descobrir "qual campo é o
+seletor de tamanho" etc. Agora todas as famílias partilham a mesma classe
+(ProductModel/ProductVariant) — os campos que variam por família vivem em
+`attributes`, descritos em CATEGORY_ATTRIBUTE_SCHEMAS.
+"""
 from __future__ import annotations
+
 import json
 from typing import Any
-from models.ui_schema import field_label, field_widget, is_field_hidden
 
-_STOREFRONT_SKIP = frozenset({"id", "id_categoria", "slug", "nome", "descricao", "visibilidade"})
+from models.catalog_attributes import CATEGORY_ATTRIBUTE_SCHEMAS
+
 
 def _normalize_string_list(value: Any) -> list[str]:
     if value is None:
@@ -21,23 +30,14 @@ def _normalize_string_list(value: Any) -> list[str]:
         return [value.strip()] if value.strip() else []
     return []
 
-def _first_string_list_field(model_schema) -> str | None:
-    for fname, fdef in model_schema.model_fields.items():
-        if field_widget(fdef, fname) == "string_list":
-            return fname
-    return None
 
-def _variant_picker_field(product_schema) -> str:
-    if "dimensoes" in product_schema.model_fields:
-        return "dimensoes"
-    for fname, fdef in product_schema.model_fields.items():
-        if field_widget(fdef, fname) == "dimensions":
-            return fname
-    for fname, fdef in product_schema.model_fields.items():
-        w = field_widget(fdef, fname)
-        if w in ("text", "dimensions") and fname not in _STOREFRONT_SKIP:
-            return fname
-    return "dimensoes"
+def _model_attrs(tipo: str) -> dict:
+    return (CATEGORY_ATTRIBUTE_SCHEMAS.get(tipo) or {}).get("model_attributes") or {}
+
+
+def _variant_attrs(tipo: str) -> dict:
+    return (CATEGORY_ATTRIBUTE_SCHEMAS.get(tipo) or {}).get("variant_attributes") or {}
+
 
 def storefront_picker_for_type(cfg: dict) -> dict | None:
     """Configuração do selector na página de produto (tamanho, altura, etc.)."""
@@ -46,108 +46,78 @@ def storefront_picker_for_type(cfg: dict) -> dict | None:
         return None
     if cfg.get("storefront_picker"):
         return dict(cfg["storefront_picker"])
-    model_schema = cfg["model_schema"]
-    product_schema = cfg["product_schema"]
-    if mode == "assento":
-        field = cfg.get("model_discriminator_field") or _first_string_list_field(model_schema) or "alturas"
-        fdef = model_schema.model_fields.get(field)
-        return {
-            "source": "model",
-            "field": field,
-            "label": field_label(field, fdef) if fdef else "Variante",
-            "format": "plain",
-        }
-    field = _variant_picker_field(product_schema)
-    fdef = product_schema.model_fields.get(field)
-    is_dim = field == "dimensoes" or (fdef is not None and field_widget(fdef, field) == "dimensions")
-    fmt = "dimensions" if is_dim else "plain"
-    return {
-        "source": "products",
-        "field": field,
-        "label": field_label(field, fdef) if fdef else "Tamanho",
-        "format": fmt,
-        "suffix": " cm" if fmt == "dimensions" else "",
-    }
 
-def storefront_specs_for_model(model_schema, picker: dict | None = None, badge: dict | None = None) -> list[dict]:
-    """Campos do modelo a mostrar na ficha de produto da loja."""
+    tipo = cfg.get("_tipo") or ""
+    if mode == "assento":
+        for name, desc in _model_attrs(tipo).items():
+            if desc["type"] == "string_list":
+                return {"source": "model", "field": name, "label": desc.get("label") or "Variante", "format": "plain"}
+        return {"source": "model", "field": "alturas", "label": "Variante", "format": "plain"}
+
+    for name, desc in _variant_attrs(tipo).items():
+        if desc["type"] == "dimension_single":
+            return {
+                "source": "products",
+                "field": name,
+                "label": desc.get("label") or "Tamanho",
+                "format": "dimensions",
+                "suffix": " cm",
+            }
+    for name, desc in _variant_attrs(tipo).items():
+        if not desc.get("hidden"):
+            return {"source": "products", "field": name, "label": desc.get("label") or "Tamanho", "format": "plain"}
+    return None
+
+
+def storefront_specs_for_model(tipo: str, picker: dict | None = None, badge: dict | None = None) -> list[dict]:
+    """Atributos do modelo a mostrar na ficha de produto da loja."""
     picker_field = picker.get("field") if picker and picker.get("source") == "model" else None
     badge_field = badge.get("field") if badge else None
     specs: list[dict] = []
-    for fname, fdef in model_schema.model_fields.items():
-        extra = fdef.json_schema_extra or {}
-        if is_field_hidden(fname, fdef, {}) and fname not in _STOREFRONT_SKIP:
-            if extra.get("ui_hidden"):
-                continue
-        if fname in _STOREFRONT_SKIP:
+    for name, desc in _model_attrs(tipo).items():
+        if desc.get("hidden") or name in (picker_field, badge_field):
             continue
-        if fname.startswith("id_") or extra.get("ui_relation"):
-            continue
-        if fname == picker_field or fname == badge_field:
-            continue
-        if extra.get("ui_storefront") is False:
-            continue
-        widget = field_widget(fdef, fname)
-        if widget in ("relation", "image", "multi_image"):
-            continue
-        if widget == "string_list":
-            continue
+        if desc["type"] == "string_list":
+            continue  # já representado pelo picker, quando aplicável
         specs.append(
             {
-                "field": fname,
-                "label": field_label(fname, fdef),
-                "widget": widget,
-                "enum_labels": dict(extra.get("ui_labels") or {}),
+                "field": name,
+                "label": desc.get("label") or name.replace("_", " ").title(),
+                "widget": desc["type"],
+                "enum_labels": dict(desc.get("labels") or {}),
             }
         )
     return specs
 
-def storefront_badge_for_model(model_schema) -> dict | None:
-    """Primeiro campo enum do modelo — badge na grelha de produtos."""
-    for fname, fdef in model_schema.model_fields.items():
-        extra = fdef.json_schema_extra or {}
-        if extra.get("ui_widget") != "enum":
-            continue
-        if extra.get("ui_storefront_badge") is False:
-            continue
-        return {
-            "field": fname,
-            "labels": dict(extra.get("ui_labels") or {}),
-        }
+
+def storefront_badge_for_model(tipo: str) -> dict | None:
+    """Primeiro atributo enum do modelo — badge na grelha de produtos."""
+    for name, desc in _model_attrs(tipo).items():
+        if desc["type"] == "enum" and not desc.get("hidden"):
+            return {"field": name, "labels": dict(desc.get("labels") or {})}
     return None
 
-def storefront_filters_for_model(model_schema) -> list[dict]:
-    out: list[dict] = []
-    for fname, fdef in model_schema.model_fields.items():
-        extra = fdef.json_schema_extra or {}
-        if extra.get("ui_widget") != "enum":
-            continue
-        out.append(
-            {
-                "field": fname,
-                "label": field_label(fname, fdef),
-                "options": list(extra.get("ui_options") or []),
-                "labels": dict(extra.get("ui_labels") or {}),
-            }
-        )
-    return out
 
-def storefront_context_for_tipo(cfg: dict) -> dict:
+def storefront_context_for_tipo(tipo: str, cfg: dict) -> dict:
+    cfg = {**cfg, "_tipo": tipo}
     picker = storefront_picker_for_type(cfg)
-    badge = storefront_badge_for_model(cfg["model_schema"])
+    badge = storefront_badge_for_model(tipo)
     return {
         "mode": cfg.get("storefront_mode") or "variantes",
         "product_table": cfg["product_table"],
         "picker": picker,
-        "specs": storefront_specs_for_model(cfg["model_schema"], picker, badge),
+        "specs": storefront_specs_for_model(tipo, picker, badge),
         "badge": badge,
     }
 
-def attach_storefront_fields(data: dict, cfg: dict) -> dict:
+
+def attach_storefront_fields(data: dict, tipo: str, cfg: dict) -> dict:
     """Normaliza campos usados pelo picker (ex.: listas JSON de alturas)."""
-    picker = storefront_picker_for_type(cfg)
+    picker = storefront_picker_for_type({**cfg, "_tipo": tipo})
     if picker and picker.get("source") == "model":
         field = picker.get("field")
-        if field and field in data:
-            data[field] = _normalize_string_list(data[field])
+        attrs = data.get("attributes") or {}
+        if field and field in attrs:
+            attrs[field] = _normalize_string_list(attrs[field])
+            data["attributes"] = attrs
     return data

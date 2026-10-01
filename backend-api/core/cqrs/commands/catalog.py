@@ -16,8 +16,10 @@ from models.schemas import category_definition_for_slug
 
 
 def soft_delete(table: str, record_id: str) -> dict:
+    from models.catalog_registry import physical_table_for
+
     db = get_db()
-    res = db.table(table).update({"visibilidade": False}).eq("id", record_id).execute()
+    res = db.table(physical_table_for(table)).update({"visibilidade": False}).eq("id", record_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Registo não encontrado")
     return {"status": "soft_deleted", "id": record_id}

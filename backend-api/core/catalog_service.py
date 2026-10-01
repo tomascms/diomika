@@ -35,14 +35,16 @@ def catalogue_for_category(
     *,
     filters: dict[str, str] | None = None,
     tipo_filter: str | None = None,
+    limit: int = 24,
+    offset: int = 0,
 ) -> list:
     if not is_valid_storefront_tipo(tipo):
         raise HTTPException(status_code=404, detail=f"Tipo de catálogo «{tipo}» desconhecido.")
     active = _resolve_storefront_filters(tipo, filters, tipo_filter)
     if aggregated_tipos_for_tipo(tipo):
-        return catalogue_models_aggregated(tipo, id_categoria, filters=active)
+        return catalogue_models_aggregated(tipo, id_categoria, filters=active, limit=limit, offset=offset)
     db_filters = {k: v for k, v in active.items() if not k.startswith("_")}
-    return catalogue_models_for_tipo(tipo, id_categoria, filters=db_filters)
+    return catalogue_models_for_tipo(tipo, id_categoria, filters=db_filters, limit=limit, offset=offset)
 
 
 def model_detail_for_tipo(tipo: str, id_modelo: str) -> dict | None:

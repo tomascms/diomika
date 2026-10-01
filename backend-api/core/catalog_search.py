@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from core.catalog_storefront import models_detail_map_for_tipo
 from core.database import get_db
 from core.visibility import is_visible
-from models.catalog_registry import CATALOG_TYPES
+from models.schemas import PRODUCT_MODELS_TABLE
 
 logger = logging.getLogger("diomika-api")
 
@@ -19,52 +18,53 @@ def _model_cover_path(model: dict) -> str:
 
 
 def _search_models_by_name(q: str, *, limit: int) -> list[dict]:
+    """1 query à tabela única de modelos — antes disparava 1 query por família
+    de catálogo em paralelo (12 round-trips para o mesmo resultado)."""
     needle = q.strip()
     if len(needle) < 2:
         return []
 
-    db = get_db()
-    per_table = max(8, limit // max(len(CATALOG_TYPES), 1) + 1)
-    out: list[dict] = []
+    try:
+        res = (
+            get_db()
+            .table(PRODUCT_MODELS_TABLE)
+            .select("id, nome, slug, tipo_catalogo, visibilidade, id_categoria, categories(id, nome, slug, tipo_catalogo)")
+            .eq("visibilidade", True)
+            .or_(f"nome.ilike.%{needle}%,slug.ilike.%{needle}%")
+            .limit(max(limit * 2, 16))
+            .execute()
+        )
+    except Exception as exc:
+        logger.debug("Search %s: %s", PRODUCT_MODELS_TABLE, exc)
+        return []
 
-    def _query_tipo(tipo: str, cfg: dict) -> list[dict]:
-        mt = cfg["model_table"]
-        try:
-            res = (
-                db.table(mt)
-                .select("id, nome, slug, visibilidade, id_categoria, categories(id, nome, slug, tipo_catalogo)")
-                .eq("visibilidade", True)
-                .or_(f"nome.ilike.%{needle}%,slug.ilike.%{needle}%")
-                .limit(per_table)
-                .execute()
-            )
-        except Exception as exc:
-            logger.debug("Search %s: %s", mt, exc)
-            return []
-        rows: list[dict] = []
-        ids = [str(row["id"]) for row in (res.data or []) if row.get("id")]
+    ids_by_tipo: dict[str, list[str]] = {}
+    categories_by_id: dict[str, dict] = {}
+    for row in res.data or []:
+        cat = row.get("categories") or {}
+        if isinstance(cat, list) and cat:
+            cat = cat[0]
+        if not isinstance(cat, dict) or not cat.get("id"):
+            continue
+        tipo = row.get("tipo_catalogo")
+        rid = str(row.get("id") or "")
+        if not tipo or not rid:
+            continue
+        ids_by_tipo.setdefault(tipo, []).append(rid)
+        categories_by_id[rid] = cat
+
+    out: list[dict] = []
+    for tipo, ids in ids_by_tipo.items():
         details = models_detail_map_for_tipo(tipo, ids)
-        for row in res.data or []:
-            cat = row.get("categories") or {}
-            if not cat.get("id"):
-                continue
-            detail = details.get(str(row["id"]))
-            if not detail:
-                continue
-            rows.append(
+        for mid, detail in details.items():
+            out.append(
                 {
                     "model": detail,
-                    "category": cat,
+                    "category": categories_by_id.get(mid, {}),
                     "cover_path": _model_cover_path(detail),
                     "_tipo_catalogo": tipo,
                 }
             )
-        return rows
-
-    with ThreadPoolExecutor(max_workers=min(5, len(CATALOG_TYPES))) as pool:
-        futures = [pool.submit(_query_tipo, tipo, cfg) for tipo, cfg in CATALOG_TYPES.items()]
-        for fut in as_completed(futures):
-            out.extend(fut.result())
 
     out.sort(key=lambda r: str((r.get("model") or {}).get("nome") or ""))
     return out[:limit]

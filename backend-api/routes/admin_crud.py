@@ -1,4 +1,13 @@
-"""CRUD genérico para backoffice web — validação via TABLE_MAP."""
+"""CRUD genérico para backoffice web — validação via TABLE_MAP.
+
+Esquema unificado: os nomes de tabela na URL (table_name) continuam a ser os
+"nomes virtuais" de sempre (ex.: "almofada", "modelos_almofadas") — o
+backoffice e as rotas não mudam. Internamente resolvem para 1 de 3 tabelas
+físicas partilhadas (product_models / product_variants / product_model_colors)
+através de physical_table_for()/tipo_for_table(), com o filtro `tipo_catalogo`
+aplicado onde é preciso distinguir uma família da outra (listas, criação).
+Uma pesquisa por `id` não precisa do filtro — o id já é único na tabela toda.
+"""
 from __future__ import annotations
 
 import json
@@ -24,6 +33,7 @@ from core.idempotency import (
 )
 from core.local_only import admin_must_be_local
 from core.rate_limit import get_client_ip
+from models.catalog_attributes import CATEGORY_ATTRIBUTE_SCHEMAS
 from models.catalog_registry import (
     CATALOG_TYPES,
     admin_list_select_query,
@@ -33,11 +43,14 @@ from models.catalog_registry import (
     apply_barcode_on_save,
     colors_table_for_model_table,
     colors_table_for_tipo,
+    fold_attributes,
+    level_for_table,
     list_select_query,
+    physical_table_for,
     relation_options_select_query,
     tipo_for_table,
 )
-from models.schemas import TABLE_MAP, aggregated_tipos_for_tipo
+from models.schemas import PRODUCT_MODELS_TABLE, TABLE_MAP, aggregated_tipos_for_tipo
 from models.ui_schema import get_form_fields
 from utils.barcode_gen import apply_barcode_url
 from utils.image_urls import content_type_for_path, resolve_image_value
@@ -53,6 +66,22 @@ router = APIRouter(
 )
 
 
+# --- Resolução de tabela virtual -> física + família (tipo_catalogo) ---
+
+def _db_table(table_name: str):
+    return get_db().table(physical_table_for(table_name))
+
+
+def _scoped(query, table_name: str):
+    """Filtra pela família (tipo_catalogo) quando a tabela virtual é de catálogo."""
+    tipo = tipo_for_table(table_name)
+    return query.eq("tipo_catalogo", tipo) if tipo else query
+
+
+def _attr(payload: dict, name: str):
+    return (payload.get("attributes") or {}).get(name)
+
+
 def _schedule_barcode_update(table_name: str, record_id: str, ean: str | None) -> None:
     """Gera barcode em background — evita timeout no guardar (upload storage é lento)."""
     code = (ean or "").strip()
@@ -65,7 +94,7 @@ def _schedule_barcode_update(table_name: str, record_id: str, ean: str | None) -
             apply_barcode_url(payload)
             url = payload.get("barcode_url")
             if url:
-                get_db().table(table_name).update({"barcode_url": url}).eq("id", record_id).execute()
+                _db_table(table_name).update({"barcode_url": url}).eq("id", record_id).execute()
         except Exception as exc:
             logger.warning("Barcode async %s/%s: %s", table_name, record_id, exc)
 
@@ -86,9 +115,9 @@ def _client_error(exc: Exception) -> str:
         return str(msg)
     text = str(exc).strip()
     if "duplicate key" in text.lower() or "23505" in text:
-        if "assento_id_modelo_key" in text or "assento_modelo_altura" in text:
+        if "assento_id_modelo_key" in text or "assento_modelo_altura" in text or "variant_modelo_altura" in text:
             return "Já existe um assento com esta altura neste modelo."
-        if "modelo_cores_model_numero" in text or "modelo_cores" in text.lower():
+        if "modelo_cores_model_numero" in text or "model_colors_numero" in text.lower():
             return "Já existe esta cor (número) neste modelo."
         if "ean" in text.lower():
             return "Este EAN já existe noutro produto."
@@ -105,10 +134,7 @@ def _is_expected_client_conflict(exc: Exception) -> bool:
 
 def _schema_for(table: str):
     if table not in TABLE_MAP:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Tabela «{table}» não registada no catálogo",
-        )
+        raise HTTPException(status_code=404, detail=f"Tabela «{table}» não registada no catálogo")
     schema = TABLE_MAP[table].get("schema")
     if not schema:
         raise HTTPException(status_code=404, detail="Sem schema")
@@ -141,34 +167,43 @@ def _audit(request: Request, action: str, resource: str, resource_id: str | None
     )
 
 
-def _invalidate_catalog_cache(
-    *,
-    table_name: str | None = None,
-    record: dict | None = None,
-    record_id: str | None = None,
-) -> None:
+def _invalidate_catalog_cache(*, table_name: str | None = None, record: dict | None = None, record_id: str | None = None) -> None:
     invalidate_catalog_change(table_name=table_name, record=record, record_id=record_id)
 
 
 def _tipo_for_model_id(model_id: str | None) -> str:
     if not model_id:
         raise ValueError("Modelo em falta.")
-    db = get_db()
-    for tipo, cfg in CATALOG_TYPES.items():
-        mt = cfg["model_table"]
-        row = db.table(mt).select("id").eq("id", model_id).limit(1).execute().data
-        if row:
-            return tipo
-    raise ValueError("Modelo não encontrado.")
-
-
-def _model_discriminator_values(model_id: str, model_table: str, field: str) -> list[str]:
-    db = get_db()
-    res = db.table(model_table).select(field).eq("id", model_id).limit(1).execute()
-    row = (res.data or [None])[0]
+    row = (
+        get_db()
+        .table(PRODUCT_MODELS_TABLE)
+        .select("tipo_catalogo")
+        .eq("id", str(model_id))
+        .limit(1)
+        .execute()
+        .data
+        or [None]
+    )[0]
     if not row:
         raise ValueError("Modelo não encontrado.")
-    values = row.get(field) or []
+    return row["tipo_catalogo"]
+
+
+def _model_attribute_values(model_id: str, field: str) -> list[str]:
+    """Lista de valores disponíveis (ex.: dimensões) definidos no modelo."""
+    row = (
+        get_db()
+        .table(PRODUCT_MODELS_TABLE)
+        .select("attributes")
+        .eq("id", model_id)
+        .limit(1)
+        .execute()
+        .data
+        or [None]
+    )[0]
+    if not row:
+        raise ValueError("Modelo não encontrado.")
+    values = (row.get("attributes") or {}).get(field) or []
     if isinstance(values, str):
         try:
             values = json.loads(values)
@@ -186,8 +221,8 @@ def _validate_model_discriminator(table_name: str, payload: dict, record_id: str
     if not model_field:
         return
 
-    product_field = "altura" if table_name == "assento" else model_field
-    value = (payload.get(product_field) or "").strip()
+    product_field = "altura" if tipo == "assento" else model_field
+    value = str(_attr(payload, product_field) or "").strip()
     if not value:
         raise ValueError(f"Selecione {product_field.replace('_', ' ')} desta variante.")
 
@@ -195,17 +230,19 @@ def _validate_model_discriminator(table_name: str, payload: dict, record_id: str
     if not id_modelo:
         return
 
-    mt = cfg["model_table"]
-    allowed = _model_discriminator_values(str(id_modelo), mt, model_field)
+    allowed = _model_attribute_values(str(id_modelo), model_field)
     if value not in allowed:
         raise ValueError(f"«{value}» não está definido no modelo.")
 
-    db = get_db()
-    pt = cfg["product_table"]
-    q = db.table(pt).select("id").eq("id_modelo", str(id_modelo)).eq(product_field, value)
+    q = (
+        _db_table(table_name)
+        .select("id")
+        .eq("id_modelo", str(id_modelo))
+        .eq(f"attributes->>{product_field}", value)
+    )
     if record_id:
         q = q.neq("id", record_id)
-    if (q.limit(1).execute().data or []):
+    if q.limit(1).execute().data or []:
         raise ValueError(f"Já existe variante «{value}» neste modelo.")
 
 
@@ -217,10 +254,9 @@ def _validate_oculo(payload: dict, record_id: str | None = None) -> None:
     id_modelo = payload.get("id_modelo")
     if not id_modelo:
         return
-    db = get_db()
     model = (
-        db.table("modelos_oculos")
-        .select("tipo_oculo")
+        _db_table("modelos_oculos")
+        .select("attributes")
         .eq("id", str(id_modelo))
         .limit(1)
         .execute()
@@ -229,23 +265,24 @@ def _validate_oculo(payload: dict, record_id: str | None = None) -> None:
     )[0]
     if not model:
         raise ValueError("Modelo de óculos não encontrado.")
-    tipo_oculo = model.get("tipo_oculo")
-    segmento = payload.get("segmento")
+    tipo_oculo = (model.get("attributes") or {}).get("tipo_oculo")
+    segmento = _attr(payload, "segmento")
+    db_variants = _db_table("oculo")
     if tipo_oculo == "leitura":
         if segmento:
             raise ValueError("Óculos de leitura não têm segmento — use produto sortido.")
-        q = db.table("oculo").select("id").eq("id_modelo", str(id_modelo))
+        q = db_variants.select("id").eq("id_modelo", str(id_modelo))
         if record_id:
             q = q.neq("id", record_id)
-        if (q.limit(1).execute().data or []):
+        if q.limit(1).execute().data or []:
             raise ValueError("Este modelo de leitura já tem produto sortido.")
         return
     if not segmento:
         raise ValueError("Selecione segmento (homem, mulher ou criança).")
-    q = db.table("oculo").select("id").eq("id_modelo", str(id_modelo)).eq("segmento", segmento)
+    q = db_variants.select("id").eq("id_modelo", str(id_modelo)).eq("attributes->>segmento", segmento)
     if record_id:
         q = q.neq("id", record_id)
-    if (q.limit(1).execute().data or []):
+    if q.limit(1).execute().data or []:
         raise ValueError(f"Já existe produto para segmento «{segmento}» neste modelo.")
 
 
@@ -253,10 +290,9 @@ def _validate_regional_product(payload: dict, record_id: str | None = None) -> N
     id_modelo = payload.get("id_modelo")
     if not id_modelo:
         return
-    db = get_db()
     model = (
-        db.table("modelos_regionais")
-        .select("subtipo, dimensoes")
+        _db_table("modelos_regionais")
+        .select("attributes")
         .eq("id", str(id_modelo))
         .limit(1)
         .execute()
@@ -265,19 +301,25 @@ def _validate_regional_product(payload: dict, record_id: str | None = None) -> N
     )[0]
     if not model:
         raise ValueError("Modelo regional não encontrado.")
-    subtipo = model.get("subtipo")
+    attrs = model.get("attributes") or {}
+    subtipo = attrs.get("subtipo")
     needs_dim = subtipo in ("pano_cozinha", "toalha", "protetor")
-    dim = (payload.get("dimensoes") or "").strip()
+    dim = str(_attr(payload, "dimensoes") or "").strip()
     if needs_dim:
         if not dim:
             raise ValueError("Selecione dimensão desta variante.")
-        allowed = _model_discriminator_values(str(id_modelo), "modelos_regionais", "dimensoes")
+        allowed = _model_attribute_values(str(id_modelo), "dimensoes")
         if dim not in allowed:
             raise ValueError(f"Dimensão «{dim}» não está definida no modelo.")
-        q = db.table("regional").select("id").eq("id_modelo", str(id_modelo)).eq("dimensoes", dim)
+        q = (
+            _db_table("regional")
+            .select("id")
+            .eq("id_modelo", str(id_modelo))
+            .eq("attributes->>dimensoes", dim)
+        )
         if record_id:
             q = q.neq("id", record_id)
-        if (q.limit(1).execute().data or []):
+        if q.limit(1).execute().data or []:
             raise ValueError(f"Já existe variante «{dim}» neste modelo.")
     elif dim:
         raise ValueError("Este subtipo não usa dimensão no produto.")
@@ -298,7 +340,7 @@ def _validate_unico_single_product(table_name: str, payload: dict, record_id: st
     id_modelo = payload.get("id_modelo")
     if not id_modelo:
         return
-    q = get_db().table(table_name).select("id").eq("id_modelo", str(id_modelo))
+    q = _db_table(table_name).select("id").eq("id_modelo", str(id_modelo))
     if record_id:
         q = q.neq("id", record_id)
     if q.limit(1).execute().data or []:
@@ -329,27 +371,18 @@ def _assert_model_category_tipo(table_name: str, payload: dict) -> None:
         if not cat:
             raise ValueError("Categoria não encontrada.")
         cat_tipo = str(cat.get("tipo_catalogo") or "").strip()
-        allowed = {tipo}
         aggregated = aggregated_tipos_for_tipo(cat_tipo) or []
-        if aggregated:
-            allowed = set(aggregated)
-        elif cat_tipo:
-            allowed = {cat_tipo}
+        allowed = set(aggregated) if aggregated else ({cat_tipo} if cat_tipo else {tipo})
         if tipo not in allowed:
-            raise ValueError(
-                f"A categoria «{cat.get('nome') or cat_tipo}» não aceita modelos do tipo «{tipo}»."
-            )
+            raise ValueError(f"A categoria «{cat.get('nome') or cat_tipo}» não aceita modelos do tipo «{tipo}».")
         return
 
     if table_name in all_product_tables() or table_name in all_colors_tables():
         if not id_modelo:
             return
-        mt = CATALOG_TYPES.get(tipo, {}).get("model_table")
-        if not mt:
-            return
         model = (
-            db.table(mt)
-            .select("id,id_categoria")
+            db.table(PRODUCT_MODELS_TABLE)
+            .select("id,id_categoria,tipo_catalogo")
             .eq("id", str(id_modelo))
             .limit(1)
             .execute()
@@ -358,8 +391,8 @@ def _assert_model_category_tipo(table_name: str, payload: dict) -> None:
         )[0]
         if not model:
             raise ValueError("Modelo não encontrado.")
-        # Reusa a mesma regra via o modelo pai
-        _assert_model_category_tipo(mt, {"id_categoria": model.get("id_categoria")})
+        if model.get("tipo_catalogo") != tipo:
+            raise ValueError("O modelo escolhido não pertence a esta família de produto.")
 
 
 def _validate_product_payload(table_name: str, payload: dict, record_id: str | None = None) -> None:
@@ -376,46 +409,35 @@ def _validate_product_payload(table_name: str, payload: dict, record_id: str | N
 
 def _publish_catalog_children(table_name: str, record_id: str, *, tipo: str | None = None) -> None:
     """Torna visíveis cores e produtos filhos quando o modelo é publicado."""
+    if table_name not in all_model_tables():
+        return
     db = get_db()
-    if table_name in all_model_tables():
-        cfg = CATALOG_TYPES.get(tipo or tipo_for_table(table_name) or "") or {}
-        pt = cfg.get("product_table")
-        ct = cfg.get("colors_table")
-        if pt:
-            db.table(pt).update({"visibilidade": True}).eq("id_modelo", record_id).execute()
-        if ct:
-            db.table(ct).update({"visibilidade": True}).eq("id_modelo", record_id).execute()
+    db.table("product_variants").update({"visibilidade": True}).eq("id_modelo", record_id).execute()
+    db.table("product_model_colors").update({"visibilidade": True}).eq("id_modelo", record_id).execute()
 
 
 def _hide_catalog_children(table_name: str, record_id: str, *, tipo: str | None = None) -> None:
     """Oculta cores e produtos filhos quando o modelo é ocultado."""
+    if table_name not in all_model_tables():
+        return
     db = get_db()
-    if table_name in all_model_tables():
-        cfg = CATALOG_TYPES.get(tipo or tipo_for_table(table_name) or "") or {}
-        pt = cfg.get("product_table")
-        ct = cfg.get("colors_table")
-        if pt:
-            db.table(pt).update({"visibilidade": False}).eq("id_modelo", record_id).execute()
-        if ct:
-            db.table(ct).update({"visibilidade": False}).eq("id_modelo", record_id).execute()
+    db.table("product_variants").update({"visibilidade": False}).eq("id_modelo", record_id).execute()
+    db.table("product_model_colors").update({"visibilidade": False}).eq("id_modelo", record_id).execute()
 
 
 def _assert_ean_globally_unique(table_name: str, payload: dict, record_id: str | None = None) -> None:
-    """EAN único em todas as tabelas de produto (além do UNIQUE por tabela na BD)."""
+    """EAN único — 1 tabela partilhada, já reforçado por UNIQUE na BD; o
+    pré-check aqui só existe para dar uma mensagem de erro amigável."""
     if table_name not in all_product_tables():
         return
     ean = str(payload.get("ean") or "").strip()
     if not ean:
         return
-    db = get_db()
-    for pt in all_product_tables():
-        q = db.table(pt).select("id").eq("ean", ean)
-        if record_id and pt == table_name:
-            q = q.neq("id", record_id)
-        if q.limit(1).execute().data or []:
-            if pt == table_name:
-                raise ValueError(f"Já existe um produto com EAN {ean} nesta família.")
-            raise ValueError(f"EAN {ean} já está registado noutro catálogo ({pt}).")
+    q = _db_table(table_name).select("id").eq("ean", ean)
+    if record_id:
+        q = q.neq("id", record_id)
+    if q.limit(1).execute().data or []:
+        raise ValueError(f"Já existe um produto com EAN {ean}.")
 
 
 def _assert_model_publishable(table_name: str, record_id: str) -> None:
@@ -425,65 +447,58 @@ def _assert_model_publishable(table_name: str, record_id: str) -> None:
     """
     if table_name not in all_model_tables():
         return
-    tipo = tipo_for_table(table_name)
-    cfg = CATALOG_TYPES.get(tipo or "") or {}
-    pt = cfg.get("product_table")
-    ct = cfg.get("colors_table")
     db = get_db()
-    if ct:
-        colors = (
-            db.table(ct)
-            .select("id,imagem")
-            .eq("id_modelo", record_id)
-            .limit(20)
-            .execute()
-            .data
-            or []
-        )
-        if not any(str(c.get("imagem") or "").strip() for c in colors):
-            raise ValueError("Adicione pelo menos uma cor com imagem antes de publicar na loja.")
-    if pt:
-        products = (
-            db.table(pt)
-            .select("id,ean")
-            .eq("id_modelo", record_id)
-            .limit(50)
-            .execute()
-            .data
-            or []
-        )
-        if not any(str(p.get("ean") or "").strip() for p in products):
-            raise ValueError("Adicione pelo menos um produto com EAN antes de publicar na loja.")
+    colors = (
+        db.table("product_model_colors")
+        .select("id,imagem")
+        .eq("id_modelo", record_id)
+        .limit(20)
+        .execute()
+        .data
+        or []
+    )
+    if not any(str(c.get("imagem") or "").strip() for c in colors):
+        raise ValueError("Adicione pelo menos uma cor com imagem antes de publicar na loja.")
+    products = (
+        db.table("product_variants")
+        .select("id,ean")
+        .eq("id_modelo", record_id)
+        .limit(50)
+        .execute()
+        .data
+        or []
+    )
+    if not any(str(p.get("ean") or "").strip() for p in products):
+        raise ValueError("Adicione pelo menos um produto com EAN antes de publicar na loja.")
 
 
 def _cascade_category_visibility(category_id: str, vis: bool) -> None:
     """Ao tornar categoria visível/oculta, propaga para modelos (e produtos/cores)."""
     db = get_db()
-    for tipo, cfg in CATALOG_TYPES.items():
-        mt = cfg.get("model_table")
-        if not mt:
+    models = (
+        db.table(PRODUCT_MODELS_TABLE)
+        .select("id")
+        .eq("id_categoria", str(category_id))
+        .execute()
+        .data
+        or []
+    )
+    for row in models:
+        mid = str(row.get("id") or "")
+        if not mid:
             continue
-        models = (
-            db.table(mt)
-            .select("id")
-            .eq("id_categoria", str(category_id))
-            .execute()
-            .data
-            or []
-        )
-        for row in models:
-            mid = str(row.get("id") or "")
-            if not mid:
-                continue
-            db.table(mt).update({"visibilidade": vis}).eq("id", mid).execute()
-            if vis:
-                _publish_catalog_children(mt, mid, tipo=tipo)
-            else:
-                _hide_catalog_children(mt, mid, tipo=tipo)
+        db.table(PRODUCT_MODELS_TABLE).update({"visibilidade": vis}).eq("id", mid).execute()
+        if vis:
+            _publish_catalog_children(PRODUCT_MODELS_TABLE, mid)
+        else:
+            _hide_catalog_children(PRODUCT_MODELS_TABLE, mid)
 
 
 def _enrich_create_payload(table_name: str, payload: dict) -> dict:
     out = dict(payload)
+    tipo = tipo_for_table(table_name)
+    if tipo:
+        out["tipo_catalogo"] = tipo
     _assert_model_category_tipo(table_name, out)
     _assert_ean_globally_unique(table_name, out)
     _validate_product_payload(table_name, out)
@@ -495,44 +510,23 @@ def _enrich_create_payload(table_name: str, payload: dict) -> dict:
 
 def _enrich_update_payload(table_name: str, payload: dict, record_id: str) -> dict:
     out = dict(payload)
-    db = get_db()
+    tipo = tipo_for_table(table_name)
+    if tipo:
+        out["tipo_catalogo"] = tipo
+    db = _db_table(table_name)
     if table_name in all_model_tables() and not out.get("id_categoria"):
-        row = (
-            db.table(table_name)
-            .select("id_categoria")
-            .eq("id", record_id)
-            .limit(1)
-            .execute()
-            .data
-            or [None]
-        )[0]
+        row = (db.select("id_categoria").eq("id", record_id).limit(1).execute().data or [None])[0]
         if row:
             out.setdefault("id_categoria", row.get("id_categoria"))
     if _product_validation_table(table_name) or table_name in ("assento", "oculo", "regional"):
-        if table_name == "assento" and (not out.get("altura") or not out.get("id_modelo")):
-            row = (
-                db.table("assento")
-                .select("altura, id_modelo")
-                .eq("id", record_id)
-                .limit(1)
-                .execute()
-                .data
-            )
-            if row:
-                out.setdefault("altura", row[0].get("altura"))
-                out.setdefault("id_modelo", row[0].get("id_modelo"))
         if not out.get("id_modelo"):
-            row = (
-                db.table(table_name)
-                .select("id_modelo")
-                .eq("id", record_id)
-                .limit(1)
-                .execute()
-                .data
-                or [None]
-            )[0]
+            row = (db.select("id_modelo").eq("id", record_id).limit(1).execute().data or [None])[0]
             if row:
                 out.setdefault("id_modelo", row.get("id_modelo"))
+        if not out.get("attributes"):
+            row = (db.select("attributes").eq("id", record_id).limit(1).execute().data or [None])[0]
+            if row and row.get("attributes"):
+                out.setdefault("attributes", row.get("attributes"))
         _validate_product_payload(table_name, out, record_id)
         _assert_ean_globally_unique(table_name, out, record_id)
     _assert_model_category_tipo(table_name, out)
@@ -541,8 +535,20 @@ def _enrich_update_payload(table_name: str, payload: dict, record_id: str) -> di
     return out
 
 
-def _idempotency_op(table_name: str) -> str:
-    return f"admin_create:{table_name}"
+def _idempotency_op(table_name: str, payload: dict) -> str:
+    """Âmbito da chave de idempotência: operação + hash do corpo do pedido.
+
+    Sem o hash, reutilizar a mesma Idempotency-Key num pedido *diferente*
+    devolvia em silêncio a resposta do primeiro pedido (bug real — ver
+    auditoria). Incluir o hash faz pedidos diferentes terem operações
+    diferentes, por isso nunca partilham resposta em cache.
+    """
+    import hashlib
+
+    body_hash = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()[:24]
+    return f"admin_create:{table_name}:{body_hash}"
 
 
 def _resolve_image_fields(table_name: str, payload: dict) -> dict:
@@ -625,7 +631,7 @@ def list_relation_options(
     _schema_for(table_name)
     assert_table_action(table_name, "read", _role(request))
     limit = min(max(limit, 1), 300)
-    query = get_db().table(table_name).select(relation_options_select_query(table_name))
+    query = _scoped(_db_table(table_name).select(relation_options_select_query(table_name)), table_name)
     if visible_only:
         query = query.eq("visibilidade", True)
     if id_modelo and table_name in (*all_colors_tables(), *all_product_tables()):
@@ -656,11 +662,7 @@ def list_relation_options(
             {
                 "id": r["id"],
                 "label": _label(r) or str(r.get("id", ""))[:8],
-                **(
-                    {"tipo_catalogo": r["tipo_catalogo"]}
-                    if table_name == "categories" and r.get("tipo_catalogo")
-                    else {}
-                ),
+                **({"tipo_catalogo": r["tipo_catalogo"]} if table_name == "categories" and r.get("tipo_catalogo") else {}),
             }
             for r in rows
         ],
@@ -682,7 +684,7 @@ def list_records(
     limit = min(max(limit, 1), 200)
     offset = max(offset, 0)
     select_q = admin_list_select_query(table_name, embed_category=table_name in all_product_tables())
-    query = get_db().table(table_name).select(select_q)
+    query = _scoped(_db_table(table_name).select(select_q), table_name)
     if visible_only:
         query = query.eq("visibilidade", True)
     if id_modelo and table_name in (*all_colors_tables(), *all_product_tables()):
@@ -690,7 +692,13 @@ def list_records(
     needle = (q or "").strip()
     if needle:
         if table_name in all_product_tables():
-            query = query.or_(f"ean.ilike.%{needle}%,dimensoes.ilike.%{needle}%")
+            tipo = tipo_for_table(table_name) or ""
+            variant_attrs = (CATEGORY_ATTRIBUTE_SCHEMAS.get(tipo) or {}).get("variant_attributes") or {}
+            terms = [f"ean.ilike.%{needle}%"]
+            for attr_name in ("dimensoes", "altura"):
+                if attr_name in variant_attrs:
+                    terms.append(f"attributes->>{attr_name}.ilike.%{needle}%")
+            query = query.or_(",".join(terms))
         elif table_name in all_model_tables():
             query = query.or_(f"nome.ilike.%{needle}%,slug.ilike.%{needle}%")
         elif table_name == "categories":
@@ -713,9 +721,7 @@ def get_record(request: Request, table_name: str, record_id: str):
     _schema_for(table_name)
     assert_table_action(table_name, "read", _role(request))
     res = (
-        get_db()
-        .table(table_name)
-        .select(list_select_query(table_name))
+        _scoped(_db_table(table_name).select(list_select_query(table_name)), table_name)
         .eq("id", record_id)
         .execute()
     )
@@ -733,8 +739,9 @@ def create_record(
 ):
     schema_class = _schema_for(table_name)
     assert_table_action(table_name, "create", _role(request))
+    body = fold_attributes(table_name, body)
     key = (idempotency_key or "").strip()
-    op = _idempotency_op(table_name)
+    op = _idempotency_op(table_name, body)
     if key:
         try:
             state = begin_idempotent_request(key, op)
@@ -753,7 +760,7 @@ def create_record(
         body = _enrich_create_payload(table_name, body)
         validated = schema_class(**body)
         payload = _normalize_payload(validated.model_dump())
-        ins = get_db().table(table_name).insert(payload).execute()
+        ins = _db_table(table_name).insert(payload).execute()
         row = (ins.data or [{}])[0]
         record_id = str(row.get("id") or "")
         if key:
@@ -761,9 +768,8 @@ def create_record(
         _invalidate_catalog_cache(table_name=table_name, record=row, record_id=record_id)
         _audit(request, "create", table_name, resource_id=record_id or None)
         _schedule_barcode_update(table_name, record_id, payload.get("ean"))
-        if payload.get("visibilidade"):
-            cfg = TABLE_MAP.get(table_name, {})
-            _publish_catalog_children(table_name, record_id, tipo=cfg.get("ui_catalog_tipo"))
+        if payload.get("visibilidade") and table_name in all_model_tables():
+            _publish_catalog_children(table_name, record_id)
         return row
     except HTTPException:
         if key:
@@ -785,29 +791,23 @@ def update_record(request: Request, table_name: str, record_id: str, body: dict)
     schema_class = _schema_for(table_name)
     assert_table_action(table_name, "update", _role(request))
     try:
-        body = {**body, "id": record_id}
+        body = fold_attributes(table_name, {**body, "id": record_id})
         body = _resolve_image_fields(table_name, body)
         body = _enrich_update_payload(table_name, body, record_id)
         validated = schema_class(**body)
         payload = _normalize_payload(validated.model_dump())
         payload.pop("id", None)
         payload.pop("created_at", None)
-        res = get_db().table(table_name).update(payload).eq("id", record_id).execute()
+        res = _scoped(_db_table(table_name).update(payload), table_name).eq("id", record_id).execute()
         updated = (res.data or [{}])[0]
-        _invalidate_catalog_cache(
-            table_name=table_name,
-            record={**payload, **updated},
-            record_id=record_id,
-        )
+        _invalidate_catalog_cache(table_name=table_name, record={**payload, **updated}, record_id=record_id)
         _audit(request, "update", table_name, resource_id=record_id)
         _schedule_barcode_update(table_name, record_id, payload.get("ean"))
-        if payload.get("visibilidade"):
-            cfg = TABLE_MAP.get(table_name, {})
-            _publish_catalog_children(table_name, record_id, tipo=cfg.get("ui_catalog_tipo"))
-            if table_name == "categories":
-                _cascade_category_visibility(record_id, True)
-        elif table_name == "categories" and "visibilidade" in payload and not payload.get("visibilidade"):
-            _cascade_category_visibility(record_id, False)
+        if payload.get("visibilidade") and table_name in all_model_tables():
+            _publish_catalog_children(table_name, record_id)
+        if table_name == "categories":
+            if "visibilidade" in payload:
+                _cascade_category_visibility(record_id, bool(payload.get("visibilidade")))
         return (res.data or [{}])[0] if res.data else {"id": record_id, **payload}
     except Exception as exc:
         detail = _client_error(exc)
@@ -831,16 +831,14 @@ def patch_visibility(request: Request, table_name: str, record_id: str, body: di
             _assert_model_publishable(table_name, record_id)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-    res = get_db().table(table_name).update({"visibilidade": vis}).eq("id", record_id).execute()
+    res = _scoped(_db_table(table_name).update({"visibilidade": vis}), table_name).eq("id", record_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Registo não encontrado")
-    cfg = TABLE_MAP.get(table_name, {})
-    tipo = cfg.get("ui_catalog_tipo") or tipo_for_table(table_name)
     if table_name in all_model_tables():
         if vis:
-            _publish_catalog_children(table_name, record_id, tipo=tipo)
+            _publish_catalog_children(table_name, record_id)
         else:
-            _hide_catalog_children(table_name, record_id, tipo=tipo)
+            _hide_catalog_children(table_name, record_id)
     elif table_name == "categories":
         _cascade_category_visibility(record_id, vis)
     _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
@@ -853,29 +851,19 @@ def publish_record(request: Request, table_name: str, record_id: str):
     """Torna o registo visível na loja (e cores/produtos do modelo, se aplicável)."""
     cfg = TABLE_MAP.get(table_name)
     if not cfg:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Tabela «{table_name}» não registada no catálogo",
-        )
+        raise HTTPException(status_code=404, detail=f"Tabela «{table_name}» não registada no catálogo")
     assert_table_action(table_name, "update", _role(request))
     if table_name in all_model_tables():
         try:
             _assert_model_publishable(table_name, record_id)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-    db = get_db()
-    res = db.table(table_name).update({"visibilidade": True}).eq("id", record_id).execute()
+    res = _scoped(_db_table(table_name).update({"visibilidade": True}), table_name).eq("id", record_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Registo não encontrado")
 
-    tipo = cfg.get("ui_catalog_tipo")
-    if cfg.get("ui_embed_colors") and tipo:
-        ct = colors_table_for_tipo(tipo)
-        if ct:
-            db.table(ct).update({"visibilidade": True}).eq("id_modelo", record_id).execute()
-
-    if table_name in all_model_tables() and tipo:
-        _publish_catalog_children(table_name, record_id, tipo=tipo)
+    if table_name in all_model_tables():
+        _publish_catalog_children(table_name, record_id)
     elif table_name == "categories":
         _cascade_category_visibility(record_id, True)
 
@@ -894,7 +882,7 @@ def patch_lida(request: Request, table_name: str, record_id: str, body: dict):
     if "lida" not in body:
         raise HTTPException(status_code=400, detail="Campo lida em falta")
     lida = bool(body["lida"])
-    res = get_db().table(table_name).update({"lida": lida}).eq("id", record_id).execute()
+    res = _db_table(table_name).update({"lida": lida}).eq("id", record_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Registo não encontrado")
     _audit(request, "mark_read", table_name, resource_id=record_id, lida=lida)
@@ -910,16 +898,10 @@ def delete_record(request: Request, table_name: str, record_id: str, hard: bool 
     assert_table_action(table_name, action, _role(request))
     try:
         if hard:
-            db = get_db()
             if table_name in all_model_tables():
-                ct = colors_table_for_model_table(table_name)
-                if ct:
-                    db.table(ct).delete().eq("id_modelo", record_id).execute()
-                for t, cfg in CATALOG_TYPES.items():
-                    if cfg["model_table"] == table_name:
-                        db.table(cfg["product_table"]).delete().eq("id_modelo", record_id).execute()
-                        break
-            db.table(table_name).delete().eq("id", record_id).execute()
+                get_db().table("product_model_colors").delete().eq("id_modelo", record_id).execute()
+                get_db().table("product_variants").delete().eq("id_modelo", record_id).execute()
+            _db_table(table_name).delete().eq("id", record_id).execute()
             _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
             _audit(request, "hard_delete", table_name, resource_id=record_id)
             return {"status": "deleted", "hard": True}
