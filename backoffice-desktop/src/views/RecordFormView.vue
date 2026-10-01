@@ -205,7 +205,9 @@ const loadModelDiscriminatorOptions = async (modelId) => {
   const optionKey = field.widget === 'altura_modelo' ? 'altura_modelo' : 'dimensoes_modelo'
   try {
     const model = await api.getRecord(relation, modelId)
-    const raw = model?.[modelField]
+    // Esquema unificado: dimensoes/alturas do modelo vivem em `attributes`.
+    // O fallback de topo cobre respostas já achatadas pela API da loja.
+    const raw = model?.attributes?.[modelField] ?? model?.[modelField]
     const values = Array.isArray(raw)
       ? raw.map((v) => String(v).trim()).filter(Boolean)
       : typeof raw === 'string'

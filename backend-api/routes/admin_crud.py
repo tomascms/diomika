@@ -74,9 +74,27 @@ def _db_table(table_name: str):
 
 
 def _scoped(query, table_name: str):
-    """Filtra pela família (tipo_catalogo) quando a tabela virtual é de catálogo."""
+    """Filtra pela família (tipo_catalogo) quando a tabela virtual é de catálogo.
+
+    Só `product_models` e `product_variants` têm a coluna. `product_model_colors`
+    não tem — a família de uma cor vem do modelo-pai — por isso filtrá-la aqui
+    dava erro 400 do PostgREST em todas as operações de cores. Nas escritas não
+    é preciso filtro nenhum: o registo já é endereçado por `id`.
+    """
     tipo = tipo_for_table(table_name)
-    return query.eq("tipo_catalogo", tipo) if tipo else query
+    if not tipo or level_for_table(table_name) == "colors":
+        return query
+    return query.eq("tipo_catalogo", tipo)
+
+
+def _scoped_list(query, table_name: str):
+    """Como `_scoped`, mas para listagens de cores filtra a família através do
+    modelo-pai embutido — sem isto a lista de cores de uma família mostrava as
+    cores de todas as famílias, que agora partilham a mesma tabela física."""
+    if level_for_table(table_name) == "colors":
+        tipo = tipo_for_table(table_name)
+        return query.eq(f"{PRODUCT_MODELS_TABLE}.tipo_catalogo", tipo) if tipo else query
+    return _scoped(query, table_name)
 
 
 def _attr(payload: dict, name: str):
@@ -632,7 +650,7 @@ def list_relation_options(
     _schema_for(table_name)
     assert_table_action(table_name, "read", _role(request))
     limit = min(max(limit, 1), 300)
-    query = _scoped(_db_table(table_name).select(relation_options_select_query(table_name)), table_name)
+    query = _scoped_list(_db_table(table_name).select(relation_options_select_query(table_name)), table_name)
     if visible_only:
         query = query.eq("visibilidade", True)
     if id_modelo and table_name in (*all_colors_tables(), *all_product_tables()):
@@ -685,7 +703,7 @@ def list_records(
     limit = min(max(limit, 1), 200)
     offset = max(offset, 0)
     select_q = admin_list_select_query(table_name, embed_category=table_name in all_product_tables())
-    query = _scoped(_db_table(table_name).select(select_q), table_name)
+    query = _scoped_list(_db_table(table_name).select(select_q), table_name)
     if visible_only:
         query = query.eq("visibilidade", True)
     if id_modelo and table_name in (*all_colors_tables(), *all_product_tables()):
@@ -723,7 +741,7 @@ def get_record(request: Request, table_name: str, record_id: str):
     _schema_for(table_name)
     assert_table_action(table_name, "read", _role(request))
     res = (
-        _scoped(_db_table(table_name).select(list_select_query(table_name)), table_name)
+        _scoped_list(_db_table(table_name).select(list_select_query(table_name)), table_name)
         .eq("id", record_id)
         .execute()
     )

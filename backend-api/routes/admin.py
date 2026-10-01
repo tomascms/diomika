@@ -66,7 +66,7 @@ def _normalize_row(row: dict) -> dict:
 
 @router.get("/export/{table_name}")
 def export_csv(request: Request, table_name: str):
-    from models.catalog_registry import physical_table_for, tipo_for_table
+    from models.catalog_registry import level_for_table, physical_table_for, tipo_for_table
 
     exportable = _exportable_tables()
     if table_name not in exportable:
@@ -76,7 +76,13 @@ def export_csv(request: Request, table_name: str):
 
     query = get_db().table(physical_table_for(table_name)).select("*")
     tipo = tipo_for_table(table_name)
-    if tipo:
+    if tipo and level_for_table(table_name) == "colors":
+        # product_model_colors não tem `tipo_catalogo` — a família vem do
+        # modelo-pai, por isso filtra-se pelo embed (ver admin_crud._scoped_list).
+        query = get_db().table(physical_table_for(table_name)).select(
+            "*, product_models!inner(tipo_catalogo)"
+        ).eq("product_models.tipo_catalogo", tipo)
+    elif tipo:
         query = query.eq("tipo_catalogo", tipo)
     rows = query.order("created_at", desc=True).execute().data or []
     audit_request(request, action="export", resource=table_name, detail={"rows": len(rows)})

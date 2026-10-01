@@ -15,8 +15,13 @@ from models.catalog_registry import CATALOG_TYPES, is_valid_tipo
 from models.schemas import PRODUCT_MODEL_COLORS_TABLE, PRODUCT_MODELS_TABLE, PRODUCT_VARIANTS_TABLE
 from models.storefront_meta import attach_storefront_fields, storefront_context_for_tipo
 
-DEFAULT_PAGE_LIMIT = 24
-MAX_PAGE_LIMIT = 60
+# A loja ainda não tem "ver mais": nenhum chamador envia `limit`, por isso o
+# valor por omissão é o tamanho real da página que o cliente vê. Com 24 uma
+# categoria com mais do que 24 modelos visíveis perdia os restantes sem
+# qualquer aviso. Mantém-se um limite (a query continua limitada) mas acima de
+# qualquer categoria plausível deste catálogo — a maior tem 10 modelos.
+DEFAULT_PAGE_LIMIT = 200
+MAX_PAGE_LIMIT = 500
 
 
 def _has_ean(row: dict | None) -> bool:
@@ -259,10 +264,20 @@ def catalogue_models_aggregated(
     db_filters = {k: v for k, v in (filters or {}).items() if not k.startswith("_")}
     out: list[dict] = []
 
+    # limit/offset aplicam-se à lista JÁ fundida, não a cada família: aplicá-los
+    # por família devolvia até N×limit linhas numa página, e o offset saltava
+    # registos em cada família em vez de na lista ordenada, pelo que as páginas
+    # seguintes saltavam e repetiam modelos.
+    page_limit = min(max(int(limit or DEFAULT_PAGE_LIMIT), 1), MAX_PAGE_LIMIT)
+    page_offset = max(int(offset or 0), 0)
+    per_family_limit = min(page_offset + page_limit, MAX_PAGE_LIMIT)
+
     def _fetch(physical: str) -> list[dict]:
         if family and physical != family:
             return []
-        rows = catalogue_models_for_tipo(physical, id_categoria, filters=db_filters, limit=limit, offset=offset)
+        rows = catalogue_models_for_tipo(
+            physical, id_categoria, filters=db_filters, limit=per_family_limit, offset=0
+        )
         batch: list[dict] = []
         for row in rows:
             row["_tipo_catalogo"] = physical
@@ -277,7 +292,7 @@ def catalogue_models_aggregated(
             out.extend(fut.result())
 
     out.sort(key=lambda r: str(r.get("nome") or ""))
-    return out
+    return out[page_offset : page_offset + page_limit]
 
 
 def model_detail_for_tipo_query(tipo: str, id_modelo: str) -> dict | None:

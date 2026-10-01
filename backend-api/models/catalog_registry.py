@@ -226,7 +226,9 @@ def list_select_query(table: str) -> str:
     if physical == PRODUCT_MODELS_TABLE:
         return "*, categories(nome)"
     if physical == PRODUCT_MODEL_COLORS_TABLE:
-        return f"*, {PRODUCT_MODELS_TABLE}(nome)"
+        # !inner: as cores não têm `tipo_catalogo` próprio, por isso a família
+        # filtra-se pelo modelo-pai embutido (ver _scoped_list em admin_crud).
+        return f"*, {PRODUCT_MODELS_TABLE}!inner(nome, tipo_catalogo)"
     return "*"
 
 
@@ -242,7 +244,6 @@ def admin_list_select_query(table: str, *, embed_category: bool = False) -> str:
     if table == "categories":
         return "id, nome, tipo_catalogo, visibilidade, slug, created_at"
     physical = physical_table_for(table)
-    tipo = tipo_for_table(table)
     if physical == PRODUCT_VARIANTS_TABLE:
         cols = ["id", "ean", "tipo_catalogo", "attributes", "visibilidade", "created_at", "id_modelo"]
         if embed_category:
@@ -254,10 +255,11 @@ def admin_list_select_query(table: str, *, embed_category: bool = False) -> str:
             return f"{', '.join(cols)}, categories(nome)"
         return ", ".join(cols)
     if physical == PRODUCT_MODEL_COLORS_TABLE:
-        return "id, numero, nome, visibilidade, id_modelo, created_at"
-    if not tipo:
-        return "id, visibilidade, created_at"
-    return "id, visibilidade, created_at"
+        # !inner: ver list_select_query — a família de uma cor vem do modelo-pai.
+        return f"id, numero, nome, visibilidade, id_modelo, created_at, {PRODUCT_MODELS_TABLE}!inner(tipo_catalogo)"
+    # Tabelas não-catálogo (orçamentos, encomendas, mensagens): `nome` é o que
+    # identifica a linha na lista do backoffice — sem ele mostrava o id.
+    return "id, nome, visibilidade, created_at"
 
 
 def relation_options_select_query(table: str) -> str:
@@ -270,7 +272,7 @@ def relation_options_select_query(table: str) -> str:
     if physical == PRODUCT_VARIANTS_TABLE:
         return "id, ean, id_modelo, tipo_catalogo"
     if physical == PRODUCT_MODEL_COLORS_TABLE:
-        return "id, numero, nome, id_modelo"
+        return f"id, numero, nome, id_modelo, {PRODUCT_MODELS_TABLE}!inner(tipo_catalogo)"
     return "id, nome"
 
 

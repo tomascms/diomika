@@ -94,17 +94,33 @@ def relation_table(field_name: str, field: FieldInfo, table_config: dict | None 
     if field_name == "id_categoria":
         return "categories"
     if field_name == "id_modelo" and table_config:
-        from models.catalog_registry import tipo_for_table
-        from models.schemas import CATALOG_TYPES
+        from models.catalog_registry import model_table_for_tipo, tipo_for_table
 
         ptable = table_config.get("_table_name")
         if ptable:
-            tipo = tipo_for_table(ptable)
-            if tipo and tipo in CATALOG_TYPES:
-                return CATALOG_TYPES[tipo]["model_table"]
-    if field_name == "id_modelo":
-        return "modelos_almofadas"
+            # Nome virtual da tabela de modelos desta família (ex.:
+            # modelos_almofadas) — é essa a chave que /admin/crud/{table}
+            # encaminha. CATALOG_TYPES[tipo]["model_table"] dá o nome físico
+            # partilhado (product_models), que não é encaminhável.
+            return model_table_for_tipo(tipo_for_table(ptable))
     return None
+
+
+def enum_choices(field_name: str, field: FieldInfo, table_name: str | None) -> tuple[Optional[list], dict]:
+    """Opções/rótulos de um campo enum. `categories.tipo_catalogo` não as pode
+    declarar em `json_schema_extra` porque a lista de famílias só existe depois
+    de CATALOG_TYPES ser construído — sem isto o select "Família de produto" no
+    formulário de categorias aparecia vazio."""
+    extra = field_extra(field)
+    explicit = extra.get("ui_options")
+    if explicit:
+        return explicit, extra.get("ui_labels", {})
+    if field_name == "tipo_catalogo" and table_name == "categories":
+        from models.catalog_registry import CATALOG_TYPES
+
+        tipos = sorted(CATALOG_TYPES)
+        return tipos, {t: CATALOG_TYPES[t].get("label") or t for t in tipos}
+    return None, extra.get("ui_labels", {})
 
 
 def get_form_fields(schema_class: type[BaseModel], table_config: dict, table_name: str | None = None) -> List[dict]:
@@ -122,6 +138,7 @@ def get_form_fields(schema_class: type[BaseModel], table_config: dict, table_nam
             continue  # representado pelos campos de ui_attribute_fields abaixo
         if is_field_hidden(name, field, table_config):
             continue
+        options, labels = enum_choices(name, field, table_name)
         fields.append(
             {
                 "name": name,
@@ -130,8 +147,8 @@ def get_form_fields(schema_class: type[BaseModel], table_config: dict, table_nam
                 "required": is_field_required(field),
                 "readonly": is_field_readonly(field),
                 "relation": relation_table(name, field, ctx),
-                "enum_options": field_extra(field).get("ui_options"),
-                "enum_labels": field_extra(field).get("ui_labels", {}),
+                "enum_options": options,
+                "enum_labels": labels,
                 "lock_on_edit": field_extra(field).get("ui_lock_on_edit", False),
                 "placeholder": field_extra(field).get("ui_placeholder") or "",
             }

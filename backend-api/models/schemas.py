@@ -99,16 +99,18 @@ class Categoria(BaseModel):
         if not self.slug:
             self.slug = generate_slug(self.nome)
 
+        # CRUD real de categorias: a família é escolhida por quem cria, e
+        # CATEGORY_DEFINITIONS só serve de predefinição para os slugs
+        # conhecidos — nunca para recusar a escolha. Antes, uma categoria
+        # chamada "Assentos" com outra família era rejeitada com um erro
+        # enganador, o que contrariava o próprio CRUD livre.
         definition = category_definition_for_slug(self.slug)
-        if definition:
-            inferred_tipo = definition["tipo_catalogo"]
-            if self.tipo_catalogo and self.tipo_catalogo != inferred_tipo:
-                raise ValueError("Tipo de catálogo inválido para esta categoria.")
-            self.tipo_catalogo = inferred_tipo
-        elif self.tipo_catalogo is None:
-            self.tipo_catalogo = next(iter(CATALOG_TYPES.keys()), "almofada")
+        if self.tipo_catalogo is None:
+            self.tipo_catalogo = (definition or {}).get("tipo_catalogo") or next(
+                iter(CATALOG_TYPES.keys()), "almofada"
+            )
         elif not is_registered_tipo(self.tipo_catalogo):
-            raise ValueError(f"tipo_catalogo «{self.tipo_catalogo}» não está registado em CATALOG_TYPES.")
+            raise ValueError(f"tipo_catalogo «{self.tipo_catalogo}» não está registado.")
 
         if self.carrinho_step is None:
             self.carrinho_step = int((definition or {}).get("carrinho_step") or 6)
@@ -154,7 +156,11 @@ class ProductModel(BaseModel):
 class ProductVariant(BaseModel):
     """Variante/EAN de um modelo — tabela única product_variants, para todas as categorias."""
     id: UUID = Field(default_factory=uuid4, json_schema_extra={"ui_hidden": True})
-    id_modelo: UUID = Field(..., description="Modelo", json_schema_extra={"ui_relation": "product_models"})
+    # Sem `ui_relation` fixo: `product_models` é o nome físico e não é uma chave
+    # do TABLE_MAP, por isso /admin/crud/product_models/options dava 404 e o
+    # dropdown "Modelo" ficava sempre vazio. A relação é resolvida por família
+    # (nome virtual, ex.: modelos_almofadas) em ui_schema.relation_table().
+    id_modelo: UUID = Field(..., description="Modelo")
     tipo_catalogo: str = Field(..., description="Família de produto", json_schema_extra={"ui_hidden": True})
     ean: str = Field(..., pattern=r"^\d{13}$", description="EAN-13")
     barcode_url: Optional[str] = Field(None, json_schema_extra={"ui_readonly": True})

@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from core.auth import require_catalog_role
 from core.cache import catalog_cache_ttl, get_or_set
 from core.catalog_service import catalogue_for_category, model_detail_for_slugs, model_detail_for_tipo
+from core.catalog_storefront import DEFAULT_PAGE_LIMIT
 from core.database import get_db
 from core.local_only import admin_must_be_local
 from models.catalog_registry import (
@@ -115,7 +116,7 @@ async def list_storefront_catalog(
     id_categoria: str,
     request: Request,
     filter_tipo: str | None = None,
-    limit: int = 24,
+    limit: int = DEFAULT_PAGE_LIMIT,
     offset: int = 0,
 ):
     """Lista modelos para a loja (vitrine) — visível apenas, paginada no servidor."""
