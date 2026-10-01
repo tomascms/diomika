@@ -1,5 +1,9 @@
-/* Latin 400+700 — cobre PT (Latin-1); evita latin-ext (~100KB) no critical path */
+/* Latin 400+600+700 — cobre PT (Latin-1); evita latin-ext (~100KB) no critical path.
+   600 é pedido ~15x no CSS (labels, nav, badges) — sem o carregar, o browser
+   fazia "font matching" para o peso mais próximo carregado (normalmente 700),
+   e todo o texto "semibold" saía involuntariamente a negrito. */
 import '@fontsource/arimo/latin-400.css'
+import '@fontsource/arimo/latin-600.css'
 import '@fontsource/arimo/latin-700.css'
 import '@/assets/main.css'
 

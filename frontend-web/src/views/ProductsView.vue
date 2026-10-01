@@ -475,13 +475,17 @@ onUnmounted(() => {
               class="nav-btn"
               aria-label="Imagem anterior"
               @click.prevent.stop="prevImg($event, product)"
-            >‹</button>
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
+            </button>
             <button
               type="button"
               class="nav-btn"
               aria-label="Próxima imagem"
               @click.prevent.stop="nextImg($event, product)"
-            >›</button>
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+            </button>
           </div>
 
           <span v-if="tipoLabel(product)" class="type-chip">{{ tipoLabel(product) }}</span>
@@ -859,11 +863,13 @@ onUnmounted(() => {
   width: 2.25rem;
   height: 2.25rem;
   margin: 0 0.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.92);
   color: var(--color-ink);
-  font-size: 1.25rem;
   cursor: pointer;
   line-height: 1;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);

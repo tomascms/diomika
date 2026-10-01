@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
+import AppIcon from '@/components/AppIcon.vue'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -39,7 +40,8 @@ const displayName = computed(() => {
         :class="{ active: active === item.key }"
         @click="$emit('navigate')"
       >
-        {{ item.label }}
+        <AppIcon :name="item.icon || 'folder'" :size="17" />
+        <span>{{ item.label }}</span>
       </RouterLink>
     </nav>
 
@@ -127,7 +129,9 @@ const displayName = computed(() => {
 }
 
 .nav-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   padding: 0.62rem 0.75rem;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
@@ -137,6 +141,9 @@ const displayName = computed(() => {
   border: 1px solid transparent;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
+.nav-item .app-icon { opacity: 0.75; }
+.nav-item.active .app-icon,
+.nav-item:hover .app-icon { opacity: 1; }
 
 .nav-item:hover {
   background: var(--bg-soft);
