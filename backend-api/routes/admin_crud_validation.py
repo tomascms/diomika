@@ -248,20 +248,6 @@ def _validate_product_payload(table_name: str, payload: dict, record_id: str | N
     _validate_unico_single_product(table_name, payload, record_id)
 
 
-def _assert_ean_globally_unique(table_name: str, payload: dict, record_id: str | None = None) -> None:
-    """Ensure EAN is globally unique (per-product table enforcement)."""
-    if table_name not in all_product_tables():
-        return
-    ean = str(payload.get("ean") or "").strip()
-    if not ean:
-        return
-    q = _db_table(table_name).select("id").eq("ean", ean)
-    if record_id:
-        q = q.neq("id", record_id)
-    if q.limit(1).execute().data or []:
-        raise ValueError(f"Já existe um produto com EAN {ean}.")
-
-
 def _assert_model_publishable(table_name: str, record_id: str) -> None:
     """Ensure model can be published: has ≥1 color (image) and ≥1 product (EAN)."""
     if table_name not in all_model_tables():
