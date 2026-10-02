@@ -1,0 +1,94 @@
+global:
+  resolve_timeout: 5m
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+
+route:
+  receiver: 'default'
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+
+  routes:
+    - match:
+        severity: critical
+      receiver: 'critical'
+      continue: true
+      group_wait: 1s
+      repeat_interval: 30m
+
+    - match:
+        severity: warning
+      receiver: 'warning'
+      group_wait: 5m
+      repeat_interval: 4h
+
+    - match_re:
+        alertname: 'SLA|Database|Critical'
+      receiver: 'sla-team'
+      continue: true
+
+receivers:
+  - name: 'default'
+    slack_configs:
+      - channel: '#monitoring'
+        title: 'Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+        send_resolved: true
+
+  - name: 'critical'
+    slack_configs:
+      - channel: '#critical-alerts'
+        title: 'CRITICAL: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'danger'
+        send_resolved: true
+    pagerduty_configs:
+      - service_key: '${PAGERDUTY_SERVICE_KEY}'
+        client: 'Diomika Alert Manager'
+
+  - name: 'warning'
+    slack_configs:
+      - channel: '#warnings'
+        title: 'Warning: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'warning'
+        send_resolved: false
+
+  - name: 'sla-team'
+    slack_configs:
+      - channel: '#sla-team'
+        title: 'SLA Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'danger'
+    email_configs:
+      - to: 'sla-team@diomika.com'
+        from: 'alertmanager@diomika.com'
+        smarthost: 'smtp.diomika.com:587'
+        auth_username: '${SMTP_USER}'
+        auth_password: '${SMTP_PASSWORD}'
+        headers:
+          Subject: 'SLA Alert: {{ .GroupLabels.alertname }}'
+
+inhibit_rules:
+  # Suppress warnings if critical is firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'dev', 'instance']
+
+  # Suppress info if warning is firing
+  - source_match:
+      severity: 'warning'
+    target_match:
+      severity: 'info'
+    equal: ['alertname', 'dev', 'instance']
+
+  # Suppress 4xx if 5xx is firing for same endpoint
+  - source_match_re:
+      status: '5..'
+    target_match_re:
+      status: '4..'
+    equal: ['path']
