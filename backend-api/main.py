@@ -36,6 +36,7 @@ from core.middleware import (
 )
 from core.auth_token_middleware import AdminTokenRotationMiddleware
 from core.path_guard import PrivilegedPathMiddleware
+from core.rate_limiting import RateLimitingMiddleware
 from core.version import VERSION
 from routes import (
     categories,
@@ -107,6 +108,7 @@ app.add_middleware(AdminTokenRotationMiddleware)
 app.add_middleware(GlobalRateLimitMiddleware)
 app.add_middleware(BodySizeLimitMiddleware)
 app.add_middleware(BotDefenseMiddleware)
+app.add_middleware(RateLimitingMiddleware)
 app.add_middleware(LatencyAlertMiddleware)
 app.add_middleware(CatalogCacheHeadersMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
