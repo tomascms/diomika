@@ -93,13 +93,13 @@ def _validate_model_discriminator(table_name: str, payload: dict, record_id: str
         raise ValueError(f"Já existe variante «{value}» neste modelo.")
 
 
-def _validate_assento_altura(payload: dict, record_id: str | None = None) -> None:
-    """Validate assento (seat) height discriminator."""
-    _validate_model_discriminator("assento", payload, record_id)
 
 
 def _validate_oculo(payload: dict, record_id: str | None = None) -> None:
-    """Validate óculos (glasses) by type and segment."""
+    """Validate óculos (glasses) by type and segment.
+
+    Special case: leitura glasses have no discriminator, just one product per model.
+    """
     id_modelo = payload.get("id_modelo")
     if not id_modelo:
         return
@@ -109,34 +109,29 @@ def _validate_oculo(payload: dict, record_id: str | None = None) -> None:
         .eq("id", str(id_modelo))
         .limit(1)
         .execute()
-        .data
-        or [None]
+        .data or [None]
     )[0]
     if not model:
         raise ValueError("Modelo de óculos não encontrado.")
+
     tipo_oculo = (model.get("attributes") or {}).get("tipo_oculo")
-    segmento = _attr(payload, "segmento")
-    db_variants = _db_table("oculo")
     if tipo_oculo == "leitura":
-        if segmento:
+        if _attr(payload, "segmento"):
             raise ValueError("Óculos de leitura não têm segmento — use produto sortido.")
-        q = db_variants.select("id").eq("id_modelo", str(id_modelo))
+        q = _db_table("oculo").select("id").eq("id_modelo", str(id_modelo))
         if record_id:
             q = q.neq("id", record_id)
         if q.limit(1).execute().data or []:
             raise ValueError("Este modelo de leitura já tem produto sortido.")
         return
-    if not segmento:
-        raise ValueError("Selecione segmento (homem, mulher ou criança).")
-    q = db_variants.select("id").eq("id_modelo", str(id_modelo)).eq("attributes->>segmento", segmento)
-    if record_id:
-        q = q.neq("id", record_id)
-    if q.limit(1).execute().data or []:
-        raise ValueError(f"Já existe produto para segmento «{segmento}» neste modelo.")
+    _validate_model_discriminator("oculo", payload, record_id)
 
 
 def _validate_regional_product(payload: dict, record_id: str | None = None) -> None:
-    """Validate regional product by subtype and dimensions."""
+    """Validate regional product by subtype and dimensions.
+
+    Only some subtypes require a discriminator (pano_cozinha, toalha, protetor).
+    """
     id_modelo = payload.get("id_modelo")
     if not id_modelo:
         return
@@ -146,27 +141,23 @@ def _validate_regional_product(payload: dict, record_id: str | None = None) -> N
         .eq("id", str(id_modelo))
         .limit(1)
         .execute()
-        .data
-        or [None]
+        .data or [None]
     )[0]
     if not model:
         raise ValueError("Modelo regional não encontrado.")
+
     attrs = model.get("attributes") or {}
     subtipo = attrs.get("subtipo")
     needs_dim = subtipo in ("pano_cozinha", "toalha", "protetor")
     dim = str(_attr(payload, "dimensoes") or "").strip()
+
     if needs_dim:
         if not dim:
             raise ValueError("Selecione dimensão desta variante.")
         allowed = _model_attribute_values(str(id_modelo), "dimensoes")
         if dim not in allowed:
             raise ValueError(f"Dimensão «{dim}» não está definida no modelo.")
-        q = (
-            _db_table("regional")
-            .select("id")
-            .eq("id_modelo", str(id_modelo))
-            .eq("attributes->>dimensoes", dim)
-        )
+        q = _db_table("regional").select("id").eq("id_modelo", str(id_modelo)).eq("attributes->>dimensoes", dim)
         if record_id:
             q = q.neq("id", record_id)
         if q.limit(1).execute().data or []:
@@ -248,9 +239,7 @@ def _assert_model_category_tipo(table_name: str, payload: dict) -> None:
 
 def _validate_product_payload(table_name: str, payload: dict, record_id: str | None = None) -> None:
     """Run all product-related validations."""
-    if table_name == "assento":
-        _validate_assento_altura(payload, record_id)
-    elif table_name == "oculo":
+    if table_name == "oculo":
         _validate_oculo(payload, record_id)
     elif table_name == "regional":
         _validate_regional_product(payload, record_id)

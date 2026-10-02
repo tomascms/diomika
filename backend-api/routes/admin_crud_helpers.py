@@ -34,24 +34,24 @@ def _db_table(table_name: str):
     return get_db().table(physical_table_for(table_name))
 
 
-def _scoped(query, table_name: str):
-    """Filter by catalog family (tipo_catalogo) for catalog tables.
+def _scoped(query, table_name: str, use_join: bool = False):
+    """Filter by catalog family (tipo_catalogo), optionally via parent model join.
 
-    Only product_models and product_variants have the column. product_model_colors
-    does not — a color's family comes from the parent model.
+    Args:
+        query: PostgREST query builder
+        table_name: table name (virtual or physical)
+        use_join: if True and table is colors, filter via PRODUCT_MODELS_TABLE join
     """
     tipo = tipo_for_table(table_name)
-    if not tipo or level_for_table(table_name) == "colors":
+    if not tipo:
+        return query
+
+    is_colors = level_for_table(table_name) == "colors"
+    if is_colors and use_join:
+        return query.eq(f"{PRODUCT_MODELS_TABLE}.tipo_catalogo", tipo)
+    elif is_colors:
         return query
     return query.eq("tipo_catalogo", tipo)
-
-
-def _scoped_list(query, table_name: str):
-    """Like _scoped, but for color listings filter by parent model."""
-    if level_for_table(table_name) == "colors":
-        tipo = tipo_for_table(table_name)
-        return query.eq(f"{PRODUCT_MODELS_TABLE}.tipo_catalogo", tipo) if tipo else query
-    return _scoped(query, table_name)
 
 
 def _schema_for(table: str):

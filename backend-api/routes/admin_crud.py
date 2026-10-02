@@ -60,7 +60,6 @@ from .admin_crud_helpers import (
     _schedule_barcode_update,
     _schema_for,
     _scoped,
-    _scoped_list,
 )
 from .admin_crud_publishing import (
     _cascade_category_visibility,
@@ -68,7 +67,6 @@ from .admin_crud_publishing import (
     _publish_catalog_children,
 )
 from .admin_crud_validation import (
-    _assert_ean_globally_unique,
     _assert_model_category_tipo,
     _assert_model_publishable,
     _product_validation_table,
@@ -123,7 +121,7 @@ def relation_options(
     para o formulário agregado (routes/admin_form.py) poder juntar várias
     tabelas numa só resposta, em vez de uma chamada HTTP por relação."""
     limit = min(max(limit, 1), 300)
-    query = _scoped_list(_db_table(table_name).select(relation_options_select_query(table_name)), table_name)
+    query = _scoped(_db_table(table_name).select(relation_options_select_query(table_name)), table_name, use_join=True)
     if visible_only:
         query = query.eq("visibilidade", True)
     if id_modelo and table_name in (*all_colors_tables(), *all_product_tables()):
@@ -192,7 +190,7 @@ def list_records(
     limit = min(max(limit, 1), 200)
     offset = max(offset, 0)
     select_q = admin_list_select_query(table_name, embed_category=table_name in all_product_tables())
-    query = _scoped_list(_db_table(table_name).select(select_q), table_name)
+    query = _scoped(_db_table(table_name).select(select_q), table_name, use_join=True)
     if visible_only:
         query = query.eq("visibilidade", True)
     if id_modelo and table_name in (*all_colors_tables(), *all_product_tables()):
@@ -230,7 +228,7 @@ def get_record(request: Request, table_name: str, record_id: str):
     _schema_for(table_name)
     assert_table_action(table_name, "read", _role(request))
     res = (
-        _scoped_list(_db_table(table_name).select(list_select_query(table_name)), table_name)
+        _scoped(_db_table(table_name).select(list_select_query(table_name)), table_name, use_join=True)
         .eq("id", record_id)
         .execute()
     )

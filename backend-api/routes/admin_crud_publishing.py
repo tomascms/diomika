@@ -27,7 +27,10 @@ def _hide_catalog_children(table_name: str, record_id: str, *, tipo: str | None 
 
 
 def _cascade_category_visibility(category_id: str, vis: bool) -> None:
-    """Cascade visibility change to child models (and their colors/products)."""
+    """Cascade visibility change to child models (and their colors/products).
+
+    Executes 3 queries total (1 select + 2 batch updates) instead of 1 + N*3.
+    """
     db = get_db()
     models = (
         db.table(PRODUCT_MODELS_TABLE)
@@ -37,12 +40,10 @@ def _cascade_category_visibility(category_id: str, vis: bool) -> None:
         .data
         or []
     )
-    for row in models:
-        mid = str(row.get("id") or "")
-        if not mid:
-            continue
-        db.table(PRODUCT_MODELS_TABLE).update({"visibilidade": vis}).eq("id", mid).execute()
-        if vis:
-            _publish_catalog_children(PRODUCT_MODELS_TABLE, mid)
-        else:
-            _hide_catalog_children(PRODUCT_MODELS_TABLE, mid)
+    model_ids = [str(row.get("id") or "") for row in models if row.get("id")]
+    if not model_ids:
+        return
+
+    db.table(PRODUCT_MODELS_TABLE).update({"visibilidade": vis}).in_("id", model_ids).execute()
+    db.table("product_variants").update({"visibilidade": vis}).in_("id_modelo", model_ids).execute()
+    db.table("product_model_colors").update({"visibilidade": vis}).in_("id_modelo", model_ids).execute()
