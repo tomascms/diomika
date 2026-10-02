@@ -19,6 +19,10 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 from core.auth import Role, SENSITIVE_BUSINESS_TABLES, assert_table_action, require_admin
+from core.cache_invalidation_strategy import (
+    CacheInvalidationAnalyzer,
+    GranularCacheInvalidator,
+)
 from core.cqrs.commands.catalog import soft_delete
 from core.database import get_db
 from core.idempotency import (
@@ -52,7 +56,6 @@ from .admin_crud_helpers import (
     _audit,
     _client_error,
     _db_table,
-    _invalidate_catalog_cache,
     _is_expected_client_conflict,
     _normalize_payload,
     _resolve_image_fields,
@@ -272,7 +275,20 @@ def create_record(
         record_id = str(row.get("id") or "")
         if key:
             complete_idempotent_request(key, op, row)
-        _invalidate_catalog_cache(table_name=table_name, record=row, record_id=record_id)
+        strategy = CacheInvalidationAnalyzer.get_strategy_for_change(
+            table_name,
+            old_record=None,
+            new_record=row,
+        )
+        count = GranularCacheInvalidator.execute_strategy(
+            strategy,
+            table_name=table_name,
+            tipo=row.get("tipo_catalogo"),
+            id_modelo=row.get("id_modelo"),
+            id_categoria=row.get("id_categoria"),
+            record_id=record_id,
+        )
+        logger.debug(f"Cache invalidated {count} keys using {strategy.value} strategy for create {table_name}/{record_id}")
         _audit(request, "create", table_name, resource_id=record_id or None)
         _schedule_barcode_update(table_name, record_id, payload.get("ean"))
         if payload.get("visibilidade") and table_name in all_model_tables():
@@ -298,6 +314,9 @@ def update_record(request: Request, table_name: str, record_id: str, body: dict)
     schema_class = _schema_for(table_name)
     assert_table_action(table_name, "update", _role(request))
     try:
+        old_record_res = _scoped(_db_table(table_name), table_name).eq("id", record_id).limit(1).execute()
+        old_record = (old_record_res.data or [{}])[0] if old_record_res.data else {}
+
         body = fold_attributes(table_name, {**body, "id": record_id})
         body = _resolve_image_fields(table_name, body)
         body = _enrich_update_payload(table_name, body, record_id)
@@ -307,7 +326,21 @@ def update_record(request: Request, table_name: str, record_id: str, body: dict)
         payload.pop("created_at", None)
         res = _scoped(_db_table(table_name).update(payload), table_name).eq("id", record_id).execute()
         updated = (res.data or [{}])[0]
-        _invalidate_catalog_cache(table_name=table_name, record={**payload, **updated}, record_id=record_id)
+
+        strategy = CacheInvalidationAnalyzer.get_strategy_for_change(
+            table_name,
+            old_record=old_record,
+            new_record=updated or {**old_record, **payload},
+        )
+        count = GranularCacheInvalidator.execute_strategy(
+            strategy,
+            table_name=table_name,
+            tipo=updated.get("tipo_catalogo") or old_record.get("tipo_catalogo"),
+            id_modelo=updated.get("id_modelo") or old_record.get("id_modelo"),
+            id_categoria=updated.get("id_categoria") or old_record.get("id_categoria"),
+            record_id=record_id,
+        )
+        logger.debug(f"Cache invalidated {count} keys using {strategy.value} strategy for update {table_name}/{record_id}")
         _audit(request, "update", table_name, resource_id=record_id)
         _schedule_barcode_update(table_name, record_id, payload.get("ean"))
         if payload.get("visibilidade") and table_name in all_model_tables():
@@ -348,7 +381,14 @@ def patch_visibility(request: Request, table_name: str, record_id: str, body: di
             _hide_catalog_children(table_name, record_id)
     elif table_name == "categories":
         _cascade_category_visibility(record_id, vis)
-    _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
+    updated = (res.data or [{}])[0]
+    GranularCacheInvalidator.invalidate_surgical(
+        table_name=table_name,
+        record_id=record_id,
+        tipo=updated.get("tipo_catalogo"),
+        id_modelo=updated.get("id_modelo"),
+        id_categoria=updated.get("id_categoria"),
+    )
     _audit(request, "visibility", table_name, resource_id=record_id, visibilidade=vis)
     return (res.data or [{"id": record_id, "visibilidade": vis}])[0]
 
@@ -374,7 +414,14 @@ def publish_record(request: Request, table_name: str, record_id: str):
     elif table_name == "categories":
         _cascade_category_visibility(record_id, True)
 
-    _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
+    updated = (res.data or [{}])[0]
+    GranularCacheInvalidator.invalidate_surgical(
+        table_name=table_name,
+        record_id=record_id,
+        tipo=updated.get("tipo_catalogo"),
+        id_modelo=updated.get("id_modelo"),
+        id_categoria=updated.get("id_categoria"),
+    )
     _audit(request, "publish", table_name, resource_id=record_id)
     return (res.data or [{"id": record_id, "visibilidade": True}])[0]
 
@@ -405,15 +452,31 @@ def delete_record(request: Request, table_name: str, record_id: str, hard: bool 
     assert_table_action(table_name, action, _role(request))
     try:
         if hard:
+            old_record_res = _scoped(_db_table(table_name), table_name).eq("id", record_id).limit(1).execute()
+            old_record = (old_record_res.data or [{}])[0] if old_record_res.data else {}
             if table_name in all_model_tables():
                 get_db().table("product_model_colors").delete().eq("id_modelo", record_id).execute()
                 get_db().table("product_variants").delete().eq("id_modelo", record_id).execute()
             _db_table(table_name).delete().eq("id", record_id).execute()
-            _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
+            GranularCacheInvalidator.invalidate_surgical(
+                table_name=table_name,
+                record_id=record_id,
+                tipo=old_record.get("tipo_catalogo"),
+                id_modelo=old_record.get("id_modelo"),
+                id_categoria=old_record.get("id_categoria"),
+            )
             _audit(request, "hard_delete", table_name, resource_id=record_id)
             return {"status": "deleted", "hard": True}
+        old_record_res = _scoped(_db_table(table_name), table_name).eq("id", record_id).limit(1).execute()
+        old_record = (old_record_res.data or [{}])[0] if old_record_res.data else {}
         result = soft_delete(table_name, record_id)
-        _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
+        GranularCacheInvalidator.invalidate_surgical(
+            table_name=table_name,
+            record_id=record_id,
+            tipo=old_record.get("tipo_catalogo"),
+            id_modelo=old_record.get("id_modelo"),
+            id_categoria=old_record.get("id_categoria"),
+        )
         _audit(request, "soft_delete", table_name, resource_id=record_id)
         return result
     except HTTPException:
@@ -421,3 +484,13 @@ def delete_record(request: Request, table_name: str, record_id: str, hard: bool 
     except Exception as exc:
         logger.error("Delete %s/%s: %s", table_name, record_id, exc)
         raise HTTPException(status_code=400, detail=_client_error(exc)) from exc
+
+
+def _enrich_create_payload(table_name: str, body: dict) -> dict:
+    """Enrich payload before create (e.g., set defaults, computed fields)."""
+    return body
+
+
+def _enrich_update_payload(table_name: str, body: dict, record_id: str) -> dict:
+    """Enrich payload before update (e.g., normalize fields)."""
+    return body
