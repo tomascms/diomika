@@ -48,6 +48,7 @@ from routes import (
     admin_crud,
     admin_form,
     admin_auth,
+    admin_monitoring,
     privacy,
     ops_analytics,
 )
@@ -156,6 +157,7 @@ app.include_router(encomendas.router)
 app.include_router(admin_crud.router)
 app.include_router(admin_form.router)
 app.include_router(admin.router)
+app.include_router(admin_monitoring.router)
 app.include_router(ops_analytics.router)
 
 
