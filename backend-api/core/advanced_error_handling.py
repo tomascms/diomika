@@ -92,7 +92,10 @@ class ValidationException(DiomikaException):
         kwargs.setdefault("category", ErrorCategory.VALIDATION)
         kwargs.setdefault("severity", ErrorSeverity.WARNING)
         kwargs.setdefault("http_status", 422)
-        kwargs["details"]["field"] = field
+        if "details" not in kwargs:
+            kwargs["details"] = {}
+        if field:
+            kwargs["details"]["field"] = field
         super().__init__(message, **kwargs)
 
 
@@ -144,6 +147,8 @@ class RateLimitException(DiomikaException):
         kwargs.setdefault("category", ErrorCategory.RATE_LIMIT)
         kwargs.setdefault("severity", ErrorSeverity.WARNING)
         kwargs.setdefault("http_status", 429)
+        if "details" not in kwargs:
+            kwargs["details"] = {}
         kwargs["details"]["retry_after"] = retry_after
         super().__init__(message, **kwargs)
 
@@ -155,7 +160,10 @@ class ExternalServiceException(DiomikaException):
         kwargs.setdefault("category", ErrorCategory.EXTERNAL_SERVICE)
         kwargs.setdefault("severity", ErrorSeverity.ERROR)
         kwargs.setdefault("http_status", 502)
-        kwargs["details"]["service"] = service
+        if "details" not in kwargs:
+            kwargs["details"] = {}
+        if service:
+            kwargs["details"]["service"] = service
         super().__init__(message, **kwargs)
 
 
@@ -166,7 +174,10 @@ class DatabaseException(DiomikaException):
         kwargs.setdefault("category", ErrorCategory.DATABASE)
         kwargs.setdefault("severity", ErrorSeverity.CRITICAL)
         kwargs.setdefault("http_status", 500)
-        kwargs["details"]["query"] = query
+        if "details" not in kwargs:
+            kwargs["details"] = {}
+        if query:
+            kwargs["details"]["query"] = query
         super().__init__(message, **kwargs)
 
 
@@ -177,7 +188,10 @@ class TimeoutException(DiomikaException):
         kwargs.setdefault("category", ErrorCategory.TIMEOUT)
         kwargs.setdefault("severity", ErrorSeverity.ERROR)
         kwargs.setdefault("http_status", 504)
-        kwargs["details"]["timeout_seconds"] = timeout_seconds
+        if "details" not in kwargs:
+            kwargs["details"] = {}
+        if timeout_seconds:
+            kwargs["details"]["timeout_seconds"] = timeout_seconds
         super().__init__(message, **kwargs)
 
 
