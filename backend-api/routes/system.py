@@ -18,7 +18,7 @@ from core.local_only import admin_must_be_local
 from models.catalog_registry import catalog_metadata
 from models.catalog_views import CATALOG_VIEWS
 from models.schemas import TABLE_MAP, sidebar_tables
-from models.ui_schema import get_form_fields
+from core.admin_form_schema import build_form_schema
 
 logger = logging.getLogger("diomika-api")
 
@@ -79,28 +79,11 @@ def workspace_config(request: Request, role=Depends(require_admin)):
 
 @router.get("/schema/form/{table_name}")
 def form_schema(request: Request, table_name: str, role=Depends(require_admin)):
-    if table_name not in TABLE_MAP or table_name in CRUD_INFRA_BLOCKED:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Tabela «{table_name}» não registada no catálogo",
-        )
+    # build primeiro: dá 404 para tabela não registada, antes do 403 de papel,
+    # que era a ordem de erros desta rota antes de a construção ser extraída.
+    schema = build_form_schema(table_name)
     assert_table_action(table_name, "read", role)
-    cfg = TABLE_MAP[table_name]
-    schema = cfg.get("schema")
-    if not schema:
-        raise HTTPException(status_code=404, detail="Sem schema")
-    # Não expor metadados internos/callable
-    safe_config = {
-        k: v
-        for k, v in cfg.items()
-        if k != "schema" and not callable(v) and not str(k).startswith("_")
-    }
-    return {
-        "table": table_name,
-        "label": cfg.get("label", table_name),
-        "fields": get_form_fields(schema, cfg, table_name),
-        "config": safe_config,
-    }
+    return schema
 
 
 @router.get("/categories/tipos", dependencies=[Depends(require_catalog_role)])
