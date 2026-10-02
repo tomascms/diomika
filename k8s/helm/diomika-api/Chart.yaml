@@ -1,0 +1,17 @@
+apiVersion: v2
+name: diomika-api
+description: Helm chart for Diomika API
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - diomika
+  - api
+  - fastapi
+home: https://github.com/diomika/diomika-api
+sources:
+  - https://github.com/diomika/diomika-api
+maintainers:
+  - name: Diomika Team
+    email: team@diomika.com
+dependencies: []
