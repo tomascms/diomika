@@ -34,6 +34,7 @@ from core.middleware import (
     BotDefenseMiddleware,
     ALLOWED_CORS_HEADERS,
 )
+from core.auth_token_middleware import AdminTokenRotationMiddleware
 from core.path_guard import PrivilegedPathMiddleware
 from core.version import VERSION
 from routes import (
@@ -102,6 +103,7 @@ app = FastAPI(
 
 # Ordem: path guard primeiro (outermost = last add) — Starlette inverte
 app.add_middleware(GZipMiddleware, minimum_size=500)
+app.add_middleware(AdminTokenRotationMiddleware)
 app.add_middleware(GlobalRateLimitMiddleware)
 app.add_middleware(BodySizeLimitMiddleware)
 app.add_middleware(BotDefenseMiddleware)
