@@ -167,6 +167,11 @@ export const api = {
     schemaCache.set(table, pending)
     return pending
   },
+  formBundle: async (table, id = null) => {
+    const params = {}
+    if (id) params.id = id
+    return request('GET', `/admin/form/${table}`, { params })
+  },
   listRecords: async (table, params) => {
     const data = await request('GET', `/admin/crud/${table}`, { params })
     return Array.isArray(data) ? data : data?.items || []

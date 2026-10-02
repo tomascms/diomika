@@ -175,21 +175,6 @@ const navigateNewPhysical = async (physicalTable, categoryId) => {
   })
 }
 
-const loadCategories = async () => {
-  try {
-    categoryRows.value = await api.listCategoriesForForms()
-  } catch {
-    categoryRows.value = []
-  }
-}
-
-const loadRelations = async (fields) => {
-  const relTables = [...new Set(fields.filter((f) => f.relation).map((f) => f.relation))]
-  const entries = await Promise.all(
-    relTables.map(async (rt) => [rt, await api.listRelationOptions(rt)]),
-  )
-  relations.value = Object.fromEntries(entries)
-}
 
 const loadModelDiscriminatorOptions = async (modelId) => {
   const field = (schema.value?.fields || []).find((f) =>
@@ -281,20 +266,21 @@ const load = async () => {
   error.value = ''
   try {
     const tableName = table.value
-    await loadCategories()
-    const schemaPromise = api.formSchema(tableName)
-    const recordPromise = !isNew.value
-      ? api.getRecord(tableName, recordId.value)
-      : Promise.resolve(null)
-
-    const schemaData = await schemaPromise
+    const bundleData = await api.formBundle(tableName, !isNew.value ? recordId.value : null)
     if (seq !== loadSeq) return
+
+    const schemaData = {
+      table: bundleData.table,
+      label: bundleData.label,
+      fields: bundleData.fields,
+      config: bundleData.config,
+    }
     schema.value = schemaData
+    categoryRows.value = bundleData.categories || []
+    relations.value = bundleData.relations || {}
+    fieldOptions.value = bundleData.field_options || {}
 
-    const relationsPromise = loadRelations(schemaData.fields || [])
-    const [record] = await Promise.all([recordPromise, relationsPromise])
-    if (seq !== loadSeq) return
-
+    const record = bundleData.record
     if (record) {
       formData.value = { ...record }
     } else {
@@ -315,7 +301,6 @@ const load = async () => {
       }
     }
     familyTipo.value = schemaData?.config?.ui_catalog_tipo || catalogTipo.value || ''
-    await loadModelDiscriminatorOptions(formData.value.id_modelo)
     await loadStorefrontCheck()
   } catch (e) {
     if (seq === loadSeq) error.value = e.message

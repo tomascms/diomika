@@ -44,6 +44,7 @@ from routes import (
     encomendas,
     catalog_generic,
     admin_crud,
+    admin_form,
     admin_auth,
     privacy,
     ops_analytics,
@@ -149,6 +150,7 @@ app.include_router(contact.router)
 app.include_router(orcamentos.router)
 app.include_router(encomendas.router)
 app.include_router(admin_crud.router)
+app.include_router(admin_form.router)
 app.include_router(admin.router)
 app.include_router(ops_analytics.router)
 

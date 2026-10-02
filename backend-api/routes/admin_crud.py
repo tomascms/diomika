@@ -638,17 +638,16 @@ async def upload_image(
     return {"url": url}
 
 
-@router.get("/{table_name}/options")
-def list_relation_options(
-    request: Request,
+def relation_options(
     table_name: str,
+    *,
     visible_only: bool = False,
     limit: int = 200,
     id_modelo: str | None = None,
-):
-    """Dropdowns leves — só id + label, sem embeds pesados."""
-    _schema_for(table_name)
-    assert_table_action(table_name, "read", _role(request))
+) -> list[dict]:
+    """Opções de dropdown (id + label) de uma tabela. Função separada da rota
+    para o formulário agregado (routes/admin_form.py) poder juntar várias
+    tabelas numa só resposta, em vez de uma chamada HTTP por relação."""
     limit = min(max(limit, 1), 300)
     query = _scoped_list(_db_table(table_name).select(relation_options_select_query(table_name)), table_name)
     if visible_only:
@@ -676,15 +675,31 @@ def list_relation_options(
             return " · ".join(p for p in parts if p)
         return str(row.get("id", ""))[:8]
 
+    return [
+        {
+            "id": r["id"],
+            "label": _label(r) or str(r.get("id", ""))[:8],
+            **({"tipo_catalogo": r["tipo_catalogo"]} if table_name == "categories" and r.get("tipo_catalogo") else {}),
+        }
+        for r in rows
+    ]
+
+
+@router.get("/{table_name}/options")
+def list_relation_options(
+    request: Request,
+    table_name: str,
+    visible_only: bool = False,
+    limit: int = 200,
+    id_modelo: str | None = None,
+):
+    """Dropdowns leves — só id + label, sem embeds pesados."""
+    _schema_for(table_name)
+    assert_table_action(table_name, "read", _role(request))
     return {
-        "items": [
-            {
-                "id": r["id"],
-                "label": _label(r) or str(r.get("id", ""))[:8],
-                **({"tipo_catalogo": r["tipo_catalogo"]} if table_name == "categories" and r.get("tipo_catalogo") else {}),
-            }
-            for r in rows
-        ],
+        "items": relation_options(
+            table_name, visible_only=visible_only, limit=limit, id_modelo=id_modelo
+        )
     }
 
 
