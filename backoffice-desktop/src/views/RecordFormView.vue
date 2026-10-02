@@ -32,6 +32,8 @@ const message = ref('')
 const createIdempotencyKey = ref(null)
 const categoryRows = ref([])
 const familyTipo = ref('')
+const bundleProductTable = ref(null)
+const bundleColorsTable = ref(null)
 let switchingSchema = false
 /** Campos a repor após mudar categoria/família (novo registo). */
 let formCarry = null
@@ -52,10 +54,7 @@ const isProductForm = computed(() =>
   catalogTypes.value.some((t) => t.product_table === table.value),
 )
 
-const modelCatalogTipo = computed(() =>
-  catalogTypes.value.find((t) => t.model_table === table.value) || null,
-)
-const productTableForModel = computed(() => modelCatalogTipo.value?.product_table || null)
+const productTableForModel = computed(() => bundleProductTable.value)
 
 const storefrontCheck = ref(null)
 
@@ -84,12 +83,11 @@ const storefrontIssues = computed(() => {
 const loadStorefrontCheck = async () => {
   storefrontCheck.value = null
   if (!isModelForm.value || isNew.value || !recordId.value) return
-  const cfg = modelCatalogTipo.value
-  if (!cfg?.product_table || !cfg?.colors_table) return
+  if (!bundleProductTable.value || !bundleColorsTable.value) return
   try {
     const [products, colors] = await Promise.all([
-      api.listRecords(cfg.product_table, { id_modelo: recordId.value, limit: '50' }),
-      api.listModelColors(cfg.colors_table, recordId.value),
+      api.listRecords(bundleProductTable.value, { id_modelo: recordId.value, limit: '50' }),
+      api.listModelColors(bundleColorsTable.value, recordId.value),
     ])
     storefrontCheck.value = {
       withEan: products.filter((p) => String(p.ean || '').trim()).length,
@@ -265,6 +263,8 @@ const load = async () => {
     categoryRows.value = bundleData.categories || []
     relations.value = bundleData.relations || {}
     fieldOptions.value = bundleData.field_options || {}
+    bundleProductTable.value = bundleData.product_table || null
+    bundleColorsTable.value = bundleData.colors_table || null
 
     const record = bundleData.record
     if (record) {
