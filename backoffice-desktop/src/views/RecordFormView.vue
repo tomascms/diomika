@@ -3,12 +3,14 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/lib/api'
 import { workspace } from '@/composables/useWorkspace'
+import { useAggregatedTipos } from '@/composables/useAggregatedTipos'
 import SchemaForm from '@/components/SchemaForm.vue'
 import ModelColorsPanel from '@/components/ModelColorsPanel.vue'
 import ModelVariantsPanel from '@/components/ModelVariantsPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
+const { getAggregatedTiposForCategory } = useAggregatedTipos()
 
 const table = computed(() => route.params.physicalTable || route.params.table)
 const recordId = computed(() => route.params.id)
@@ -107,16 +109,7 @@ const selectedCategory = computed(() =>
   categoryRows.value.find((c) => String(c.id) === String(formData.value.id_categoria || '')) || null,
 )
 
-const aggregatedTipos = computed(() => {
-  const cat = selectedCategory.value
-  if (!cat?.tipo_catalogo) return null
-  for (const def of Object.values(categoryDefinitions.value || {})) {
-    if (def.tipo_catalogo === cat.tipo_catalogo && def.aggregated_tipos?.length) {
-      return def.aggregated_tipos
-    }
-  }
-  return null
-})
+const aggregatedTipos = computed(() => getAggregatedTiposForCategory(selectedCategory.value))
 
 const showFamilyPicker = computed(
   () => isNew.value && isModelForm.value && Boolean(aggregatedTipos.value?.length),
@@ -134,14 +127,7 @@ const modelTableForTipo = (tipo) =>
 
 const resolveTargetModelTable = (cat, preferredTipo = null) => {
   if (!cat?.tipo_catalogo) return null
-  const aggregated = (() => {
-    for (const def of Object.values(categoryDefinitions.value || {})) {
-      if (def.tipo_catalogo === cat.tipo_catalogo && def.aggregated_tipos?.length) {
-        return def.aggregated_tipos
-      }
-    }
-    return null
-  })()
+  const aggregated = getAggregatedTiposForCategory(cat)
   let tipo = preferredTipo || cat.tipo_catalogo
   if (aggregated?.length) {
     const currentTipo = catalogTipo.value
