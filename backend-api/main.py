@@ -31,6 +31,7 @@ from core.middleware import (
     CatalogCacheHeadersMiddleware,
     BodySizeLimitMiddleware,
     LatencyAlertMiddleware,
+    BotDefenseMiddleware,
     ALLOWED_CORS_HEADERS,
 )
 from core.path_guard import PrivilegedPathMiddleware
@@ -103,6 +104,7 @@ app = FastAPI(
 app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(GlobalRateLimitMiddleware)
 app.add_middleware(BodySizeLimitMiddleware)
+app.add_middleware(BotDefenseMiddleware)
 app.add_middleware(LatencyAlertMiddleware)
 app.add_middleware(CatalogCacheHeadersMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)

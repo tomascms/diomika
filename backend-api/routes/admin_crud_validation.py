@@ -237,8 +237,25 @@ def _assert_model_category_tipo(table_name: str, payload: dict) -> None:
             raise ValueError("O modelo escolhido não pertence a esta família de produto.")
 
 
+def _validate_ean_checksum(ean: str | None) -> None:
+    """Valida checksum EAN-13 se presente."""
+    from utils.ean_validator import get_ean_error_message
+
+    ean_str = str(ean or "").strip()
+    if not ean_str:
+        return  # EAN é opcional
+
+    error = get_ean_error_message(ean_str)
+    if error:
+        raise ValueError(f"EAN inválido: {error}")
+
+
 def _validate_product_payload(table_name: str, payload: dict, record_id: str | None = None) -> None:
     """Run all product-related validations."""
+    # Valida EAN checksum se o campo existir
+    if "ean" in payload:
+        _validate_ean_checksum(payload.get("ean"))
+
     if table_name == "oculo":
         _validate_oculo(payload, record_id)
     elif table_name == "regional":
