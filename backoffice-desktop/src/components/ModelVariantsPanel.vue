@@ -179,11 +179,154 @@ defineExpose({ save })
 </template>
 
 <style scoped>
-.variants-panel { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); display: grid; gap: 12px; }
-.hint, .muted { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
-.err { color: var(--danger); margin: 0; }
-.variant-row { padding: 14px; display: flex; gap: 12px; align-items: flex-start; }
-.fields { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.ean { font-variant-numeric: tabular-nums; }
-.btn-sm { padding: 6px 10px; }
+.variants-panel {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 12px;
+}
+
+.variants-panel h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--accent);
+  padding-bottom: 12px;
+  border-bottom: 2px solid rgba(59, 130, 246, 0.2);
+}
+
+.hint,
+.muted {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.muted {
+  padding: 12px;
+  background: rgba(59, 130, 246, 0.04);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: var(--radius-sm);
+  animation: fadeIn 0.3s ease-out;
+}
+
+.err {
+  margin: 0;
+  padding: 12px;
+  color: var(--danger);
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.04) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-left: 4px solid var(--danger);
+  border-radius: var(--radius-sm);
+  animation: slideDown 0.3s ease-out;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.1);
+}
+
+.variant-row {
+  padding: 14px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.01) 0%, transparent 100%);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+  animation: slideUp 0.3s ease-out;
+}
+
+.variant-row:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.04) 0%, rgba(59, 130, 246, 0.01) 100%);
+  border-color: rgba(59, 130, 246, 0.2);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.08);
+}
+
+.fields {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.fields .input {
+  padding: 10px 12px;
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: rgba(255, 255, 255, 0.3);
+  color: var(--text-primary);
+  transition: all var(--transition);
+}
+
+.fields .input::placeholder {
+  color: var(--text-muted);
+}
+
+.fields .input:hover {
+  border-color: rgba(59, 130, 246, 0.25);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.06);
+}
+
+.fields .input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12), inset 0 0 0 1px rgba(59, 130, 246, 0.1);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.fields .input:disabled {
+  background: rgba(120, 120, 120, 0.04);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.ean {
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 </style>

@@ -23,3 +23,19 @@ app.config.errorHandler = (err) => {
 // Bust stale module graph on custom domain after partial deploys.
 if (typeof window !== 'undefined') window.__DIOMIKA_BUILD__ = '2026-08-27f'
 app.mount('#app')
+
+// Register Service Worker for offline support and caching
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((reg) => {
+        console.log('[Diomika] Service Worker registered', reg)
+        // Check for updates every minute in the background
+        setInterval(() => {
+          reg.update().catch(() => {})
+        }, 60000)
+      })
+      .catch((err) => console.log('[Diomika] Service Worker registration failed', err))
+  })
+}
