@@ -478,42 +478,136 @@ onActivated(() => {
 </template>
 
 <style scoped>
-.page-view { display: grid; gap: 0.25rem; }
-.toolbar { margin-bottom: 0; }
-.search { max-width: none; }
-.hidden-file { display: none; }
+.page-view {
+  display: grid;
+  gap: 16px;
+}
+
+.toolbar-panel {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-xs);
+}
+
+.input {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 14px;
+  background: var(--surface);
+  color: var(--text-primary);
+  transition: all var(--transition);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input.search {
+  flex: 1;
+  min-width: 200px;
+}
+
+.input.filter-mini {
+  min-width: 150px;
+}
+
+.hidden-file {
+  display: none;
+}
+
 .notice {
-  margin: 0 0 0.85rem;
-  padding: 0.65rem 0.9rem;
-  border-radius: var(--radius-sm);
-  background: var(--accent-soft);
-  color: var(--accent-hover);
-  font-size: 0.88rem;
-  font-weight: 600;
-}
-.picker { padding: 1.15rem 1.25rem; margin-bottom: 1rem; }
-.picker h3 {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: 1.15rem;
-  font-weight: 560;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  font-size: 14px;
+  font-weight: 500;
 }
-.picker label { display: block; margin: 0.85rem 0 0.35rem; font-size: 0.84rem; font-weight: 600; color: var(--text-muted); }
-.picker-actions { display: flex; gap: 0.55rem; margin-top: 1rem; }
-.ok { color: var(--success); margin: 0 0 0.75rem; font-weight: 600; }
-.err { color: var(--danger); margin: 0 0 0.75rem; font-weight: 600; }
+
+.picker {
+  padding: 20px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.picker h3 {
+  margin: 0 0 16px 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.picker label {
+  display: block;
+  margin: 16px 0 8px 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.picker-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  justify-content: flex-end;
+}
+
+.ok {
+  color: var(--success);
+  margin: 0 0 12px 0;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 8px 12px;
+  background: rgba(16, 185, 129, 0.08);
+  border-radius: var(--radius);
+  border-left: 3px solid var(--success);
+}
+
+.err {
+  color: var(--danger);
+  margin: 0 0 12px 0;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: var(--radius);
+  border-left: 3px solid var(--danger);
+}
+
 .pager {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin-top: 0.85rem;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
   flex-wrap: wrap;
 }
+
 .pager-meta {
   margin: 0;
-  font-size: 0.84rem;
-  color: var(--text-muted);
-  font-weight: 550;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
 }
 </style>

@@ -115,47 +115,60 @@ const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route
 .shell {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
+  grid-template-rows: var(--header-height) 1fr;
   min-height: 100vh;
   background: var(--bg);
+  gap: 0;
 }
 
 .main {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  grid-column: 2;
+  grid-row: 1 / -1;
 }
 
 .topbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
-  padding: 1.1rem 1.5rem;
+  gap: 2rem;
+  padding: 0 2rem;
   border-bottom: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(8px);
+  background: var(--surface);
+  backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
   z-index: 20;
+  box-shadow: var(--shadow-sm);
 }
 
 .menu-btn {
   display: none;
+  padding: 8px 12px;
+  font-size: 14px;
+  border-radius: var(--radius);
+}
+
+.topbar-title {
+  flex: 1;
 }
 
 .topbar-title h1 {
-  margin: 0.15rem 0 0;
+  margin: 0;
   font-family: var(--font-display);
-  font-size: 1.55rem;
-  font-weight: 560;
-  letter-spacing: -0.02em;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
 }
 
 .eyebrow {
-  margin: 0;
-  font-size: 0.7rem;
+  margin: 0 0 4px 0;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.6px;
   color: var(--text-muted);
   font-weight: 600;
 }
@@ -163,81 +176,115 @@ const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route
 .status-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.7rem;
+  gap: 8px;
+  padding: 6px 12px;
   border-radius: 999px;
-  font-size: 0.76rem;
-  font-weight: 650;
-  background: var(--bg-soft);
-  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
   border: 1px solid var(--border);
   white-space: nowrap;
+  transition: all var(--transition);
 }
 
 .status-chip .dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #98a5b3;
+  background: var(--text-muted);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .status-chip.online {
   color: var(--success);
-  border-color: rgba(31, 122, 77, 0.25);
+  border-color: rgba(16, 185, 129, 0.2);
   background: var(--success-soft);
 }
 
-.status-chip.online .dot { background: var(--success); }
+.status-chip.online .dot {
+  background: var(--success);
+}
 
 .status-chip.offline {
   color: var(--danger);
-  border-color: rgba(180, 35, 24, 0.25);
+  border-color: rgba(239, 68, 68, 0.2);
   background: var(--danger-soft);
 }
 
-.status-chip.offline .dot { background: var(--danger); }
+.status-chip.offline .dot {
+  background: var(--danger);
+  animation: none;
+}
 
 .content {
-  padding: 1.35rem 1.5rem 2.5rem;
+  padding: 24px;
   flex: 1;
+  overflow-y: auto;
 }
 
 .banner.error {
-  margin: 0;
-  padding: 0.8rem 1.5rem;
+  margin: 0 0 16px 0;
+  padding: 12px 16px;
   background: var(--danger-soft);
-  border-bottom: 1px solid rgba(180, 35, 24, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius);
   color: var(--danger);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
 .banner.error p {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 14px;
   font-weight: 500;
 }
 
-.overlay { display: none; }
+.overlay {
+  display: none;
+}
 
 @media (max-width: 900px) {
-  .shell { grid-template-columns: 1fr; }
+  .shell {
+    grid-template-columns: 1fr;
+  }
 
-  .menu-btn { display: inline-flex; }
+  .main {
+    grid-column: 1;
+  }
 
-  .topbar-title h1 { font-size: 1.25rem; }
+  .menu-btn {
+    display: inline-flex;
+  }
 
-  .status-chip { display: none; }
+  .topbar {
+    gap: 1rem;
+    padding: 0 1rem;
+  }
+
+  .topbar-title h1 {
+    font-size: 18px;
+  }
+
+  .status-chip {
+    display: none;
+  }
 
   .overlay {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(24, 33, 43, 0.35);
+    background: rgba(15, 23, 42, 0.5);
     z-index: 90;
+    backdrop-filter: blur(4px);
   }
 
   .shell :deep(.sidebar) {
@@ -247,15 +294,17 @@ const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route
     bottom: 0;
     z-index: 100;
     transform: translateX(-105%);
-    transition: transform 0.22s ease;
+    transition: transform var(--transition) cubic-bezier(0.4, 0, 0.2, 1);
     width: min(280px, 86vw);
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-lg);
   }
 
   .shell.sidebar-open :deep(.sidebar) {
     transform: translateX(0);
   }
 
-  .content { padding: 1rem; }
+  .content {
+    padding: 16px;
+  }
 }
 </style>

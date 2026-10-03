@@ -67,55 +67,60 @@ const displayName = computed(() => {
 <style scoped>
 .sidebar {
   width: var(--sidebar-w);
-  background: var(--bg-panel);
+  background: var(--surface);
   border-right: 1px solid var(--border);
-  padding: 1.1rem 0.85rem;
+  padding: 16px 12px;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 16px;
   min-height: 100vh;
+  overflow-y: auto;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-  padding: 0.25rem 0.55rem 0.9rem;
+  gap: 12px;
+  padding: 12px;
   border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
 }
 
 .logo {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius);
   display: grid;
   place-items: center;
-  background: var(--accent);
-  color: #fff;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: white;
   font-family: var(--font-display);
-  font-weight: 560;
-  font-size: 1.15rem;
+  font-weight: 700;
+  font-size: 18px;
+  box-shadow: var(--shadow-sm);
 }
 
 .brand strong {
   display: block;
   font-family: var(--font-display);
-  font-size: 1.15rem;
-  font-weight: 560;
+  font-size: 16px;
+  font-weight: 700;
   letter-spacing: -0.01em;
+  color: var(--text-primary);
 }
 
 .brand small {
   display: block;
   color: var(--text-muted);
-  font-size: 0.72rem;
-  margin-top: 0.1rem;
+  font-size: 11px;
+  margin-top: 2px;
+  font-weight: 500;
 }
 
 .nav {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 4px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -123,87 +128,93 @@ const displayName = computed(() => {
 
 .nav-status {
   margin: 0;
-  padding: 0.6rem 0.7rem;
-  font-size: 0.82rem;
+  padding: 8px 12px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.62rem 0.75rem;
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  color: var(--text-secondary);
   text-decoration: none;
-  font-weight: 550;
-  font-size: 0.92rem;
+  font-weight: 500;
+  font-size: 14px;
   border: 1px solid transparent;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: all var(--transition);
 }
-.nav-item .app-icon { opacity: 0.75; }
+
+.nav-item .app-icon {
+  opacity: 0.6;
+  transition: opacity var(--transition);
+}
+
 .nav-item.active .app-icon,
-.nav-item:hover .app-icon { opacity: 1; }
+.nav-item:hover .app-icon {
+  opacity: 1;
+}
 
 .nav-item:hover {
-  background: var(--bg-soft);
-  color: var(--text);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .nav-item.active {
-  background: var(--accent-soft);
-  color: var(--accent-hover);
-  border-color: rgba(15, 110, 86, 0.18);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(30, 64, 175, 0.1) 100%);
+  color: var(--accent);
+  border-color: rgba(59, 130, 246, 0.2);
+  font-weight: 600;
 }
 
 .sidebar-footer {
   border-top: 1px solid var(--border);
-  padding-top: 0.75rem;
+  padding-top: 12px;
   margin-top: auto;
   display: grid;
-  gap: 0.55rem;
-}
-
-.footer-link {
-  margin: 0;
+  gap: 8px;
 }
 
 .user-box {
-  padding: 0.55rem 0.65rem;
-  border-radius: var(--radius-sm);
-  background: var(--bg-soft);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
 }
 
 .user-line {
   margin: 0;
-  font-size: 0.8rem;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: var(--text-secondary);
   display: flex;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 8px;
   align-items: center;
 }
 
 .user-line .role {
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 0.68rem;
+  letter-spacing: 0.5px;
+  font-size: 10px;
   font-weight: 700;
-  color: var(--accent-hover);
+  color: var(--accent);
 }
 
 .logout-btn {
-  margin-top: 0.45rem;
+  margin-top: 6px;
   width: 100%;
   text-align: left;
   cursor: pointer;
   background: transparent;
-  border: 0;
-  padding: 0.2rem 0;
+  border: none;
+  padding: 4px 0;
   font: inherit;
-  font-size: 0.8rem;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-secondary);
+  transition: color var(--transition);
 }
 
 .logout-btn:hover {
@@ -212,22 +223,27 @@ const displayName = computed(() => {
 
 .hint {
   margin: 0;
-  padding: 0 0.35rem;
-  font-size: 0.72rem;
+  padding: 0 8px;
+  font-size: 11px;
   color: var(--text-muted);
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 6px;
 }
 
 .status-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: #98a5b3;
+  background: var(--text-muted);
   flex-shrink: 0;
 }
 
-.status-dot.online { background: var(--success); }
-.status-dot.offline { background: var(--danger); }
+.status-dot.online {
+  background: var(--success);
+}
+
+.status-dot.offline {
+  background: var(--danger);
+}
 </style>
