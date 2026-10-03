@@ -88,7 +88,9 @@ def test_hard_delete_allowed_for_admin():
     table.eq.return_value = table
     table.execute.return_value = MagicMock(data=[])
 
-    with patch("routes.admin_crud._schema_for"), patch("routes.admin_crud.get_db", return_value=db):
+    with patch("routes.admin_crud._schema_for"), patch("routes.admin_crud.get_db", return_value=db), patch(
+        "routes.admin_crud_helpers.get_db", return_value=db
+    ):
         with patch("routes.admin_crud._invalidate_catalog_cache"), patch("routes.admin_crud._audit"):
             out = delete_record(Req(), "categories", "00000000-0000-0000-0000-000000000001", hard=True)
     assert out == {"status": "deleted", "hard": True}

@@ -1,6 +1,6 @@
 {
   "name": "backoffice-desktop",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Diomika Backoffice — app de secretária (Windows / macOS / Linux)",
   "author": "Diomika",
@@ -94,12 +94,12 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",
-    "concurrently": "^9.2.0",
+    "concurrently": "^10.0.5",
     "cross-env": "^7.0.3",
-    "electron": "^33.4.11",
-    "electron-builder": "^25.1.8",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
     "vite": "^8.0.8",
-    "wait-on": "^8.0.3"
+    "wait-on": "^9.5.1"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
