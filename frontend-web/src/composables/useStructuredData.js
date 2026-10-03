@@ -1,4 +1,4 @@
-const SITE = typeof window !== 'undefined' ? window.location.origin : 'https://www.diomika.com'
+const SITE = 'https://www.diomika.com'
 
 export function injectOrganizationJsonLd() {
   if (typeof document === 'undefined') return

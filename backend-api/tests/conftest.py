@@ -10,6 +10,13 @@ mexer em dados reais.
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
+
+# `pytest` sem `python -m` não põe backend-api no sys.path.
+_BACKEND = str(Path(__file__).resolve().parents[1])
+if _BACKEND not in sys.path:
+    sys.path.insert(0, _BACKEND)
 
 _ISOLATED = {
     "DIOMIKA_ENV": "development",

@@ -41,7 +41,7 @@ jobs:
       - name: Testes
         working-directory: backend-api
         # tests/conftest.py isola tudo (BD, Supabase, Redis, Sentry, email).
-        run: pytest tests -q -p no:cacheprovider -o addopts=""
+        run: python -m pytest tests -q -p no:cacheprovider -o addopts=""
 
   storefront:
     name: Loja — lint e build

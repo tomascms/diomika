@@ -2,7 +2,8 @@ import { watch } from 'vue'
 
 const DEFAULT_TITLE = 'Diomika'
 const DEFAULT_DESC = 'Catálogo Diomika — explore categorias, modelos e peça orçamento online.'
-const SITE_ORIGIN = typeof window !== 'undefined' ? window.location.origin : ''
+// Domínio canónico fixo: visitas por *.pages.dev não podem declarar-se canónicas.
+const SITE_ORIGIN = 'https://www.diomika.com'
 
 const ROUTE_META = {
   home: {
