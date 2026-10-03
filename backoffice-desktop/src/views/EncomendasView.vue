@@ -115,12 +115,91 @@ onMounted(load)
   grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.4fr);
   gap: 20px;
   align-items: start;
+  animation: slideUp 0.5s ease-out;
 }
-.list-pane { padding: 16px; }
-.list-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.list-head h2 { margin: 0; font-size: 1.1rem; }
-.btn-sm { padding: 6px 12px; font-size: 0.85rem; }
-.ok { color: var(--success); font-size: 0.9rem; }
-.err { color: var(--danger); font-size: 0.9rem; }
-@media (max-width: 960px) { .encomendas { grid-template-columns: 1fr; } }
+
+.list-pane {
+  padding: 18px;
+  animation: slideDown 0.4s ease-out;
+}
+
+.list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.08);
+}
+
+.list-head h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
+}
+
+.btn-sm {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ok {
+  margin: 0 0 12px 0;
+  color: var(--success);
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.04) 100%);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-left: 4px solid var(--success);
+  animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.12);
+}
+
+.err {
+  margin: 0 0 12px 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.04) 100%);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-left: 4px solid var(--danger);
+  animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.12);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 960px) {
+  .encomendas {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
