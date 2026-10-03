@@ -55,12 +55,14 @@ class CatalogCacheHeadersMiddleware(BaseHTTPMiddleware):
         if request.method != "GET" or response.status_code != 200:
             return response
         path = request.url.path
-        if path == "/categorias" or path.startswith("/categorias/"):
-            response.headers.setdefault("Cache-Control", "public, max-age=300, stale-while-revalidate=600")
-        elif path == "/catalogo/meta" or (
-            path.startswith("/catalogo/") and "/admin/" not in path and response.status_code == 200
+        # Sem cache no browser: com max-age=300 + stale-while-revalidate=600 o
+        # browser mostrava o catálogo antigo até 15 min depois de publicar. A
+        # velocidade vem da cache na Cloudflare (functions/api na loja), que é
+        # invalidada pela versão do catálogo.
+        if path == "/categorias" or path.startswith("/categorias/") or (
+            path.startswith("/catalogo/") and "/admin/" not in path
         ):
-            response.headers.setdefault("Cache-Control", "public, max-age=300, stale-while-revalidate=600")
+            response.headers.setdefault("Cache-Control", "no-cache")
         return response
 
 

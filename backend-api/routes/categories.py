@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import re
+import unicodedata
 
 from uuid import UUID
 
@@ -14,6 +16,11 @@ from core.visibility import require_visible
 logger = logging.getLogger("diomika-api")
 
 router = APIRouter(prefix="/categorias", tags=["Categorias"])
+
+
+def _slugify(value) -> str:
+    text = unicodedata.normalize("NFD", str(value or "")).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
 @router.get("")
@@ -36,16 +43,18 @@ async def get_category_by_slug(slug: str):
     cache_key = f"categories:slug:{slug}"
 
     def load():
-        res = (
-            get_db()
-            .table("categories")
-            .select(PUBLIC_CATEGORY_FIELDS)
-            .eq("slug", slug.strip())
-            .execute()
-        )
-        if not res.data:
+        wanted = slug.strip()
+        res = get_db().table("categories").select(PUBLIC_CATEGORY_FIELDS).eq("slug", wanted).execute()
+        rows = res.data or []
+        if not rows:
+            # Também aceita o slug derivado do nome («material-de-cozinha» para
+            # «Material de Cozinha»): links antigos ou escritos à mão não dão 404.
+            wanted_norm = _slugify(wanted)
+            all_rows = get_db().table("categories").select(PUBLIC_CATEGORY_FIELDS).execute().data or []
+            rows = [r for r in all_rows if _slugify(r.get("nome")) == wanted_norm or _slugify(r.get("slug")) == wanted_norm]
+        if not rows:
             raise HTTPException(status_code=404, detail="Categoria não encontrada")
-        return public_category(require_visible(res.data[0]))
+        return public_category(require_visible(rows[0]))
 
     try:
         return await asyncio.to_thread(get_or_set, cache_key, float(ttl), load)

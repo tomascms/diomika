@@ -182,13 +182,37 @@ def main() -> int:
         print("\n=== 4) Tunnel origin para Docker host :8000 ===\n")
         update_tunnel_origin(env, args.update_tunnel_origin)
 
-    print("\n=== 5) docker compose --profile tunnel ===\n")
+    print("\n=== 5) docker compose --profile tunnel (com recuo automático) ===\n")
+    # 1) guarda a imagem actual como rollback-<data>; 2) build + up; 3) espera
+    # até 2 min pelo /health/live; 4) se a API nova não responder, repõe a
+    # imagem anterior sozinho. Mantém só as 3 imagens de rollback mais recentes.
+    compose = "sudo docker compose --env-file .env -f deploy/docker-compose.free.yml --profile tunnel"
     up = (
-        "set -euo pipefail; cd $HOME/diomika; "
-        "sudo docker compose --env-file .env -f deploy/docker-compose.free.yml --profile tunnel up -d --build; "
-        "sleep 8; curl -sf -A DiomikaHealthcheck/1.0 http://127.0.0.1:8000/health; echo"
+        "set -uo pipefail; cd $HOME/diomika; "
+        "TAG=rollback-$(date +%Y%m%d-%H%M%S); HAVE_ROLLBACK=0; "
+        "if sudo docker image inspect deploy-api:latest >/dev/null 2>&1; then "
+        "  sudo docker tag deploy-api:latest deploy-api:$TAG && HAVE_ROLLBACK=1 && echo \"rollback: deploy-api:$TAG\"; "
+        "fi; "
+        f"{compose} up -d --build || exit 2; "
+        "for i in $(seq 1 30); do "
+        "  if curl -sf -A DiomikaHealthcheck/1.0 http://127.0.0.1:8000/health/live >/dev/null; then "
+        "    curl -s -A DiomikaHealthcheck/1.0 http://127.0.0.1:8000/health; echo; "
+        "    sudo docker images deploy-api --format '{{.Tag}}' | grep '^rollback-' | sort -r | tail -n +4 "
+        "      | xargs -r -I{} sudo docker rmi deploy-api:{} >/dev/null 2>&1; "
+        "    exit 0; "
+        "  fi; sleep 4; "
+        "done; "
+        "echo 'ERRO: a API nova não respondeu em 2 min — a repor a versão anterior'; "
+        "if [ $HAVE_ROLLBACK = 1 ]; then "
+        f"  sudo docker tag deploy-api:$TAG deploy-api:latest && {compose} up -d --no-build api; "
+        "fi; "
+        "exit 3"
     )
-    if subprocess.run([*ssh_base, up], cwd=ROOT).returncode != 0:
+    result = subprocess.run([*ssh_base, up], cwd=ROOT).returncode
+    if result == 3:
+        print("ERRO: deploy revertido para a versão anterior (ver logs: docker logs deploy-api-1)")
+        return 3
+    if result != 0:
         print("ERRO compose na VM")
         return 1
 

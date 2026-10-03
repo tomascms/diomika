@@ -4,7 +4,11 @@ if (!import.meta.env.DEV && !prodBase) {
   throw new Error('VITE_API_BASE_URL em falta — configure antes do build de produção.')
 }
 
+// POST (formulários) vão directos à API. GET de catálogo vão a /api no próprio
+// domínio da loja: em produção é a função da Cloudflare (functions/api) que os
+// serve da cache do PoP; em dev é o proxy do Vite.
 const base = (import.meta.env.DEV ? '/api' : prodBase)
+const getBase = import.meta.env.VITE_EDGE_API === '0' && !import.meta.env.DEV ? prodBase : '/api'
 
 export const API_BASE_URL = base
 
@@ -79,7 +83,7 @@ export async function apiGet(path, { retries = 2 } = {}) {
   for (let attempt = 0; ; attempt += 1) {
     let resp
     try {
-      resp = await fetchWithTimeout(`${base}${path}`)
+      resp = await fetchWithTimeout(`${getBase}${path}`)
     } catch (err) {
       // Um timeout (25 s) não se repete — só falhas rápidas de rede.
       const timedOut = String(err?.message || '').includes('demorou')

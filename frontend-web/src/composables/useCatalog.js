@@ -21,21 +21,25 @@ import { parseDimensions } from '@/lib/images'
 
 const metaCache = ref(null)
 let metaInFlight = null
-const LIST_CACHE_KEY = 'diomika_cat_models_v1'
-const LIST_TTL_MS = 5 * 60 * 1000
+const LIST_CACHE_KEY = 'diomika_cat_models_v2'
+// Só evita repetir o mesmo pedido em navegações seguidas; acima disto vai-se
+// sempre buscar dados frescos (a cache rápida é a da Cloudflare). Uma cópia
+// mais antiga só serve de recurso se a API falhar.
+const LIST_FRESH_MS = 15 * 1000
+const LIST_FALLBACK_MS = 24 * 60 * 60 * 1000
 
 function listCacheId(tipo, categoryId, activeFilters) {
   return `${tipo}:${categoryId}:${JSON.stringify(activeFilters || {})}`
 }
 
-function readListCache(id) {
+function readListCache(id, maxAgeMs = LIST_FRESH_MS) {
   if (typeof sessionStorage === 'undefined') return null
   try {
     const raw = sessionStorage.getItem(LIST_CACHE_KEY)
     if (!raw) return null
     const bag = JSON.parse(raw)
     const row = bag?.[id]
-    if (!row?.data || !row?.exp || Date.now() > row.exp) return null
+    if (!row?.data || !row?.at || Date.now() - row.at > maxAgeMs) return null
     return row.data
   } catch {
     return null
@@ -47,10 +51,10 @@ function writeListCache(id, data) {
   try {
     const raw = sessionStorage.getItem(LIST_CACHE_KEY)
     const bag = raw ? JSON.parse(raw) : {}
-    bag[id] = { data, exp: Date.now() + LIST_TTL_MS }
+    bag[id] = { data, at: Date.now() }
     const keys = Object.keys(bag)
     if (keys.length > 80) {
-      keys.sort((a, b) => (bag[a].exp || 0) - (bag[b].exp || 0))
+      keys.sort((a, b) => (bag[a].at || 0) - (bag[b].at || 0))
       keys.slice(0, keys.length - 60).forEach((k) => delete bag[k])
     }
     sessionStorage.setItem(LIST_CACHE_KEY, JSON.stringify(bag))
@@ -142,16 +146,18 @@ export function useCatalog() {
       }
     }
 
-    if (cached) {
-      loadFresh()
-        .then((data) => writeListCache(cacheId, data))
-        .catch(() => {})
-      return cached
-    }
+    if (cached) return cached
 
-    const data = await loadFresh()
-    writeListCache(cacheId, data)
-    return data
+    try {
+      const data = await loadFresh()
+      writeListCache(cacheId, data)
+      return data
+    } catch (err) {
+      // Resiliência: sem API nem Supabase, mostra a última lista vista nesta sessão.
+      const fallback = readListCache(cacheId, LIST_FALLBACK_MS)
+      if (fallback) return fallback
+      throw err
+    }
   }
 
   const searchCatalog = async (query, { limit = 40 } = {}) => {

@@ -181,6 +181,12 @@ async def import_csv(
     if errors and not dry_run and created == 0 and updated == 0:
         raise HTTPException(status_code=400, detail={"message": "Importação falhou", "errors": errors[:20]})
 
+    if not dry_run and (created or updated):
+        # Sem isto os registos importados só apareciam na loja quando a cache expirasse.
+        from core.cache import invalidate_catalog_change
+
+        invalidate_catalog_change()
+
     audit_request(
         request,
         action="import",

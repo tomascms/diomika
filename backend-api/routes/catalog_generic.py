@@ -11,9 +11,10 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from core.auth import require_catalog_role
-from core.cache import catalog_cache_ttl, get_or_set
+from core.cache import catalog_cache_ttl, catalog_version, get_or_set
 from core.catalog_service import catalogue_for_category, model_detail_for_slugs, model_detail_for_tipo
 from core.catalog_storefront import DEFAULT_PAGE_LIMIT
 from core.database import get_db
@@ -40,6 +41,13 @@ async def get_catalog_meta():
 
     ttl = catalog_cache_ttl()
     return await asyncio.to_thread(get_or_set, "catalog:meta", float(ttl), catalog_metadata)
+
+
+@router.get("/version")
+async def get_catalog_version():
+    """Muda a cada escrita no backoffice — a cache da loja na Cloudflare usa-a na chave."""
+    value = await asyncio.to_thread(catalog_version)
+    return JSONResponse({"v": value}, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/search")

@@ -125,6 +125,46 @@ def invalidate_prefix(prefix: str) -> int:
     return count
 
 
+_VERSION_KEY = "catalog:version"
+_local_version = str(int(time.time() * 1000))
+
+
+def catalog_version() -> str:
+    """Versão actual do catálogo público — muda a cada escrita no backoffice.
+
+    A cache da Cloudflare (functions/api na loja) usa-a na chave: depois de
+    publicar, a versão muda e a loja deixa de servir a cópia antiga em segundos.
+    Fica no Redis para os workers do uvicorn concordarem; sem Redis cada worker
+    tem a sua (a edge só perde eficiência, nunca serve dados velhos).
+    """
+    client = get_redis()
+    if client is not None:
+        try:
+            key = _redis_key(_VERSION_KEY)
+            value = client.get(key)
+            if value is None:
+                client.set(key, _local_version, nx=True)
+                value = client.get(key)
+            if value is not None:
+                return value.decode() if isinstance(value, bytes) else str(value)
+        except Exception as exc:
+            logger.debug("Redis catalog_version falhou: %s", exc)
+    return _local_version
+
+
+def bump_catalog_version() -> str:
+    global _local_version
+    new_value = str(int(time.time() * 1000))
+    _local_version = new_value
+    client = get_redis()
+    if client is not None:
+        try:
+            client.set(_redis_key(_VERSION_KEY), new_value)
+        except Exception as exc:
+            logger.debug("Redis bump_catalog_version falhou: %s", exc)
+    return new_value
+
+
 def _purge_memory(now: float) -> None:
     expired = [k for k, (exp, _) in _store.items() if exp <= now]
     for k in expired:
@@ -151,6 +191,7 @@ def invalidate_catalog_change(
     )
     from models.schemas import CATEGORY_DEFINITIONS
 
+    bump_catalog_version()
     invalidate_prefix("admin:merged:")
     invalidate_key("catalog:meta")
 

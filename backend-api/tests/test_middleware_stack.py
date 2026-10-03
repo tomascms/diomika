@@ -18,7 +18,8 @@ def client():
     import main
 
     # Sem `with`: não corre o lifespan (warm-up de cache / workers).
-    return TestClient(main.app)
+    # localhost é aceite pelo TrustedHostMiddleware em dev e em produção.
+    return TestClient(main.app, base_url="http://localhost")
 
 
 BROWSER_UA = (

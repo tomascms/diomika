@@ -7,12 +7,12 @@ const loading = ref(false)
 const error = ref('')
 let loadPromise = null
 
-const CACHE_KEY = 'diomika_cats_v5'
+const CACHE_KEY = 'diomika_cats_v6'
 const CACHE_TTL_MS = 5 * 60 * 1000
 
 function readCatCache() {
   try {
-    ;['diomika_cats_v1', 'diomika_cats_v2', 'diomika_cats_v3'].forEach((k) =>
+    ;['diomika_cats_v1', 'diomika_cats_v2', 'diomika_cats_v3', 'diomika_cats_v5'].forEach((k) =>
       sessionStorage.removeItem(k),
     )
   } catch {
@@ -62,7 +62,7 @@ export function useCategories() {
     if (categories.value.length && !force) {
       return categories.value
     }
-    if (categories.value.length === 0 && !force && loadPromise) {
+    if (loadPromise) {
       return loadPromise
     }
 
@@ -70,8 +70,10 @@ export function useCategories() {
       const cached = readCatCache()
       if (cached?.length) {
         categories.value = cached.map((c) => ({ ...c }))
-        // Mostrar já; assinar imagens em background (bucket privado)
+        // Mostra já a cópia guardada e vai buscar a lista actual por trás: o
+        // que se publicar no backoffice substitui-a no ecrã assim que chega.
         void hydrateCategoryImages(categories.value)
+        void load(true).catch(() => {})
         return categories.value
       }
     }
@@ -95,8 +97,10 @@ export function useCategories() {
         void hydrateCategoryImages(categories.value)
         return categories.value
       } catch (e) {
-        error.value = e.message || 'Erro ao carregar categorias.'
-        categories.value = []
+        // Numa revalidação em segundo plano mantém-se o que já está no ecrã.
+        if (!categories.value.length) {
+          error.value = e.message || 'Erro ao carregar categorias.'
+        }
         throw e
       } finally {
         loading.value = false

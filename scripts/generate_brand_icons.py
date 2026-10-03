@@ -78,6 +78,10 @@ def main() -> None:
     ico_frames = [render(s, **tile) for s in ico_sizes]
     ico_frames[-1].save(web / "favicon.ico", sizes=[(s, s) for s in ico_sizes], append_images=ico_frames[:-1])
 
+    # PNG pequenos: alguns browsers (Opera, Safari antigo) preferem PNG a SVG.
+    render(16, **tile).save(web / "favicon-16.png", optimize=True)
+    render(32, **tile).save(web / "favicon-32.png", optimize=True)
+
     # iOS arredonda sozinho → fundo cheio, sem cantos.
     render(180, background=WHITE, mark_height=0.62).save(web / "apple-touch-icon.png", optimize=True)
     render(192, **tile).save(web / "icon-192.png", optimize=True)

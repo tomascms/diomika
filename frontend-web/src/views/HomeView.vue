@@ -169,43 +169,45 @@ const featured = computed(() => categories.value.slice(0, 6))
   font-size: 0.9rem;
 }
 
-/* A faixa em ângulo do símbolo (D azul, M vermelho) a enquadrar o mosaico. */
+/* A faixa em ângulo do símbolo (D azul, M vermelho) a enquadrar o mosaico.
+   Desenhada com clip-path dentro da própria caixa — nada sai para cima do
+   texto quando o layout passa a uma coluna. */
 .hero-visual {
   position: relative;
-  min-height: 360px;
+  min-height: 380px;
+  isolation: isolate;
 }
 
 .ribbon {
   position: absolute;
   display: block;
-  transform: skewY(-24deg);
-  transform-origin: left;
+  z-index: -1;
 }
 
 .ribbon--blue {
-  inset: 12% 20% auto -8%;
-  height: 78%;
+  inset: 0 24% 4% 0;
   background: var(--brand-blue);
+  clip-path: polygon(0 34%, 100% 0, 100% 70%, 0 100%);
 }
 
 .ribbon--red {
-  top: 6%;
-  right: -6%;
-  width: 22%;
-  height: 54%;
+  top: 4%;
+  right: 0;
+  width: 20%;
+  height: 62%;
   background: var(--brand-red);
+  clip-path: polygon(0 22%, 100% 0, 100% 100%, 0 100%);
 }
 
 .mosaic {
   position: relative;
   display: grid;
   gap: 6px;
-  height: 100%;
-  min-height: 360px;
-  margin: 8% 0 0 8%;
+  min-height: 320px;
+  margin: 12% 4% 0 10%;
   overflow: hidden;
   background: var(--color-bg-soft);
-  clip-path: polygon(0 18%, 100% 0, 100% 100%, 0 100%);
+  clip-path: polygon(0 16%, 100% 0, 100% 100%, 0 100%);
 }
 
 .mosaic--2 {
@@ -407,12 +409,12 @@ const featured = computed(() => categories.value.slice(0, 6))
   }
 
   .hero-visual {
-    min-height: 240px;
+    min-height: 0;
+    max-width: 620px;
   }
 
   .mosaic {
-    min-height: 240px;
-    margin: 4% 0 0 6%;
+    min-height: 260px;
   }
 
   .steps {
@@ -422,7 +424,6 @@ const featured = computed(() => categories.value.slice(0, 6))
 }
 
 @media (max-width: 560px) {
-  .hero-visual,
   .mosaic {
     min-height: 200px;
   }
