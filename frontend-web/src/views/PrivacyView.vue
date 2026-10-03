@@ -97,33 +97,89 @@ const breadcrumbItems = [
 
 <style scoped>
 .legal-page {
-  padding-bottom: 2rem;
+  padding-bottom: 3rem;
+  background: #fff;
 }
+
 .legal-content {
   max-width: 720px;
   margin: 0 auto;
-  padding: 2rem var(--page-pad) 3rem;
-  line-height: 1.7;
+  padding: 2.5rem var(--page-pad) 3.5rem;
+  line-height: 1.8;
+  animation: slideUp 0.6s ease-out;
 }
+
 .legal-content h1 {
   font-size: clamp(1.85rem, 3vw, 2.25rem);
-  margin-bottom: 0.5rem;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  margin: 0 0 0.75rem;
+  color: var(--color-ink-deep);
 }
+
 .updated {
   color: var(--color-muted);
-  margin-bottom: 2rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  margin-bottom: 2.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
+
 section {
-  margin-bottom: 1.5rem;
+  margin-bottom: 2.25rem;
+  padding-bottom: 1.75rem;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.08);
+  animation: slideUp 0.6s ease-out;
 }
+
+section:last-child {
+  border-bottom: none;
+}
+
 section h2 {
   font-family: var(--font-body);
-  font-size: 1rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-  color: var(--color-ink-soft);
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.85rem;
+  color: var(--color-ink-deep);
 }
+
+section p {
+  margin: 0 0 1rem;
+  color: var(--color-ink-soft);
+  font-size: 0.99rem;
+}
+
+section p:last-child {
+  margin-bottom: 0;
+}
+
+section strong {
+  font-weight: 700;
+  color: var(--color-ink-deep);
+}
+
 ul {
-  padding-left: 1.25rem;
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+}
+
+li {
+  margin: 0.5rem 0;
+  color: var(--color-ink-soft);
+  font-size: 0.99rem;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>
