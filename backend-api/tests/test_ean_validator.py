@@ -35,8 +35,10 @@ class TestEANChecksum:
         assert validate_ean_checksum(None) is False
 
     def test_leading_trailing_spaces(self):
-        """Espaços não são tratados por validate_ean_checksum (uso format_ean)."""
-        assert validate_ean_checksum(" 5901234123457 ") is False  # Espaços invalid
+        """O checksum tolera espaços à volta (EAN colado de uma folha de cálculo);
+        o schema do produto (^\d{13}$) é que impede guardar com espaços."""
+        assert validate_ean_checksum(" 5901234123457 ") is True
+        assert validate_ean_checksum("5901234 123457") is False
 
 
 class TestEANFormat:

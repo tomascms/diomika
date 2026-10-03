@@ -163,12 +163,12 @@ class SagaExecutor:
     async def _send_webhook(self, url: str, data: dict) -> None:
         """Envia resultado via webhook."""
         try:
-            import aiohttp
+            import httpx  # dependência de produção (aiohttp não está na imagem)
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, json=data, timeout=10) as resp:
-                    if resp.status != 200:
-                        logger.warning(f"Webhook {url} returned {resp.status}")
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(url, json=data)
+                if resp.status_code != 200:
+                    logger.warning(f"Webhook {url} returned {resp.status_code}")
         except Exception as exc:
             logger.error(f"Failed to send webhook to {url}: {exc}")
 

@@ -11,6 +11,31 @@ logger = logging.getLogger("background-workers")
 
 _stop = threading.Event()
 _threads: list[threading.Thread] = []
+_lock_handle = None
+
+
+def _acquire_single_runner_lock() -> bool:
+    """Com vários processos uvicorn (UVICORN_WORKERS=2), só um corre os workers.
+
+    Antes, cada processo lia a mesma caixa IMAP e a mesma fila outbox no mesmo
+    segundo — duas cópias a competir (respostas de clientes podiam entrar em
+    duplicado na conversa). O lock do SO é libertado se o processo morrer; o
+    processo que o uvicorn arranca a seguir fica com ele.
+    """
+    global _lock_handle
+    try:
+        import fcntl
+    except ImportError:  # Windows (dev): um só processo
+        return True
+    path = os.getenv("WORKER_LOCK_FILE", "/tmp/diomika-embedded-workers.lock")
+    handle = open(path, "w")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        return False
+    _lock_handle = handle
+    return True
 
 
 def should_run_embedded() -> bool:
@@ -103,6 +128,9 @@ def start_background_workers() -> None:
         logger.info("Workers embutidos desactivados (RUN_EMBEDDED_WORKERS)")
         return
     if _threads:
+        return
+    if not _acquire_single_runner_lock():
+        logger.info("Workers embutidos já a correr noutro processo da API — este só serve pedidos")
         return
 
     for target, name in (

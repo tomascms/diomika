@@ -20,8 +20,14 @@ class TestRateLimitConfig:
 
     def test_config_burst_size(self):
         """Verify burst size is calculated correctly."""
+        # Burst explícito na config para bots agressivos.
         config = RATE_LIMIT_CONFIGS[RateLimitTier.AGGRESSIVE_BOT]
-        assert config.burst_size == max(int(10 / 6), 1)  # 1
+        assert config.burst_size == 3
+
+        # Sem burst explícito, deriva de requests_per_minute / 6.
+        from core.rate_limiting import RateLimitConfig
+
+        assert RateLimitConfig(tier=RateLimitTier.HUMAN, requests_per_minute=60).burst_size == 10
 
         config = RATE_LIMIT_CONFIGS[RateLimitTier.HUMAN]
         assert config.burst_size >= 1

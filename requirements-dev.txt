@@ -1,4 +1,4 @@
-# Desenvolvimento, CI e módulos opcionais — NÃO entra na imagem de produção.
+# Desenvolvimento e CI — NÃO entra na imagem de produção.
 -r requirements.txt
 
 # Testes
@@ -10,27 +10,6 @@ vulture
 # Segurança / qualidade (CI)
 bandit
 safety
-sqlmap
 
-# Carga
+# Carga (deploy/load, load-tests/)
 locust
-playwright
-
-# Extras dos módulos opcionais (core/tracing.py, core/metrics.py,
-# core/websocket_backoffice.py, workers/saga_executor.py, routes/health.py…)
-sqlalchemy
-alembic
-websockets
-python-socketio
-opentelemetry-api
-opentelemetry-sdk
-opentelemetry-exporter-jaeger
-opentelemetry-instrumentation-fastapi
-opentelemetry-instrumentation-sqlalchemy
-opentelemetry-instrumentation-redis
-opentelemetry-instrumentation-requests
-prometheus-client
-aiohttp
-python-json-logger
-celery
-rq
