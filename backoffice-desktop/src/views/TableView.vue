@@ -488,11 +488,22 @@ onActivated(() => {
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
-  padding: 16px;
+  padding: 12px 16px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-xs);
+}
+
+@media (max-width: 768px) {
+  .toolbar-panel {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .input.search {
+    order: -1;
+  }
 }
 
 .input {

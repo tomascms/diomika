@@ -226,6 +226,8 @@ const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route
   padding: 24px;
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .banner.error {
