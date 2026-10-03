@@ -75,6 +75,7 @@ from .admin_crud_validation import (
     _product_validation_table,
     _validate_product_payload,
 )
+from .admin_crud_cqrs_integration import get_cqrs_integration
 
 logger = logging.getLogger("diomika-api")
 
@@ -270,26 +271,20 @@ def create_record(
         body = _enrich_create_payload(table_name, body)
         validated = schema_class(**body)
         payload = _normalize_payload(validated.model_dump())
-        ins = _db_table(table_name).insert(payload).execute()
-        row = (ins.data or [{}])[0]
+
+        # ✅ CQRS Integration: Use command handler instead of direct DB call
+        cqrs = get_cqrs_integration()
+        row = cqrs.create_entity(
+            request=request,
+            table_name=table_name,
+            data=payload,
+            idempotency_key=key if key else None,
+            ip_address=request.client.host if request.client else None,
+        )
+
         record_id = str(row.get("id") or "")
         if key:
             complete_idempotent_request(key, op, row)
-        strategy = CacheInvalidationAnalyzer.get_strategy_for_change(
-            table_name,
-            old_record=None,
-            new_record=row,
-        )
-        count = GranularCacheInvalidator.execute_strategy(
-            strategy,
-            table_name=table_name,
-            tipo=row.get("tipo_catalogo"),
-            id_modelo=row.get("id_modelo"),
-            id_categoria=row.get("id_categoria"),
-            record_id=record_id,
-        )
-        logger.debug(f"Cache invalidated {count} keys using {strategy.value} strategy for create {table_name}/{record_id}")
-        _audit(request, "create", table_name, resource_id=record_id or None)
         _schedule_barcode_update(table_name, record_id, payload.get("ean"))
         if payload.get("visibilidade") and table_name in all_model_tables():
             _publish_catalog_children(table_name, record_id)
@@ -314,9 +309,6 @@ def update_record(request: Request, table_name: str, record_id: str, body: dict)
     schema_class = _schema_for(table_name)
     assert_table_action(table_name, "update", _role(request))
     try:
-        old_record_res = _scoped(_db_table(table_name), table_name).eq("id", record_id).limit(1).execute()
-        old_record = (old_record_res.data or [{}])[0] if old_record_res.data else {}
-
         body = fold_attributes(table_name, {**body, "id": record_id})
         body = _resolve_image_fields(table_name, body)
         body = _enrich_update_payload(table_name, body, record_id)
@@ -324,31 +316,24 @@ def update_record(request: Request, table_name: str, record_id: str, body: dict)
         payload = _normalize_payload(validated.model_dump())
         payload.pop("id", None)
         payload.pop("created_at", None)
-        res = _scoped(_db_table(table_name).update(payload), table_name).eq("id", record_id).execute()
-        updated = (res.data or [{}])[0]
 
-        strategy = CacheInvalidationAnalyzer.get_strategy_for_change(
-            table_name,
-            old_record=old_record,
-            new_record=updated or {**old_record, **payload},
-        )
-        count = GranularCacheInvalidator.execute_strategy(
-            strategy,
+        # ✅ CQRS Integration: Use command handler instead of direct DB call
+        cqrs = get_cqrs_integration()
+        updated = cqrs.update_entity(
+            request=request,
             table_name=table_name,
-            tipo=updated.get("tipo_catalogo") or old_record.get("tipo_catalogo"),
-            id_modelo=updated.get("id_modelo") or old_record.get("id_modelo"),
-            id_categoria=updated.get("id_categoria") or old_record.get("id_categoria"),
-            record_id=record_id,
+            entity_id=record_id,
+            data=payload,
+            ip_address=request.client.host if request.client else None,
         )
-        logger.debug(f"Cache invalidated {count} keys using {strategy.value} strategy for update {table_name}/{record_id}")
-        _audit(request, "update", table_name, resource_id=record_id)
+
         _schedule_barcode_update(table_name, record_id, payload.get("ean"))
         if payload.get("visibilidade") and table_name in all_model_tables():
             _publish_catalog_children(table_name, record_id)
         if table_name == "categories":
             if "visibilidade" in payload:
                 _cascade_category_visibility(record_id, bool(payload.get("visibilidade")))
-        return (res.data or [{}])[0] if res.data else {"id": record_id, **payload}
+        return updated
     except Exception as exc:
         detail = _client_error(exc)
         if _is_expected_client_conflict(exc):
@@ -451,33 +436,15 @@ def delete_record(request: Request, table_name: str, record_id: str, hard: bool 
     action = "hard_delete" if hard else "delete"
     assert_table_action(table_name, action, _role(request))
     try:
-        if hard:
-            old_record_res = _scoped(_db_table(table_name), table_name).eq("id", record_id).limit(1).execute()
-            old_record = (old_record_res.data or [{}])[0] if old_record_res.data else {}
-            if table_name in all_model_tables():
-                get_db().table("product_model_colors").delete().eq("id_modelo", record_id).execute()
-                get_db().table("product_variants").delete().eq("id_modelo", record_id).execute()
-            _db_table(table_name).delete().eq("id", record_id).execute()
-            GranularCacheInvalidator.invalidate_surgical(
-                table_name=table_name,
-                record_id=record_id,
-                tipo=old_record.get("tipo_catalogo"),
-                id_modelo=old_record.get("id_modelo"),
-                id_categoria=old_record.get("id_categoria"),
-            )
-            _audit(request, "hard_delete", table_name, resource_id=record_id)
-            return {"status": "deleted", "hard": True}
-        old_record_res = _scoped(_db_table(table_name), table_name).eq("id", record_id).limit(1).execute()
-        old_record = (old_record_res.data or [{}])[0] if old_record_res.data else {}
-        result = soft_delete(table_name, record_id)
-        GranularCacheInvalidator.invalidate_surgical(
+        # ✅ CQRS Integration: Use command handler instead of direct DB call
+        cqrs = get_cqrs_integration()
+        result = cqrs.delete_entity(
+            request=request,
             table_name=table_name,
-            record_id=record_id,
-            tipo=old_record.get("tipo_catalogo"),
-            id_modelo=old_record.get("id_modelo"),
-            id_categoria=old_record.get("id_categoria"),
+            entity_id=record_id,
+            hard_delete=hard,
+            ip_address=request.client.host if request.client else None,
         )
-        _audit(request, "soft_delete", table_name, resource_id=record_id)
         return result
     except HTTPException:
         raise
