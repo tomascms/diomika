@@ -20,157 +20,62 @@ const breadcrumbItems = [
 </script>
 
 <template>
-  <div class="categories-page">
+  <div class="min-h-screen bg-white">
     <Breadcrumbs :items="breadcrumbItems" />
 
-    <header class="page-hero">
-      <div class="page-shell hero-inner">
-        <h1>Categorias</h1>
-        <p>Escolha uma categoria para ver os modelos e pedir orçamento.</p>
+    <!-- Hero Section -->
+    <header class="bg-gradient-to-r from-slate-900 to-slate-800 text-white py-16 px-4">
+      <div class="max-w-6xl mx-auto">
+        <h1 class="text-4xl md:text-5xl font-bold mb-3">Categorias</h1>
+        <p class="text-lg text-slate-300 max-w-2xl">Escolha uma categoria para ver os modelos e pedir orçamento.</p>
       </div>
     </header>
 
-    <div class="page-shell">
+    <!-- Content -->
+    <div class="max-w-6xl mx-auto px-4 py-12">
       <LoadingState v-if="loading" message="A carregar categorias…" />
-      <p v-else-if="error" class="alert alert-error">
-        {{ error }}
-        <button type="button" class="btn btn-secondary btn-retry" @click="load(true)">
-          Tentar novamente
-        </button>
-      </p>
 
-      <div v-else-if="categories.length" class="grid">
+      <div v-else-if="error" class="alert alert-error rounded-lg p-4 mb-6">
+        <p class="text-red-700 mb-3">{{ error }}</p>
+        <button type="button" class="btn btn-sm" @click="load(true)">Tentar novamente</button>
+      </div>
+
+      <!-- Grid de Categorias -->
+      <div v-else-if="categories.length" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <RouterLink
           v-for="cat in categories"
           :key="cat.id"
           :to="categoryProductsRoute(cat)"
-          class="cat-card"
+          class="group card bg-base-100 shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden h-full"
         >
-          <div class="cat-media">
+          <!-- Imagem -->
+          <div class="w-full h-48 bg-gradient-to-br from-blue-900 to-slate-900 overflow-hidden flex items-center justify-center">
             <SoftImage
               v-if="cat.imagem"
               :src="cat.imagem"
               :alt="pretty(cat.nome)"
-              img-class="cat-img"
+              img-class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
-            <span v-else class="cat-placeholder">{{ pretty(cat.nome).charAt(0) || 'D' }}</span>
+            <span v-else class="text-5xl font-bold text-white opacity-80">{{ pretty(cat.nome).charAt(0) || 'D' }}</span>
           </div>
-          <div class="cat-body">
-            <h2>{{ pretty(cat.nome) }}</h2>
-            <span class="cat-go">Ver modelos</span>
+
+          <!-- Corpo -->
+          <div class="card-body p-5 flex flex-col justify-between flex-1">
+            <h2 class="card-title text-lg font-semibold text-slate-900 truncate">{{ pretty(cat.nome) }}</h2>
+            <div class="text-sm text-blue-600 font-medium group-hover:text-blue-700">Ver modelos →</div>
           </div>
         </RouterLink>
       </div>
 
-      <div v-else class="empty-state-block surface-card">
-        <p>Sem categorias disponíveis.</p>
-        <button type="button" class="btn btn-secondary" @click="load(true)">Tentar novamente</button>
+      <!-- Vazio -->
+      <div v-else class="card bg-base-100 shadow-sm p-12 text-center">
+        <p class="text-slate-600 mb-4 text-lg">Sem categorias disponíveis.</p>
+        <button type="button" class="btn btn-primary" @click="load(true)">Tentar novamente</button>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.categories-page {
-  background: #fff;
-  padding-bottom: 2.5rem;
-}
-
-.page-hero {
-  background: linear-gradient(155deg, #0b1f3a 0%, #1b365d 100%);
-  color: #fff;
-}
-
-.hero-inner {
-  padding-top: 2.25rem;
-  padding-bottom: 2.25rem;
-}
-
-.page-hero h1 {
-  margin: 0 0 0.5rem;
-  color: #fff;
-  font-size: clamp(1.85rem, 3.5vw, 2.5rem);
-}
-
-.page-hero p {
-  margin: 0;
-  opacity: 0.92;
-  max-width: 36rem;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-  gap: 1.25rem;
-  padding-top: 0.25rem;
-}
-
-.cat-card {
-  text-decoration: none;
-  color: inherit;
-  display: flex;
-  flex-direction: column;
-  border-radius: 14px;
-  overflow: hidden;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-}
-
-.cat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-md);
-  border-color: var(--color-border-strong);
-}
-
-.cat-media {
-  aspect-ratio: 16 / 10;
-  background: linear-gradient(145deg, #1b365d, #0b1f3a);
-  overflow: hidden;
-}
-
-.cat-media :deep(.soft-image),
-.cat-media :deep(.soft-image__img) {
-  width: 100%;
-  height: 100%;
-}
-
-.cat-media :deep(.soft-image__img) {
-  object-fit: cover;
-  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.cat-card:hover :deep(.soft-image__img) {
-  transform: scale(1.04);
-}
-
-.cat-placeholder {
-  width: 100%;
-  height: 100%;
-  display: grid;
-  place-items: center;
-  font-size: 2.75rem;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.cat-body {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.1rem 1.2rem;
-}
-
-.cat-body h2 {
-  margin: 0;
-  font-size: 1.2rem;
-}
-
-.cat-go {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--color-ink-deep);
-  white-space: nowrap;
-}
+/* Estilos usando Tailwind CSS acima no template */
 </style>
