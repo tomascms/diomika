@@ -47,13 +47,67 @@ const onPick = (e) => {
   </div>
 </template>
 <style scoped>
-.image-field { display: grid; gap: 0.65rem; }
-.row { display: flex; gap: 0.55rem; align-items: center; flex-wrap: wrap; }
-.path { flex: 1; min-width: 160px; color: var(--text-muted); }
-.pick { cursor: pointer; white-space: nowrap; margin: 0; }
-.pick input { display: none; }
-.field-error, .field-warning { margin: 0; font-size: 0.86rem; }
-.field-error { color: var(--danger, #b42318); }
-.field-warning { color: var(--warning, #9a6700); }
-.thumb { margin: 0; width: min(220px, 100%); aspect-ratio: 1; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-soft); }
+.image-field {
+  display: grid;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.path {
+  flex: 1;
+  min-width: 200px;
+  color: var(--text-secondary);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.pick {
+  cursor: pointer;
+  white-space: nowrap;
+  margin: 0;
+  padding: 10px 16px;
+}
+
+.pick input {
+  display: none;
+}
+
+.field-error,
+.field-warning {
+  margin: 0;
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+.field-error {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.08);
+  border-left: 2px solid var(--danger);
+}
+
+.field-warning {
+  color: var(--warning);
+  background: rgba(245, 158, 11, 0.08);
+  border-left: 2px solid var(--warning);
+}
+
+.thumb {
+  margin: 0;
+  width: min(240px, 100%);
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-sm);
+}
 </style>

@@ -186,91 +186,134 @@ async function submit() {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 2rem;
+  padding: 32px 20px;
   background:
-    radial-gradient(ellipse 70% 50% at 15% 0%, rgba(15, 110, 86, 0.12), transparent 55%),
-    radial-gradient(ellipse 50% 40% at 90% 100%, rgba(24, 33, 43, 0.06), transparent 50%),
+    radial-gradient(ellipse 70% 50% at 15% 0%, rgba(59, 130, 246, 0.08), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 90% 100%, rgba(15, 23, 42, 0.04), transparent 50%),
     var(--bg);
 }
 
 .login-panel {
   width: min(420px, 100%);
-  padding: 2rem 1.75rem;
+  padding: 40px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
 }
 
 .brand {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 2rem;
-  font-weight: 560;
+  font-size: 32px;
+  font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--accent-hover);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 h1 {
-  margin: 0.25rem 0 0;
-  font-size: 1.05rem;
+  margin: 8px 0 0;
+  font-size: 20px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-primary);
 }
 
 .lead {
-  margin: 1rem 0 1.35rem;
-  font-size: 0.92rem;
-  line-height: 1.45;
-  color: var(--text-muted);
+  margin: 16px 0 24px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
 }
 
 .form {
   display: grid;
-  gap: 0.85rem;
+  gap: 16px;
 }
 
 label {
   display: grid;
-  gap: 0.35rem;
-  font-size: 0.84rem;
+  gap: 6px;
+  font-size: 12px;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.input {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 14px;
+  background: var(--surface);
+  color: var(--text-primary);
+  transition: all var(--transition);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input:disabled {
+  background: var(--bg-secondary);
   color: var(--text-muted);
+  cursor: not-allowed;
 }
 
 .mfa-setup {
   display: grid;
-  gap: 0.5rem;
-  padding: 0.75rem 0.85rem;
-  border: 1px solid var(--border, #2a3140);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.04);
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
 }
 
 .mfa-title {
   margin: 0;
-  font-size: 0.9rem;
-  font-weight: 650;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
 }
 
 .secret,
 .uri {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 12px;
   word-break: break-all;
+  color: var(--text-secondary);
 }
 
 .secret code,
 .uri code {
-  font-size: 0.76rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 4px;
+  background: var(--surface);
+  border-radius: 3px;
+  color: var(--text-primary);
 }
 
 .error {
   margin: 0;
+  padding: 10px 12px;
   color: var(--danger);
-  font-size: 0.88rem;
+  font-size: 13px;
   font-weight: 500;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius);
 }
 
 .muted {
   margin: 0;
-  font-size: 0.82rem;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 </style>

@@ -523,33 +523,133 @@ defineExpose({ validate })
 
 
 <style scoped>
+.schema-form {
+  display: grid;
+  gap: 20px;
+}
 
-.schema-form { display: grid; gap: 18px; }
+.field {
+  display: grid;
+  gap: 8px;
+}
 
-.field label { display: block; margin-bottom: 6px; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
+.field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
 
-.req { color: var(--danger); }
+.req {
+  color: var(--danger);
+}
 
-.field.has-error .input { border-color: var(--danger); }
+.input {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 14px;
+  background: var(--surface);
+  color: var(--text-primary);
+  transition: all var(--transition);
+}
 
-.field-error { margin: 4px 0 0; font-size: 0.8rem; color: var(--danger); }
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
 
-.textarea { resize: vertical; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+.input:disabled {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
 
-.checkbox-row { display: flex; align-items: center; gap: 8px; }
+.field.has-error .input {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
 
-.readonly-val { margin: 0; padding: 10px 12px; background: var(--bg-hover); border-radius: var(--radius); }
+.field-error {
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.05);
+  border-left: 2px solid var(--danger);
+  border-radius: 2px;
+}
 
-.dim-row { display: flex; align-items: center; gap: 8px; }
+.textarea {
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+}
 
-.dim { width: 88px; }
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-weight: 500;
+}
 
-.string-list { display: grid; gap: 8px; }
+.checkbox-row input[type="checkbox"] {
+  cursor: pointer;
+}
 
-.sl-row { display: flex; gap: 8px; }
+.readonly-val {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  font-size: 14px;
+}
 
-.btn-sm { padding: 6px 10px; font-size: 0.8rem; }
+.dim-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 
+.dim {
+  width: 100px;
+}
+
+.dim-row > span {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.string-list {
+  display: grid;
+  gap: 10px;
+}
+
+.sl-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sl-row .input {
+  flex: 1;
+}
+
+.btn-sm {
+  padding: 8px 12px;
+  font-size: 12px;
+}
 </style>
 
 

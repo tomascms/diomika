@@ -58,6 +58,7 @@
 
   /* Extended Colors */
   --bg-soft: #f1f5f9;
+  --bg-hover: #f8fafc;
   --bg-panel: #ffffff;
   --success-soft: rgba(16, 185, 129, 0.1);
   --danger-soft: rgba(239, 68, 68, 0.1);
@@ -78,6 +79,7 @@
     --bg: #0f172a;
     --bg-secondary: #1e293b;
     --bg-soft: #1e293b;
+    --bg-hover: #334155;
     --bg-panel: #1e293b;
     --surface: #1e293b;
     --surface-secondary: #334155;
