@@ -20,6 +20,7 @@ import {
 import { parseDimensions } from '@/lib/images'
 
 const metaCache = ref(null)
+let metaInFlight = null
 const LIST_CACHE_KEY = 'diomika_cat_models_v1'
 const LIST_TTL_MS = 5 * 60 * 1000
 
@@ -61,14 +62,22 @@ function writeListCache(id, data) {
 export function useCatalog() {
   const loadMeta = async (force = false) => {
     if (metaCache.value && !force) return metaCache.value
-    try {
-      const data = await apiGet('/catalogo/meta')
-      metaCache.value = data
-      setLiveCatalogMeta(data)
-    } catch {
-      metaCache.value = getCatalogMeta()
+    // App.vue e a página pedem o meta ao mesmo tempo no arranque — partilham o pedido.
+    if (!metaInFlight || force) {
+      metaInFlight = (async () => {
+        try {
+          const data = await apiGet('/catalogo/meta')
+          metaCache.value = data
+          setLiveCatalogMeta(data)
+        } catch {
+          metaCache.value = getCatalogMeta()
+        } finally {
+          metaInFlight = null
+        }
+        return metaCache.value
+      })()
     }
-    return metaCache.value
+    return metaInFlight
   }
 
   const resolveTipoConfig = (tipo) => {
