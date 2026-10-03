@@ -199,10 +199,165 @@ onMounted(loadCategories)
 </template>
 
 <style scoped>
-.section { padding: 20px; margin-bottom: 16px; display: grid; gap: 10px; }
-.section h2, .section h3 { margin: 0 0 4px; }
-.lines { list-style: none; padding: 0; margin: 0 0 12px; }
-.lines li { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
-.err { color: var(--danger); }
-.ok { color: var(--success); }
+.order-create {
+  display: grid;
+  gap: 16px;
+  animation: slideUp 0.5s ease-out;
+}
+
+.section {
+  padding: 20px;
+  margin-bottom: 0;
+  display: grid;
+  gap: 14px;
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(59, 130, 246, 0.02) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.section:nth-child(2) { animation-delay: 0.05s; }
+.section:nth-child(3) { animation-delay: 0.1s; }
+.section:nth-child(4) { animation-delay: 0.15s; }
+
+.section h2,
+.section h3 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.section h2 {
+  font-size: 1.25rem;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.1);
+}
+
+.section label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--accent);
+}
+
+.section .input {
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 14px;
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(59, 130, 246, 0.01) 100%);
+  color: var(--text-primary);
+  transition: all var(--transition);
+}
+
+.section .input::placeholder {
+  color: var(--text-muted);
+}
+
+.section .input:hover {
+  border-color: var(--accent-light);
+  background: linear-gradient(135deg, var(--surface), rgba(59, 130, 246, 0.03));
+}
+
+.section .input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12), inset 0 0 0 1px rgba(59, 130, 246, 0.1);
+  background: linear-gradient(135deg, var(--surface), rgba(59, 130, 246, 0.04));
+}
+
+.lines {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0;
+}
+
+.lines li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.08);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.01) 0%, transparent 100%);
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  transition: all var(--transition);
+}
+
+.lines li:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.04) 0%, rgba(59, 130, 246, 0.01) 100%);
+  color: var(--text-primary);
+}
+
+.lines li:last-child {
+  border-bottom: none;
+}
+
+.section .btn {
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+  margin-top: 4px;
+}
+
+.err {
+  margin: 0;
+  padding: 12px;
+  color: var(--danger);
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.04) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-left: 4px solid var(--danger);
+  border-radius: var(--radius-md);
+  animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.12);
+}
+
+.ok {
+  margin: 0;
+  padding: 12px;
+  color: var(--success);
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.04) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-left: 4px solid var(--success);
+  border-radius: var(--radius-md);
+  animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.12);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 </style>
