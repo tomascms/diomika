@@ -13,7 +13,7 @@ const version = require('../package.json').version
 
 /** Primeiro encontrado de cada grupo conta como artefacto da plataforma. */
 const PLATFORM_GROUPS = [
-  [`Diomika-Backoffice-${version}-windows.exe`],
+  [`Diomika-Backoffice-${version}-setup.exe`],
   [`Diomika-Backoffice-${version}-windows.zip`],
   [`Diomika-Backoffice-${version}-mac.dmg`],
   [`Diomika-Backoffice-${version}-linux.AppImage`],
@@ -115,13 +115,12 @@ function ensureCredentials(dest) {
   const secret = path.join(dest, 'CREDENCIAIS.secret.txt')
   const cred = path.join(dest, 'CREDENCIAIS.txt')
   const template = path.join(packaging, 'CREDENCIAIS.template.txt')
-  if (!fs.existsSync(cred) && fs.existsSync(template)) {
-    fs.copyFileSync(template, cred)
-  }
+  // Instruções: sempre a versão actual. O ficheiro secreto nunca é tocado.
+  if (fs.existsSync(template)) fs.copyFileSync(template, cred)
   if (!fs.existsSync(secret)) {
     fs.writeFileSync(
       secret,
-      'Utilizador: (a preencher pela Diomika)\nPassword: (a preencher pela Diomika)\n',
+      'Utilizador: (a preencher pela Diomika)' + String.fromCharCode(10) + 'Password: (a preencher pela Diomika)' + String.fromCharCode(10),
       'utf8'
     )
     console.warn('AVISO: CREDENCIAIS.secret.txt criado vazio — preencher antes de enviar ao cliente.')

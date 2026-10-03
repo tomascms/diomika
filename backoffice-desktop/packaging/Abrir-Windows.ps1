@@ -1,148 +1,69 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
-  Abre o Diomika Backoffice (.exe portátil).
-  Procura o instalador na pasta actual e em locais habituais do repo (release/, cliente-backoffice/).
+  Abre o Diomika Backoffice no Windows.
+  1. Se já estiver instalado → abre a versão instalada (actualiza-se sozinha).
+  2. Senão → corre o instalador Diomika-Backoffice-*-setup.exe desta pasta
+     (instala só para este utilizador, sem pedir administrador, cria atalho
+     no ambiente de trabalho e abre a aplicação).
+  3. Sem instalador → extrai o .zip para .diomika e abre (modo de recurso,
+     sem actualizações automáticas).
 #>
 $ErrorActionPreference = 'Continue'
 $Root = $PSScriptRoot
 Set-Location -LiteralPath $Root
 
-function Write-Step([string]$msg) {
-  Write-Host " - $msg"
-}
+function Write-Step([string]$msg) { Write-Host " - $msg" }
 
-function Join-MultiPath {
-  param([string[]]$Parts)
-  $p = $Parts[0]
-  for ($i = 1; $i -lt $Parts.Count; $i++) {
-    $p = Join-Path $p $Parts[$i]
-  }
-  return $p
-}
-
-function Find-PortableExe {
-  $dirs = @(
-    $Root
-    (Join-MultiPath @($Root, '..'))
-    (Join-MultiPath @($Root, '..', 'release'))
-    (Join-MultiPath @($Root, '..', 'release-fresh'))
-    (Join-MultiPath @($Root, '..', '..', 'cliente-backoffice'))
-    (Join-MultiPath @($Root, '..', 'cliente-backoffice'))
-  ) | ForEach-Object {
-    try { (Resolve-Path -LiteralPath $_ -ErrorAction Stop).Path } catch { $null }
-  } | Where-Object { $_ } | Select-Object -Unique
-
-  $hits = @()
-  foreach ($dir in $dirs) {
-    $hits += Get-ChildItem -LiteralPath $dir -Filter 'Diomika-Backoffice-*-windows.exe' -File -ErrorAction SilentlyContinue
-  }
-  return $hits | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-}
-
-function Find-Zip {
-  $dirs = @(
-    $Root
-    (Join-MultiPath @($Root, '..'))
-    (Join-MultiPath @($Root, '..', 'release'))
-    (Join-MultiPath @($Root, '..', 'release-fresh'))
-    (Join-MultiPath @($Root, '..', '..', 'cliente-backoffice'))
-    (Join-MultiPath @($Root, '..', 'cliente-backoffice'))
-  ) | ForEach-Object {
-    try { (Resolve-Path -LiteralPath $_ -ErrorAction Stop).Path } catch { $null }
-  } | Where-Object { $_ } | Select-Object -Unique
-
-  $hits = @()
-  foreach ($dir in $dirs) {
-    $hits += Get-ChildItem -LiteralPath $dir -Filter 'Diomika-Backoffice-*-windows.zip' -File -ErrorAction SilentlyContinue
-  }
-  return $hits | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+function Newest([string]$filter) {
+  Get-ChildItem -LiteralPath $Root -Filter $filter -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
 }
 
 Write-Host ''
 Write-Host ' Diomika Backoffice'
 Write-Host ' -------------------'
 
-Write-Step 'A desbloquear ficheiros do pacote...'
-@(
-  (Find-Zip)
-  (Find-PortableExe)
-) | Where-Object { $_ } | ForEach-Object {
-  try { Unblock-File -LiteralPath $_.FullName -ErrorAction SilentlyContinue } catch {}
-}
+$installed = @(
+  (Join-Path $env:LOCALAPPDATA 'Programs\Diomika Backoffice\Diomika Backoffice.exe'),
+  (Join-Path $env:LOCALAPPDATA 'Programs\backoffice-desktop\Diomika Backoffice.exe')
+) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 
-$portable = Find-PortableExe
-
-$exclusionOk = $false
-$exDirs = @($Root)
-if ($portable) { $exDirs += $portable.DirectoryName }
-foreach ($exDir in ($exDirs | Select-Object -Unique)) {
-  if (-not $exDir -or -not (Test-Path -LiteralPath $exDir)) { continue }
-  try {
-    if (Get-Command Add-MpPreference -ErrorAction SilentlyContinue) {
-      Add-MpPreference -ExclusionPath $exDir -ErrorAction Stop
-      $exclusionOk = $true
-      Write-Step "Exclusao Defender: $exDir"
-    }
-  } catch {
-    # opcional
-  }
-}
-if (-not $exclusionOk) {
-  Write-Step 'Sem exclusao automatica (opcional). Se o AV bloquear: adicione a pasta do .exe as exclusoes.'
-}
-if ($portable) {
-  Write-Step "A abrir $($portable.Name)..."
-  Write-Step "Local: $($portable.DirectoryName)"
-  try { Unblock-File -LiteralPath $portable.FullName -ErrorAction SilentlyContinue } catch {}
-  Start-Process -FilePath $portable.FullName
+if ($installed) {
+  Write-Step 'A abrir a versão instalada...'
+  Start-Process -FilePath $installed
   exit 0
 }
 
-$zip = Find-Zip
+$setup = Newest 'Diomika-Backoffice-*-setup.exe'
+if ($setup) {
+  Write-Step "A instalar $($setup.Name) (só para este utilizador)..."
+  try { Unblock-File -LiteralPath $setup.FullName -ErrorAction SilentlyContinue } catch {}
+  Start-Process -FilePath $setup.FullName
+  exit 0
+}
+
+$zip = Newest 'Diomika-Backoffice-*-windows.zip'
 $appDir = Join-Path $Root '.diomika'
-$candidates = @(
-  (Join-Path $appDir 'Diomika Backoffice.exe'),
-  (Join-Path $appDir 'Diomika Backoffice\Diomika Backoffice.exe'),
-  (Join-Path $Root 'Diomika Backoffice\Diomika Backoffice.exe'),
-  (Join-Path $Root 'Diomika Backoffice.exe')
-)
-$appExe = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+$appExe = Get-ChildItem -LiteralPath $appDir -Recurse -Filter 'Diomika Backoffice.exe' -File -ErrorAction SilentlyContinue |
+  Select-Object -First 1 -ExpandProperty FullName
 
 if (-not $appExe -and $zip) {
-  Write-Step "A extrair $($zip.Name) para .diomika (so na 1.a vez)..."
-  $extractTo = Join-Path $Root '_extract_tmp'
-  if (Test-Path -LiteralPath $extractTo) {
-    Remove-Item -LiteralPath $extractTo -Recurse -Force -ErrorAction SilentlyContinue
-  }
-  if (Test-Path -LiteralPath $appDir) {
-    Remove-Item -LiteralPath $appDir -Recurse -Force -ErrorAction SilentlyContinue
-  }
-  New-Item -ItemType Directory -Path $extractTo | Out-Null
-  Expand-Archive -LiteralPath $zip.FullName -DestinationPath $extractTo -Force
-
-  $found = Get-ChildItem -LiteralPath $extractTo -Recurse -Filter 'Diomika Backoffice.exe' -File -ErrorAction SilentlyContinue |
-    Select-Object -First 1
-  if ($found) {
-    New-Item -ItemType Directory -Path $appDir -Force | Out-Null
-    $srcDir = $found.Directory.FullName
-    Copy-Item -LiteralPath $srcDir -Destination (Join-Path $appDir (Split-Path -Leaf $srcDir)) -Recurse -Force
-    $appExe = Get-ChildItem -LiteralPath $appDir -Recurse -Filter 'Diomika Backoffice.exe' -File -ErrorAction SilentlyContinue |
-      Select-Object -First 1 -ExpandProperty FullName
-  }
-  Remove-Item -LiteralPath $extractTo -Recurse -Force -ErrorAction SilentlyContinue
+  Write-Step "A extrair $($zip.Name) (só na 1.ª vez)..."
+  try { Unblock-File -LiteralPath $zip.FullName -ErrorAction SilentlyContinue } catch {}
+  if (Test-Path -LiteralPath $appDir) { Remove-Item -LiteralPath $appDir -Recurse -Force -ErrorAction SilentlyContinue }
+  Expand-Archive -LiteralPath $zip.FullName -DestinationPath $appDir -Force
+  $appExe = Get-ChildItem -LiteralPath $appDir -Recurse -Filter 'Diomika Backoffice.exe' -File -ErrorAction SilentlyContinue |
+    Select-Object -First 1 -ExpandProperty FullName
 }
 
 if (-not $appExe) {
   Write-Host ''
-  Write-Host ' ERRO: nao encontrei Diomika-Backoffice-*-windows.exe.'
-  Write-Host ''
-  Write-Host ' Construa primeiro:  cd backoffice-desktop  &&  npm run dist:cliente'
-  Write-Host ' Ou abra de:         cliente-backoffice\Abrir-Windows.cmd'
+  Write-Host ' ERRO: não encontrei o instalador (Diomika-Backoffice-*-setup.exe) nesta pasta.'
+  Write-Host ' Peça à Diomika o pacote mais recente.'
   Write-Host ''
   exit 1
 }
 
-try { Unblock-File -LiteralPath $appExe -ErrorAction SilentlyContinue } catch {}
 Write-Step "A abrir: $appExe"
 Start-Process -FilePath $appExe
 exit 0

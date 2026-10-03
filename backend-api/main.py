@@ -46,6 +46,7 @@ from core.health_checks import (
 from core.advanced_error_handling import ErrorFormatter, DiomikaException
 from core.version import VERSION
 from routes import (
+    desktop_updates,
     categories,
     system,
     contact,
@@ -172,6 +173,7 @@ app.include_router(admin_crud.router)
 app.include_router(admin_form.router)
 app.include_router(admin.router)
 app.include_router(ops_analytics.router)
+app.include_router(desktop_updates.router)
 
 
 @app.exception_handler(DiomikaException)

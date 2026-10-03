@@ -92,7 +92,7 @@ class LatencyAlertMiddleware(BaseHTTPMiddleware):
         t0 = time.perf_counter()
         response = await call_next(request)
         elapsed_ms = (time.perf_counter() - t0) * 1000
-        if elapsed_ms >= self.threshold_ms and not request.url.path.startswith("/health"):
+        if elapsed_ms >= self.threshold_ms and not request.url.path.startswith(("/health", "/system/desktop-updates")):
             try:
                 from core.alerts import send_alert
 

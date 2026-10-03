@@ -54,6 +54,9 @@ jobs:
             backoffice-desktop/release/*.zip
             backoffice-desktop/release/*.dmg
             backoffice-desktop/release/*.AppImage
+            backoffice-desktop/release/*.blockmap
+            backoffice-desktop/release/latest*.yml
+            backoffice-desktop/release/*.AppImage
           if-no-files-found: error
           retention-days: 90
 

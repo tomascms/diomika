@@ -5,6 +5,7 @@
  */
 const { app, BrowserWindow, shell, dialog, net, nativeTheme } = require('electron')
 const http = require('http')
+const { setupAutoUpdates } = require('./updater.cjs')
 const fs = require('fs')
 const path = require('path')
 
@@ -294,6 +295,7 @@ app.whenReady().then(async () => {
     )
   }
   localServer = await createWindow()
+  setupAutoUpdates({ gate: DESKTOP_GATE, getWindow: () => mainWindow })
   // Estado online/offline fica no painel (AppShell) — sem popup ao arrancar.
 })
 

@@ -1,3 +1,4 @@
+-- APLICADO em produção a 2026-10-03 (36 tabelas renomeadas para legacy_*; reverter: ALTER TABLE legacy_x RENAME TO x).
 -- ============================================================================
 -- 0003: cleanup das 13 famílias de tabelas antigas — TEMPLATE, NÃO AUTOMÁTICO
 -- ============================================================================
