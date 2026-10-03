@@ -636,6 +636,11 @@ watch(() => route.fullPath, load, { immediate: true })
   gap: 0.85rem;
   margin-bottom: 1.1rem;
   flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.06) 0%, rgba(59, 130, 246, 0.01) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: var(--radius-md);
+  animation: slideDown 0.3s ease-out;
 }
 .form-header h2 {
   margin: 0;
@@ -643,77 +648,188 @@ watch(() => route.fullPath, load, { immediate: true })
   min-width: 160px;
   font-family: var(--font-display);
   font-size: 1.35rem;
-  font-weight: 560;
+  font-weight: 700;
   letter-spacing: -0.02em;
+  color: var(--text-primary);
 }
 .header-save { margin-left: auto; }
 .vis-chip {
   font-size: 0.78rem;
-  font-weight: 600;
-  padding: 0.25rem 0.55rem;
+  font-weight: 700;
+  padding: 0.35rem 0.85rem;
   border-radius: 999px;
-  background: rgba(120, 120, 120, 0.15);
+  background: linear-gradient(135deg, rgba(120, 120, 120, 0.15) 0%, rgba(120, 120, 120, 0.05) 100%);
   color: var(--text-muted);
+  border: 1px solid rgba(120, 120, 120, 0.2);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  transition: all var(--transition);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 .vis-chip.live {
-  background: rgba(34, 140, 70, 0.15);
-  color: var(--success, #1a7a3a);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.05) 100%);
+  color: var(--success, #10b981);
+  border-color: rgba(16, 185, 129, 0.3);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
 }
-.error { color: var(--danger); margin: 0 0 0.75rem; }
-.ok { color: var(--success, #1a7a3a); margin: 0 0 0.75rem; }
+.error {
+  color: var(--danger);
+  margin: 0 0 0.75rem;
+  padding: 0.85rem 1rem;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.04) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-md);
+  animation: slideDown 0.3s ease-out;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.1);
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+.ok {
+  color: var(--success, #10b981);
+  margin: 0 0 0.75rem;
+  padding: 0.85rem 1rem;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.04) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-left: 3px solid var(--success, #10b981);
+  border-radius: var(--radius-md);
+  animation: slideDown 0.3s ease-out;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
+  font-weight: 500;
+  font-size: 0.95rem;
+}
 .storefront-banner {
   margin-bottom: 0.85rem;
-  padding: 0.85rem 1rem;
+  padding: 1rem;
   border-left: 3px solid #c47a00;
-  background: rgba(196, 122, 0, 0.08);
+  background: linear-gradient(135deg, rgba(196, 122, 0, 0.15) 0%, rgba(196, 122, 0, 0.05) 100%);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(196, 122, 0, 0.3);
+  animation: slideDown 0.3s ease-out;
+  box-shadow: 0 2px 8px rgba(196, 122, 0, 0.1);
 }
 .storefront-banner strong {
   display: block;
-  margin-bottom: 0.4rem;
-  font-size: 0.9rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 .storefront-banner ul {
   margin: 0;
-  padding-left: 1.1rem;
-  font-size: 0.86rem;
-  color: var(--text-muted);
+  padding-left: 1.5rem;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
   display: grid;
-  gap: 0.25rem;
+  gap: 0.35rem;
+  line-height: 1.5;
 }
-.loading-banner { color: var(--text-muted); }
-.form-card { padding: 1.25rem; }
-.form-skeleton { display: grid; gap: 0.75rem; }
+.loading-banner {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.02) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: var(--radius-md);
+  animation: slideDown 0.3s ease-out;
+}
+.form-card {
+  padding: 1.5rem;
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(59, 130, 246, 0.02) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  animation: fadeIn 0.3s ease-out;
+}
+.form-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.3) 50%, transparent 100%);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  pointer-events: none;
+}
+.form-skeleton {
+  display: grid;
+  gap: 0.75rem;
+  animation: fadeIn 0.2s ease-out;
+}
 .sk-line {
   height: 14px;
   border-radius: 6px;
-  background: linear-gradient(90deg, var(--bg-hover), transparent);
+  background: linear-gradient(90deg, var(--bg-secondary) 0%, var(--bg-hover) 50%, var(--bg-secondary) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }
-.actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1.25rem; }
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+}
 .actions-sticky {
   position: sticky;
   bottom: 0;
-  padding: 0.75rem 0;
-  background: var(--bg, #fff);
+  padding: 1rem;
+  background: linear-gradient(to top, var(--bg) 0%, var(--bg) 80%, transparent 100%);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: var(--radius-md);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
 }
 .create-flex {
-  padding: 0.85rem 1rem;
+  padding: 1rem;
   margin-bottom: 0.85rem;
   display: grid;
-  gap: 0.65rem;
+  gap: 0.85rem;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.02) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: var(--radius-md);
+  animation: slideDown 0.3s ease-out;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.05);
 }
 .create-flex-hint {
   margin: 0;
-  font-size: 0.88rem;
-  color: var(--text-muted);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 .family-field {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.5rem;
   max-width: 320px;
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
 }
 .family-field .input {
   font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
 }
 </style>
