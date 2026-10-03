@@ -1,0 +1,208 @@
+replicaCount: 2
+
+image:
+  repository: diomika/backend-api
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8000"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+  annotations: {}
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: api.diomika.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: diomika-tls
+      hosts:
+        - api.diomika.local
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Application configuration
+app:
+  debug: false
+  log_level: INFO
+
+  # Database
+  database:
+    host: postgres.default.svc.cluster.local
+    port: 5432
+    name: diomika
+    pool_size: 20
+    max_overflow: 10
+    pool_pre_ping: true
+
+  # Cache
+  cache:
+    host: redis.default.svc.cluster.local
+    port: 6379
+    db: 0
+    ttl: 3600
+
+  # Message Queue (for events)
+  queue:
+    host: rabbitmq.default.svc.cluster.local
+    port: 5672
+    vhost: diomika
+
+  # Workers
+  workers:
+    embedded: true
+    email_poll_seconds: 30
+    outbox_poll_seconds: 30
+    saga_sweep_seconds: 300
+    saga_process_seconds: 10
+    retention_sweep_cycles: 12
+
+  # API settings
+  api:
+    host: "0.0.0.0"
+    port: 8000
+    workers: 4
+    timeout: 30
+    max_request_size: 10485760  # 10MB
+
+  # Security
+  security:
+    jwt_secret_path: /secrets/jwt-secret
+    api_key_header: X-API-Key
+    cors_origins:
+      - "https://diomika.local"
+      - "https://app.diomika.com"
+    rate_limit:
+      enabled: true
+      requests_per_minute: 600
+      requests_per_hour: 10000
+
+  # Observability
+  observability:
+    prometheus_enabled: true
+    prometheus_port: 8001
+    tracing_enabled: false
+    jaeger_endpoint: "http://jaeger-collector:14268/api/traces"
+
+  # Audit
+  audit:
+    enabled: true
+    retention_days: 90
+    log_level: INFO
+
+  # Storage
+  storage:
+    type: s3
+    bucket: diomika-files
+    region: eu-west-1
+    endpoint: https://s3.eu-west-1.amazonaws.com
+    acl: private
+
+# Environment-specific defaults (overridden by values-staging.yaml, values-production.yaml)
+environment: development
+region: eu-west-1
+
+# PostgreSQL subchart configuration
+postgresql:
+  enabled: false  # Use external managed database in production
+  auth:
+    username: diomika
+    password: "changeme"
+    database: diomika
+
+# Redis subchart configuration
+redis:
+  enabled: false  # Use external managed cache in production
+  auth:
+    enabled: true
+    password: "changeme"
+
+# Prometheus monitoring
+prometheus:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  retention: 15d
+  storage_size: 50Gi
+
+# AlertManager
+alertmanager:
+  enabled: true
+  retention: 120h
+  storage_size: 10Gi
+
+# Grafana dashboards
+grafana:
+  enabled: true
+  admin_password: "changeme"
+  storage_size: 5Gi
+
+# Network Policies
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Vertical Pod Autoscaler
+vpa:
+  enabled: false
+  updateMode: "Auto"

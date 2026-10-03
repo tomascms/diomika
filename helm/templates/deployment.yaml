@@ -1,0 +1,206 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "diomika.fullname" . }}
+  labels:
+    {{- include "diomika.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "diomika.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "diomika.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "diomika.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+
+      terminationGracePeriodSeconds: 30
+
+      containers:
+      - name: {{ .Chart.Name }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+        ports:
+        - name: http
+          containerPort: {{ .Values.app.api.port }}
+          protocol: TCP
+        - name: metrics
+          containerPort: 8001
+          protocol: TCP
+
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+
+        env:
+        - name: ENVIRONMENT
+          value: {{ .Values.environment }}
+
+        - name: LOG_LEVEL
+          value: {{ .Values.app.log_level }}
+
+        # Database
+        - name: DATABASE_HOST
+          value: {{ .Values.app.database.host }}
+        - name: DATABASE_PORT
+          value: "{{ .Values.app.database.port }}"
+        - name: DATABASE_NAME
+          value: {{ .Values.app.database.name }}
+        - name: DATABASE_USER
+          value: diomika
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "diomika.fullname" . }}
+              key: database-password
+        - name: DATABASE_POOL_SIZE
+          value: "{{ .Values.app.database.pool_size }}"
+        - name: DATABASE_MAX_OVERFLOW
+          value: "{{ .Values.app.database.max_overflow }}"
+
+        # Cache
+        - name: REDIS_HOST
+          value: {{ .Values.app.cache.host }}
+        - name: REDIS_PORT
+          value: "{{ .Values.app.cache.port }}"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "diomika.fullname" . }}
+              key: redis-password
+        - name: CACHE_TTL
+          value: "{{ .Values.app.cache.ttl }}"
+
+        # Workers
+        - name: RUN_EMBEDDED_WORKERS
+          value: "{{ .Values.app.workers.embedded }}"
+        - name: EMAIL_POLL_SECONDS
+          value: "{{ .Values.app.workers.email_poll_seconds }}"
+        - name: OUTBOX_POLL_SECONDS
+          value: "{{ .Values.app.workers.outbox_poll_seconds }}"
+        - name: SAGA_SWEEP_SECONDS
+          value: "{{ .Values.app.workers.saga_sweep_seconds }}"
+        - name: SAGA_PROCESS_SECONDS
+          value: "{{ .Values.app.workers.saga_process_seconds }}"
+
+        # Security
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "diomika.fullname" . }}
+              key: jwt-secret
+        - name: API_KEY_HEADER
+          value: {{ .Values.app.security.api_key_header }}
+
+        # Observability
+        - name: PROMETHEUS_ENABLED
+          value: "{{ .Values.app.observability.prometheus_enabled }}"
+        - name: TRACING_ENABLED
+          value: "{{ .Values.app.observability.tracing_enabled }}"
+
+        # Storage
+        - name: STORAGE_TYPE
+          value: {{ .Values.app.storage.type }}
+        - name: STORAGE_BUCKET
+          value: {{ .Values.app.storage.bucket }}
+        - name: AWS_REGION
+          value: {{ .Values.region }}
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "diomika.fullname" . }}
+              key: aws-access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "diomika.fullname" . }}
+              key: aws-secret-access-key
+
+        # Alerting
+        - name: SLACK_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "diomika.fullname" . }}
+              key: slack-webhook-url
+        - name: PAGERDUTY_SERVICE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "diomika.fullname" . }}
+              key: pagerduty-service-key
+        - name: SMTP_USER
+          value: alertmanager@diomika.com
+        - name: SMTP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "diomika.fullname" . }}
+              key: smtp-password
+
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /tmp/cache
+        - name: secrets
+          mountPath: /secrets
+          readOnly: true
+
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      - name: secrets
+        secret:
+          secretName: {{ include "diomika.fullname" . }}
+          defaultMode: 0400
+
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

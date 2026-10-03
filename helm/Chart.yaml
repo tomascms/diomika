@@ -1,0 +1,17 @@
+apiVersion: v2
+name: diomika
+description: E-commerce SaaS platform with saga pattern, CQRS, and event sourcing
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+home: https://diomika.com
+sources:
+  - https://github.com/tomascms/diomika
+maintainers:
+  - name: Tomas Sousa
+    email: tcmsousa@outlook.pt
+keywords:
+  - ecommerce
+  - saga
+  - cqrs
+  - event-sourcing

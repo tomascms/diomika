@@ -1,0 +1,91 @@
+environment: staging
+region: eu-west-1
+
+replicaCount: 2
+
+image:
+  tag: "staging"
+
+ingress:
+  hosts:
+    - host: api-staging.diomika.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: diomika-staging-tls
+      hosts:
+        - api-staging.diomika.com
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 75
+
+app:
+  debug: false
+  log_level: INFO
+
+  database:
+    host: postgres-staging.eu-west-1.rds.amazonaws.com
+    port: 5432
+    name: diomika_staging
+    pool_size: 15
+    max_overflow: 5
+
+  cache:
+    host: redis-staging.eu-west-1.cache.amazonaws.com
+    port: 6379
+    ttl: 1800
+
+  security:
+    cors_origins:
+      - "https://staging.diomika.com"
+      - "https://app-staging.diomika.com"
+    rate_limit:
+      requests_per_minute: 300
+      requests_per_hour: 5000
+
+  api:
+    workers: 2
+
+  audit:
+    retention_days: 30
+
+  storage:
+    bucket: diomika-staging-files
+    endpoint: https://s3.eu-west-1.amazonaws.com
+
+prometheus:
+  retention: 7d
+  storage_size: 20Gi
+
+alertmanager:
+  storage_size: 5Gi
+
+grafana:
+  storage_size: 2Gi
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Secrets configuration (must be injected via CI/CD or sealed-secrets)
+secrets:
+  databasePassword: null  # Injected from CI/CD
+  redisPassword: null     # Injected from CI/CD
+  jwtSecret: null         # Injected from CI/CD
+  slackWebhookUrl: null   # Injected from CI/CD
+  pagerdutyServiceKey: null  # Injected from CI/CD
+  smtpPassword: null      # Injected from CI/CD
+  awsAccessKeyId: null    # Injected from CI/CD
+  awsSecretAccessKey: null # Injected from CI/CD

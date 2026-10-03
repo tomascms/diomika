@@ -1,0 +1,152 @@
+environment: production
+region: eu-west-1
+
+replicaCount: 3
+
+image:
+  tag: "v1.0.0"  # Use specific version tags, not 'latest'
+
+ingress:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "1000"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+  hosts:
+    - host: api.diomika.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: diomika-prod-tls
+      hosts:
+        - api.diomika.com
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2048Mi
+  requests:
+    cpu: 1000m
+    memory: 1024Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 65
+  targetMemoryUtilizationPercentage: 75
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+
+app:
+  debug: false
+  log_level: WARNING  # Reduce logging in production
+
+  database:
+    host: diomika-prod.eu-west-1.rds.amazonaws.com
+    port: 5432
+    name: diomika_prod
+    pool_size: 25
+    max_overflow: 15
+    ssl_mode: require
+
+  cache:
+    host: diomika-redis.eu-west-1.cache.amazonaws.com
+    port: 6379
+    ttl: 7200
+
+  security:
+    cors_origins:
+      - "https://diomika.com"
+      - "https://app.diomika.com"
+      - "https://www.diomika.com"
+    rate_limit:
+      enabled: true
+      requests_per_minute: 1000
+      requests_per_hour: 50000
+
+  api:
+    workers: 8
+    timeout: 60
+
+  audit:
+    enabled: true
+    retention_days: 365  # Keep audit logs for 1 year
+
+  storage:
+    bucket: diomika-prod-files
+    endpoint: https://s3.eu-west-1.amazonaws.com
+    acl: private
+    versioning: true
+    lifecycle_days: 2555  # 7 years
+
+prometheus:
+  retention: 90d
+  storage_size: 500Gi
+
+alertmanager:
+  storage_size: 50Gi
+
+grafana:
+  storage_size: 20Gi
+
+nodeSelector:
+  workload: api
+
+tolerations:
+  - key: "workload"
+    operator: "Equal"
+    value: "api"
+    effect: "NoSchedule"
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - diomika
+          topologyKey: kubernetes.io/hostname
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+vpa:
+  enabled: true
+  updateMode: "Auto"
+
+# Secrets configuration (must be injected via sealed-secrets or external-secrets)
+secrets:
+  databasePassword: null
+  redisPassword: null
+  jwtSecret: null
+  slackWebhookUrl: null
+  pagerdutyServiceKey: null
+  smtpPassword: null
+  dbaEmail: null
+  securityEmail: null
+  salesEmail: null
+  awsAccessKeyId: null
+  awsSecretAccessKey: null
+  datadog_api_key: null
+  datadog_app_key: null
