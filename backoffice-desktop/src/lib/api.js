@@ -5,10 +5,16 @@ const WRITE_TIMEOUT_MS = 90000
 const CATEGORIES_TTL_MS = 5 * 60 * 1000
 const AUTH_STATUS_TTL_MS = 5 * 60 * 1000
 const ME_TTL_MS = 10 * 60 * 1000
+const GENERAL_CACHE_TTL = 10 * 1000 // 10s for list/detail responses
+
+// Request deduplication — previne múltiplos requests ao mesmo endpoint
+const pendingRequests = new Map()
 
 const caches = {
   schema: new Map(),
   relation: new Map(),
+  list: new Map(), // Cache para list responses
+  detail: new Map(), // Cache para detail responses
   categories: { value: null, at: 0 },
   authStatus: { value: null, at: 0 },
   me: { value: null, at: 0 },
@@ -62,31 +68,59 @@ function parseDetail(body, status) {
   return `Erro HTTP ${status}`
 }
 
-async function request(method, path, { body, params, headers: extraHeaders } = {}) {
+async function request(method, path, { body, params, headers: extraHeaders, noCache } = {}) {
   let url = `${baseUrl()}${path}`
   if (params) url += `?${new URLSearchParams(params)}`
+
+  // Request deduplication: se já há um request em andamento para o mesmo URL, retorna a mesma promise
+  const cacheKey = `${method}:${url}`
+  if (method === 'GET' && pendingRequests.has(cacheKey)) {
+    return pendingRequests.get(cacheKey)
+  }
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutFor(method))
-  try {
-    const resp = await fetch(url, {
-      method,
-      headers: { ...headers(body !== undefined), ...(extraHeaders || {}) },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    })
-    if (!resp.ok) {
-      if (resp.status === 401) {
-        clearApiCaches()
-        clearSession()
+
+  const promise = (async () => {
+    try {
+      const resp = await fetch(url, {
+        method,
+        headers: { ...headers(body !== undefined), ...(extraHeaders || {}) },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      })
+      if (!resp.ok) {
+        if (resp.status === 401) {
+          clearApiCaches()
+          clearSession()
+        }
+        const err = await resp.json().catch(() => ({}))
+        throw new Error(parseDetail(err, resp.status))
       }
-      const err = await resp.json().catch(() => ({}))
-      throw new Error(parseDetail(err, resp.status))
+      const text = await resp.text()
+      const data = text ? JSON.parse(text) : {}
+
+      // Cache GET responses
+      if (method === 'GET' && !noCache) {
+        if (path.includes('/list') || path.includes('/records')) {
+          caches.list.set(cacheKey, { value: data, at: Date.now() })
+        } else if (path.match(/\/\w+\/[\w-]+$/)) {
+          caches.detail.set(cacheKey, { value: data, at: Date.now() })
+        }
+      }
+
+      return data
+    } finally {
+      clearTimeout(timer)
+      pendingRequests.delete(cacheKey)
     }
-    const text = await resp.text()
-    return text ? JSON.parse(text) : {}
-  } finally {
-    clearTimeout(timer)
+  })()
+
+  if (method === 'GET') {
+    pendingRequests.set(cacheKey, promise)
   }
+
+  return promise
 }
 
 async function downloadBlob(path) {
