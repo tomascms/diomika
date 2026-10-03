@@ -480,7 +480,7 @@ onActivated(() => {
 <style scoped>
 .page-view {
   display: grid;
-  gap: 16px;
+  gap: 20px;
 }
 
 .toolbar-panel {
@@ -488,17 +488,23 @@ onActivated(() => {
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
-  padding: 16px;
-  background: var(--surface);
+  padding: 18px;
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(59, 130, 246, 0.02) 100%);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-xs);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition);
+}
+
+.toolbar-panel:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
 }
 
 .input {
-  padding: 10px 12px;
+  padding: 11px 13px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-family: inherit;
   font-size: 14px;
   background: var(--surface);
@@ -506,10 +512,19 @@ onActivated(() => {
   transition: all var(--transition);
 }
 
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+.input:hover {
+  border-color: var(--accent-light);
+}
+
 .input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12), inset 0 0 0 1px rgba(59, 130, 246, 0.1);
+  background: linear-gradient(to bottom, var(--surface), rgba(59, 130, 246, 0.02));
 }
 
 .input.search {
@@ -527,69 +542,104 @@ onActivated(() => {
 
 .notice {
   margin: 0;
-  padding: 12px 16px;
-  border-radius: var(--radius);
-  background: var(--accent-soft);
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0.04) 100%);
   color: var(--accent);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.3);
   font-size: 14px;
   font-weight: 500;
+  animation: slideDown 0.3s ease-out;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .picker {
-  padding: 20px;
-  margin-bottom: 16px;
-  background: var(--surface);
+  padding: 22px;
+  margin-bottom: 18px;
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(59, 130, 246, 0.02) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
+  animation: slideUp 0.3s ease-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.picker::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.2) 50%, transparent 100%);
+  pointer-events: none;
 }
 
 .picker h3 {
-  margin: 0 0 16px 0;
+  margin: 0 0 18px 0;
   font-family: var(--font-display);
   font-size: 18px;
   font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
 }
 
 .picker label {
   display: block;
-  margin: 16px 0 8px 0;
-  font-size: 12px;
-  font-weight: 600;
+  margin: 18px 0 10px 0;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
+  letter-spacing: 0.6px;
+  color: var(--accent);
 }
 
 .picker-actions {
   display: flex;
   gap: 12px;
-  margin-top: 20px;
+  margin-top: 24px;
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .ok {
   color: var(--success);
-  margin: 0 0 12px 0;
+  margin: 0 0 14px 0;
   font-weight: 600;
-  font-size: 14px;
-  padding: 8px 12px;
-  background: rgba(16, 185, 129, 0.08);
-  border-radius: var(--radius);
+  font-size: 13px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.04) 100%);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(16, 185, 129, 0.3);
   border-left: 3px solid var(--success);
+  animation: slideDown 0.3s ease-out;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
 }
 
 .err {
   color: var(--danger);
-  margin: 0 0 12px 0;
+  margin: 0 0 14px 0;
   font-weight: 600;
-  font-size: 14px;
-  padding: 8px 12px;
-  background: rgba(239, 68, 68, 0.08);
-  border-radius: var(--radius);
+  font-size: 13px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.04) 100%);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(239, 68, 68, 0.3);
   border-left: 3px solid var(--danger);
+  animation: slideDown 0.3s ease-out;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.1);
 }
 
 .pager {
@@ -597,17 +647,37 @@ onActivated(() => {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-top: 16px;
-  padding: 12px 16px;
-  background: var(--bg-secondary);
-  border-radius: var(--radius);
+  margin-top: 20px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(59, 130, 246, 0.04) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   flex-wrap: wrap;
+  transition: all var(--transition);
+}
+
+.pager:hover {
+  border-color: var(--accent-light);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
 }
 
 .pager-meta {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

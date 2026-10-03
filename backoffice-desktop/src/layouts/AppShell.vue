@@ -136,12 +136,13 @@ const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route
   gap: 2rem;
   padding: 0 2rem;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: linear-gradient(180deg, var(--surface) 0%, rgba(59, 130, 246, 0.02) 100%);
   backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
   z-index: 20;
   box-shadow: var(--shadow-sm);
+  transition: all var(--transition);
 }
 
 .menu-btn {
@@ -177,15 +178,18 @@ const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 7px 14px;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
   background: var(--bg-secondary);
   color: var(--text-secondary);
   border: 1px solid var(--border);
   white-space: nowrap;
   transition: all var(--transition);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
 .status-chip .dot {
@@ -194,6 +198,7 @@ const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route
   border-radius: 50%;
   background: var(--text-muted);
   animation: pulse 2s ease-in-out infinite;
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.08);
 }
 
 @keyframes pulse {
@@ -203,23 +208,33 @@ const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route
 
 .status-chip.online {
   color: var(--success);
-  border-color: rgba(16, 185, 129, 0.2);
-  background: var(--success-soft);
+  border-color: rgba(16, 185, 129, 0.3);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.04) 100%);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
 }
 
 .status-chip.online .dot {
   background: var(--success);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
 }
 
 .status-chip.offline {
   color: var(--danger);
-  border-color: rgba(239, 68, 68, 0.2);
-  background: var(--danger-soft);
+  border-color: rgba(239, 68, 68, 0.3);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.04) 100%);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+  animation: pulse-danger 1s ease-in-out infinite;
 }
 
 .status-chip.offline .dot {
   background: var(--danger);
-  animation: none;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+  animation: pulse-danger 1s ease-in-out infinite;
+}
+
+@keyframes pulse-danger {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 
 .content {
@@ -230,22 +245,37 @@ const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route
 
 .banner.error {
   margin: 0 0 16px 0;
-  padding: 12px 16px;
-  background: var(--danger-soft);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: var(--radius);
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.04) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-left: 4px solid var(--danger);
+  border-radius: var(--radius-md);
   color: var(--danger);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+  animation: slideDown 0.3s ease-out;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.12);
 }
 
 .banner.error p {
   margin: 0;
   font-size: 14px;
   font-weight: 500;
+  line-height: 1.4;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .overlay {
