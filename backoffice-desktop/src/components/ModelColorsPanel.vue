@@ -171,12 +171,155 @@ defineExpose({ save })
 </template>
 
 <style scoped>
-.colors-panel { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); display: grid; gap: 12px; }
-.hint, .muted { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
-.err { color: var(--danger); margin: 0; }
-.color-row { padding: 14px; display: flex; gap: 12px; align-items: flex-start; }
-.fields { flex: 1; display: grid; gap: 10px; }
-.num { max-width: 80px; }
-.thumb { max-width: 120px; border-radius: 8px; border: 1px solid var(--border); }
-.btn-sm { padding: 6px 10px; }
+.colors-panel {
+  margin-top: 32px;
+  padding-top: 24px;
+  padding-bottom: 20px;
+  border-top: 2px solid var(--border);
+  display: grid;
+  gap: 16px;
+  position: relative;
+}
+
+.colors-panel::before {
+  content: 'Cores';
+  position: absolute;
+  top: -12px;
+  left: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--accent);
+  padding: 0 6px;
+  background: var(--surface);
+}
+
+.colors-panel > h3 {
+  display: none;
+}
+
+.hint,
+.muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.err {
+  color: var(--danger);
+  margin: 0;
+  padding: 10px 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.color-row {
+  padding: 16px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: all var(--transition);
+  animation: fadeIn 0.2s ease-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.color-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.color-row:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.color-row:hover::before {
+  opacity: 1;
+}
+
+.fields {
+  flex: 1;
+  display: grid;
+  gap: 12px;
+}
+
+.fields .input {
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.num {
+  max-width: 80px;
+}
+
+.thumb {
+  max-width: 140px;
+  height: auto;
+  aspect-ratio: auto;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--border);
+  transition: all var(--transition);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.thumb:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+  transform: scale(1.02);
+}
+
+.btn-sm {
+  padding: 8px 12px;
+  font-size: 12px;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.btn-sm:hover {
+  transform: translateY(-1px);
+}
+
+.colors-panel > .btn-ghost {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 10px 16px;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+}
+
+.colors-panel > .btn-ghost:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 </style>

@@ -525,130 +525,252 @@ defineExpose({ validate })
 <style scoped>
 .schema-form {
   display: grid;
-  gap: 20px;
+  gap: 24px;
 }
 
 .field {
   display: grid;
   gap: 8px;
+  animation: fadeIn 0.3s ease-out;
 }
 
 .field label {
   display: block;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
+  letter-spacing: 0.6px;
+  color: var(--accent);
+  transition: color var(--transition-fast);
+}
+
+.field:focus-within label {
+  color: var(--accent-dark);
 }
 
 .req {
   color: var(--danger);
+  margin-left: 3px;
 }
 
 .input {
-  padding: 10px 12px;
+  padding: 11px 13px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-family: inherit;
   font-size: 14px;
   background: var(--surface);
   color: var(--text-primary);
   transition: all var(--transition);
+  position: relative;
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+.input:hover {
+  border-color: var(--accent-light);
 }
 
 .input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12), inset 0 0 0 1px rgba(59, 130, 246, 0.1);
+  background: linear-gradient(to bottom, var(--surface), rgba(59, 130, 246, 0.02));
 }
 
 .input:disabled {
   background: var(--bg-secondary);
   color: var(--text-muted);
   cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .field.has-error .input {
   border-color: var(--danger);
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+  background: linear-gradient(to bottom, rgba(239, 68, 68, 0.02), var(--surface));
 }
 
 .field-error {
   margin: 0;
-  padding: 6px 8px;
+  padding: 10px 12px;
   font-size: 12px;
+  font-weight: 500;
   color: var(--danger);
-  background: rgba(239, 68, 68, 0.05);
-  border-left: 2px solid var(--danger);
-  border-radius: 2px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+  animation: slideDown 0.3s ease-out;
+  line-height: 1.4;
 }
 
 .textarea {
   resize: vertical;
   font-family: var(--font-mono);
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.6;
+  min-height: 120px;
+}
+
+.textarea:focus {
+  background: linear-gradient(to bottom, rgba(59, 130, 246, 0.02), var(--surface));
 }
 
 .checkbox-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 12px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(59, 130, 246, 0.02) 100%);
   font-weight: 500;
+  font-size: 14px;
+  transition: all var(--transition);
+  cursor: pointer;
+}
+
+.checkbox-row:hover {
+  border-color: var(--accent-light);
+  box-shadow: var(--shadow-sm);
+  background: linear-gradient(135deg, var(--bg-hover) 0%, rgba(59, 130, 246, 0.04) 100%);
 }
 
 .checkbox-row input[type="checkbox"] {
   cursor: pointer;
+  accent-color: var(--accent);
+  width: 18px;
+  height: 18px;
+  transition: all var(--transition-fast);
+}
+
+.checkbox-row input[type="checkbox"]:hover {
+  transform: scale(1.1);
 }
 
 .readonly-val {
   margin: 0;
-  padding: 10px 12px;
+  padding: 11px 13px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: 14px;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  letter-spacing: 0.2px;
 }
 
 .dim-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  transition: all var(--transition-fast);
+}
+
+.dim-row:focus-within {
+  background: var(--bg-secondary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
 .dim {
-  width: 100px;
+  width: 110px;
+  text-align: center;
 }
 
 .dim-row > span {
   color: var(--text-secondary);
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1;
 }
 
 .string-list {
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  padding: 12px;
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(59, 130, 246, 0.02) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: var(--radius-md);
+  transition: all var(--transition);
+}
+
+.string-list:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
 }
 
 .sl-row {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
+  animation: slideIn 0.2s ease-out;
 }
 
 .sl-row .input {
   flex: 1;
+  padding: 10px 12px;
+  font-size: 13px;
 }
 
 .btn-sm {
-  padding: 8px 12px;
+  padding: 8px 13px;
   font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.btn-sm:hover {
+  transform: translateY(-1px);
+}
+
+.string-list .btn-ghost {
+  align-self: flex-start;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 </style>
 

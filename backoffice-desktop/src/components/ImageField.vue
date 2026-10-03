@@ -49,14 +49,21 @@ const onPick = (e) => {
 <style scoped>
 .image-field {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .row {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   flex-wrap: wrap;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.row:focus-within {
+  background: var(--bg-hover);
 }
 
 .path {
@@ -67,13 +74,49 @@ const onPick = (e) => {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+  font-size: 13px;
+  transition: all var(--transition);
+}
+
+.path:hover {
+  border-color: var(--accent-light);
+  background: var(--bg-hover);
 }
 
 .pick {
   cursor: pointer;
   white-space: nowrap;
   margin: 0;
-  padding: 10px 16px;
+  padding: 10px 18px;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.pick::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width var(--transition), height var(--transition);
+}
+
+.pick:active::after {
+  width: 100%;
+  height: 100%;
+}
+
+.pick:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .pick input {
@@ -84,20 +127,24 @@ const onPick = (e) => {
 .field-warning {
   margin: 0;
   font-size: 12px;
-  padding: 8px 12px;
-  border-radius: 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  animation: slideDown 0.3s ease-out;
 }
 
 .field-error {
   color: var(--danger);
-  background: rgba(239, 68, 68, 0.08);
-  border-left: 2px solid var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-left: 3px solid var(--danger);
 }
 
 .field-warning {
   color: var(--warning);
-  background: rgba(245, 158, 11, 0.08);
-  border-left: 2px solid var(--warning);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-left: 3px solid var(--warning);
 }
 
 .thumb {
@@ -106,8 +153,38 @@ const onPick = (e) => {
   aspect-ratio: 1;
   object-fit: cover;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
-  box-shadow: var(--shadow-sm);
+  border: 2px solid var(--border);
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--surface) 100%);
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition);
+  animation: thumbIn 0.4s ease-out;
+}
+
+.thumb:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-lg), 0 0 0 4px rgba(59, 130, 246, 0.1);
+  transform: scale(1.02);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes thumbIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 </style>

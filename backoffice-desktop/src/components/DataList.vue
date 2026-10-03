@@ -86,18 +86,20 @@ const subtitle = (row, columns) => {
 <style scoped>
 .list {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .loading-banner {
-  margin: 0 0 8px 0;
+  margin: 0 0 12px 0;
   padding: 12px 16px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.3px;
   color: var(--accent);
-  background: var(--accent-soft);
+  background: linear-gradient(135deg, var(--accent-soft) 0%, rgba(59, 130, 246, 0.04) 100%);
   border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
+  animation: slideDown 0.3s ease-out;
 }
 
 .item {
@@ -112,6 +114,21 @@ const subtitle = (row, columns) => {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-xs);
   transition: all var(--transition);
+  animation: slideUp 0.3s ease-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.05) 50%, transparent 100%);
+  transition: left var(--transition-slow);
+  pointer-events: none;
 }
 
 .item.dimmed {
@@ -121,13 +138,19 @@ const subtitle = (row, columns) => {
 
 .item:hover {
   border-color: var(--accent);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+.item:hover::before {
+  left: 100%;
 }
 
 .item-body {
   flex: 1;
   min-width: 200px;
+  position: relative;
+  z-index: 1;
 }
 
 .title-row {
@@ -139,47 +162,69 @@ const subtitle = (row, columns) => {
 
 .title {
   margin: 0;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 15px;
   letter-spacing: -0.01em;
   color: var(--text-primary);
+  transition: color var(--transition);
+}
+
+.item:hover .title {
+  color: var(--accent);
 }
 
 .sub {
-  margin: 4px 0 0 0;
+  margin: 6px 0 0 0;
   color: var(--text-secondary);
   font-size: 13px;
+  transition: color var(--transition);
+}
+
+.item:hover .sub {
+  color: var(--text-primary);
 }
 
 .status-pill {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 4px 8px;
-  border-radius: 4px;
+  letter-spacing: 0.6px;
+  padding: 5px 10px;
+  border-radius: 6px;
   background: var(--success-soft);
   color: var(--success);
+  transition: all var(--transition-fast);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.status-pill:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.15);
 }
 
 .status-pill.hidden {
   background: var(--danger-soft);
   color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.2);
 }
 
 .status-pill.unread {
   background: var(--accent-soft);
   color: var(--accent);
+  border-color: rgba(59, 130, 246, 0.2);
+  animation: pulse 2s ease-in-out infinite;
 }
 
 .actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 2;
 }
 
 .empty {
-  padding: 40px 20px;
+  padding: 48px 28px;
   text-align: center;
   color: var(--text-muted);
   background: var(--surface);
@@ -187,29 +232,70 @@ const subtitle = (row, columns) => {
   border-radius: var(--radius-md);
   font-size: 14px;
   font-weight: 500;
+  transition: all var(--transition);
+  position: relative;
+}
+
+.empty:hover {
+  border-color: var(--accent-light);
+  background: var(--bg-hover);
+  color: var(--text-secondary);
 }
 
 .skeleton {
   pointer-events: none;
+  animation: fadeIn 0.4s ease-out;
 }
 
 .sk-line {
   height: 10px;
-  border-radius: 4px;
+  border-radius: 6px;
   background: linear-gradient(90deg, var(--bg-secondary) 0%, var(--surface-secondary) 50%, var(--bg-secondary) 100%);
   background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+  animation: shimmer 1.8s ease-in-out infinite;
 }
 
 .sk-title {
   width: min(60%, 300px);
-  height: 14px;
+  height: 16px;
+  border-radius: 8px;
 }
 
 .sk-sub {
   width: min(40%, 200px);
-  margin-top: 8px;
-  opacity: 0.7;
+  margin-top: 10px;
+  opacity: 0.6;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes shimmer {
@@ -218,6 +304,15 @@ const subtitle = (row, columns) => {
   }
   100% {
     background-position: -100% 0;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
   }
 }
 </style>
