@@ -1,0 +1,127 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: diomika-postgres
+    environment:
+      POSTGRES_DB: diomika_dev
+      POSTGRES_USER: diomika_dev
+      POSTGRES_PASSWORD: diomika_dev_password
+      POSTGRES_INITDB_ARGS: "-c max_connections=100 -c shared_buffers=256MB"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend-api/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U diomika_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - diomika-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: diomika-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - diomika-network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: diomika-backend
+    environment:
+      DATABASE_URL: postgresql://diomika_dev:diomika_dev_password@postgres:5432/diomika_dev
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: development
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+      PYTHONUNBUFFERED: "1"
+      AWS_ACCESS_KEY_ID: testing
+      AWS_SECRET_ACCESS_KEY: testing
+      AWS_DEFAULT_REGION: eu-west-1
+      SLACK_WEBHOOK_URL: http://localhost:9000/slack-mock
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend-api:/app/backend-api:cached
+      - ./migrations:/app/migrations:cached
+      - ./.venv:/app/.venv:cached
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - diomika-network
+
+  # LocalStack for AWS Services Emulation (S3, SQS, etc.)
+  localstack:
+    image: localstack/localstack:latest
+    container_name: diomika-localstack
+    environment:
+      SERVICES: s3,sqs,sns
+      DEBUG: "1"
+      LOCALSTACK_DOCKER_NETWORK: diomika-network
+      AWS_DEFAULT_REGION: eu-west-1
+    ports:
+      - "4566:4566"  # LocalStack Gateway
+      - "4571:4571"  # S3
+    volumes:
+      - localstack_data:/tmp/localstack
+    networks:
+      - diomika-network
+
+  # PostgreSQL Adminer (Web UI)
+  adminer:
+    image: adminer:latest
+    container_name: diomika-adminer
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - diomika-network
+
+  # Webhook Test Server (for development)
+  webhook-test:
+    image: nginx:alpine
+    container_name: diomika-webhook-test
+    ports:
+      - "9000:80"
+    volumes:
+      - ./scripts/nginx-mock-webhook.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - diomika-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  localstack_data:
+    driver: local
+
+networks:
+  diomika-network:
+    driver: bridge

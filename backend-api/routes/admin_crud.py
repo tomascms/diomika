@@ -12,16 +12,17 @@ from __future__ import annotations
 
 import json
 import logging
-import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
-from core.audit import log_admin_action
 from core.auth import Role, SENSITIVE_BUSINESS_TABLES, assert_table_action, require_admin
-from core.cache import invalidate_catalog_change
+from core.cache_invalidation_strategy import (
+    CacheInvalidationAnalyzer,
+    GranularCacheInvalidator,
+)
 from core.cqrs.commands.catalog import soft_delete
 from core.database import get_db
 from core.idempotency import (
@@ -32,31 +33,49 @@ from core.idempotency import (
     get_cached_response,
 )
 from core.local_only import admin_must_be_local
-from core.rate_limit import get_client_ip
-from models.catalog_attributes import CATEGORY_ATTRIBUTE_SCHEMAS
 from models.catalog_registry import (
-    CATALOG_TYPES,
     admin_list_select_query,
     all_colors_tables,
     all_model_tables,
     all_product_tables,
-    apply_barcode_on_save,
     colors_table_for_model_table,
     colors_table_for_tipo,
     fold_attributes,
-    level_for_table,
     list_select_query,
-    physical_table_for,
     relation_options_select_query,
-    tipo_for_table,
 )
-from models.schemas import PRODUCT_MODELS_TABLE, TABLE_MAP, aggregated_tipos_for_tipo
-from models.ui_schema import get_form_fields
-from utils.barcode_gen import apply_barcode_url
-from utils.image_urls import content_type_for_path, resolve_image_value
+from models.schemas import PRODUCT_MODELS_TABLE, TABLE_MAP
+from utils.image_urls import content_type_for_path
 from utils.image_validation import validate_upload_bytes
 from utils.postgrest_filter import or_literal
 from utils.storage import upload_bytes
+
+from .admin_crud_helpers import (
+    _allowed_upload_field,
+    _attr,
+    _audit,
+    _client_error,
+    _db_table,
+    _is_expected_client_conflict,
+    _normalize_payload,
+    _resolve_image_fields,
+    _role,
+    _schedule_barcode_update,
+    _schema_for,
+    _scoped,
+)
+from .admin_crud_publishing import (
+    _cascade_category_visibility,
+    _hide_catalog_children,
+    _publish_catalog_children,
+)
+from .admin_crud_validation import (
+    _assert_model_category_tipo,
+    _assert_model_publishable,
+    _product_validation_table,
+    _validate_product_payload,
+)
+from .admin_crud_cqrs_integration import get_cqrs_integration
 
 logger = logging.getLogger("diomika-api")
 
@@ -66,549 +85,6 @@ router = APIRouter(
     dependencies=[Depends(admin_must_be_local), Depends(require_admin)],
 )
 
-
-# --- Resolução de tabela virtual -> física + família (tipo_catalogo) ---
-
-def _db_table(table_name: str):
-    return get_db().table(physical_table_for(table_name))
-
-
-def _scoped(query, table_name: str):
-    """Filtra pela família (tipo_catalogo) quando a tabela virtual é de catálogo.
-
-    Só `product_models` e `product_variants` têm a coluna. `product_model_colors`
-    não tem — a família de uma cor vem do modelo-pai — por isso filtrá-la aqui
-    dava erro 400 do PostgREST em todas as operações de cores. Nas escritas não
-    é preciso filtro nenhum: o registo já é endereçado por `id`.
-    """
-    tipo = tipo_for_table(table_name)
-    if not tipo or level_for_table(table_name) == "colors":
-        return query
-    return query.eq("tipo_catalogo", tipo)
-
-
-def _scoped_list(query, table_name: str):
-    """Como `_scoped`, mas para listagens de cores filtra a família através do
-    modelo-pai embutido — sem isto a lista de cores de uma família mostrava as
-    cores de todas as famílias, que agora partilham a mesma tabela física."""
-    if level_for_table(table_name) == "colors":
-        tipo = tipo_for_table(table_name)
-        return query.eq(f"{PRODUCT_MODELS_TABLE}.tipo_catalogo", tipo) if tipo else query
-    return _scoped(query, table_name)
-
-
-def _attr(payload: dict, name: str):
-    return (payload.get("attributes") or {}).get(name)
-
-
-def _schedule_barcode_update(table_name: str, record_id: str, ean: str | None) -> None:
-    """Gera barcode em background — evita timeout no guardar (upload storage é lento)."""
-    code = (ean or "").strip()
-    if not code or not apply_barcode_on_save(table_name):
-        return
-
-    def _job() -> None:
-        try:
-            payload = {"ean": code}
-            apply_barcode_url(payload)
-            url = payload.get("barcode_url")
-            if url:
-                _db_table(table_name).update({"barcode_url": url}).eq("id", record_id).execute()
-        except Exception as exc:
-            logger.warning("Barcode async %s/%s: %s", table_name, record_id, exc)
-
-    threading.Thread(target=_job, daemon=True).start()
-
-
-def _client_error(exc: Exception) -> str:
-    from pydantic import ValidationError
-
-    if isinstance(exc, ValidationError):
-        first = exc.errors()[0] if exc.errors() else {}
-        msg = first.get("msg") or str(exc)
-        loc = first.get("loc") or ()
-        if loc:
-            field = ".".join(str(x) for x in loc if x != "__root__")
-            if field:
-                return f"{field}: {msg}"
-        return str(msg)
-    text = str(exc).strip()
-    if "duplicate key" in text.lower() or "23505" in text:
-        if "assento_id_modelo_key" in text or "assento_modelo_altura" in text or "variant_modelo_altura" in text:
-            return "Já existe um assento com esta altura neste modelo."
-        if "modelo_cores_model_numero" in text or "model_colors_numero" in text.lower():
-            return "Já existe esta cor (número) neste modelo."
-        if "ean" in text.lower():
-            return "Este EAN já existe noutro produto."
-        return "Registo duplicado — já existe um com a mesma chave única."
-    if text and text not in ("", "None"):
-        return text[:240]
-    return "Dados inválidos ou em conflito."
-
-
-def _is_expected_client_conflict(exc: Exception) -> bool:
-    text = str(exc).lower()
-    return "duplicate key" in text or "23505" in text or "violates unique" in text
-
-
-def _schema_for(table: str):
-    if table not in TABLE_MAP:
-        raise HTTPException(status_code=404, detail=f"Tabela «{table}» não registada no catálogo")
-    schema = TABLE_MAP[table].get("schema")
-    if not schema:
-        raise HTTPException(status_code=404, detail="Sem schema")
-    return schema
-
-
-def _role(request: Request) -> Role:
-    return getattr(request.state, "api_role", "admin")  # type: ignore[return-value]
-
-
-def _normalize_payload(payload: dict) -> dict:
-    out = dict(payload)
-    for k, v in list(out.items()):
-        if isinstance(v, UUID):
-            out[k] = str(v)
-    return out
-
-
-def _audit(request: Request, action: str, resource: str, resource_id: str | None = None, **detail):
-    role = getattr(request.state, "api_role", "admin")
-    log_admin_action(
-        action=action,
-        resource=resource,
-        resource_id=resource_id,
-        role=str(role),
-        actor=getattr(request.state, "api_actor", None),
-        request_id=getattr(request.state, "request_id", None),
-        client_ip=get_client_ip(request),
-        detail=detail or None,
-    )
-
-
-def _invalidate_catalog_cache(*, table_name: str | None = None, record: dict | None = None, record_id: str | None = None) -> None:
-    invalidate_catalog_change(table_name=table_name, record=record, record_id=record_id)
-
-
-def _tipo_for_model_id(model_id: str | None) -> str:
-    if not model_id:
-        raise ValueError("Modelo em falta.")
-    row = (
-        get_db()
-        .table(PRODUCT_MODELS_TABLE)
-        .select("tipo_catalogo")
-        .eq("id", str(model_id))
-        .limit(1)
-        .execute()
-        .data
-        or [None]
-    )[0]
-    if not row:
-        raise ValueError("Modelo não encontrado.")
-    return row["tipo_catalogo"]
-
-
-def _model_attribute_values(model_id: str, field: str) -> list[str]:
-    """Lista de valores disponíveis (ex.: dimensões) definidos no modelo."""
-    row = (
-        get_db()
-        .table(PRODUCT_MODELS_TABLE)
-        .select("attributes")
-        .eq("id", model_id)
-        .limit(1)
-        .execute()
-        .data
-        or [None]
-    )[0]
-    if not row:
-        raise ValueError("Modelo não encontrado.")
-    values = (row.get("attributes") or {}).get(field) or []
-    if isinstance(values, str):
-        try:
-            values = json.loads(values)
-        except json.JSONDecodeError:
-            values = [values]
-    return [str(a).strip() for a in values if a and str(a).strip()]
-
-
-def _validate_model_discriminator(table_name: str, payload: dict, record_id: str | None = None) -> None:
-    tipo = tipo_for_table(table_name)
-    if not tipo:
-        return
-    cfg = CATALOG_TYPES.get(tipo) or {}
-    model_field = cfg.get("model_discriminator_field")
-    if not model_field:
-        return
-
-    product_field = "altura" if tipo == "assento" else model_field
-    value = str(_attr(payload, product_field) or "").strip()
-    if not value:
-        raise ValueError(f"Selecione {product_field.replace('_', ' ')} desta variante.")
-
-    id_modelo = payload.get("id_modelo")
-    if not id_modelo:
-        return
-
-    allowed = _model_attribute_values(str(id_modelo), model_field)
-    if value not in allowed:
-        raise ValueError(f"«{value}» não está definido no modelo.")
-
-    q = (
-        _db_table(table_name)
-        .select("id")
-        .eq("id_modelo", str(id_modelo))
-        .eq(f"attributes->>{product_field}", value)
-    )
-    if record_id:
-        q = q.neq("id", record_id)
-    if q.limit(1).execute().data or []:
-        raise ValueError(f"Já existe variante «{value}» neste modelo.")
-
-
-def _validate_assento_altura(payload: dict, record_id: str | None = None) -> None:
-    _validate_model_discriminator("assento", payload, record_id)
-
-
-def _validate_oculo(payload: dict, record_id: str | None = None) -> None:
-    id_modelo = payload.get("id_modelo")
-    if not id_modelo:
-        return
-    model = (
-        _db_table("modelos_oculos")
-        .select("attributes")
-        .eq("id", str(id_modelo))
-        .limit(1)
-        .execute()
-        .data
-        or [None]
-    )[0]
-    if not model:
-        raise ValueError("Modelo de óculos não encontrado.")
-    tipo_oculo = (model.get("attributes") or {}).get("tipo_oculo")
-    segmento = _attr(payload, "segmento")
-    db_variants = _db_table("oculo")
-    if tipo_oculo == "leitura":
-        if segmento:
-            raise ValueError("Óculos de leitura não têm segmento — use produto sortido.")
-        q = db_variants.select("id").eq("id_modelo", str(id_modelo))
-        if record_id:
-            q = q.neq("id", record_id)
-        if q.limit(1).execute().data or []:
-            raise ValueError("Este modelo de leitura já tem produto sortido.")
-        return
-    if not segmento:
-        raise ValueError("Selecione segmento (homem, mulher ou criança).")
-    q = db_variants.select("id").eq("id_modelo", str(id_modelo)).eq("attributes->>segmento", segmento)
-    if record_id:
-        q = q.neq("id", record_id)
-    if q.limit(1).execute().data or []:
-        raise ValueError(f"Já existe produto para segmento «{segmento}» neste modelo.")
-
-
-def _validate_regional_product(payload: dict, record_id: str | None = None) -> None:
-    id_modelo = payload.get("id_modelo")
-    if not id_modelo:
-        return
-    model = (
-        _db_table("modelos_regionais")
-        .select("attributes")
-        .eq("id", str(id_modelo))
-        .limit(1)
-        .execute()
-        .data
-        or [None]
-    )[0]
-    if not model:
-        raise ValueError("Modelo regional não encontrado.")
-    attrs = model.get("attributes") or {}
-    subtipo = attrs.get("subtipo")
-    needs_dim = subtipo in ("pano_cozinha", "toalha", "protetor")
-    dim = str(_attr(payload, "dimensoes") or "").strip()
-    if needs_dim:
-        if not dim:
-            raise ValueError("Selecione dimensão desta variante.")
-        allowed = _model_attribute_values(str(id_modelo), "dimensoes")
-        if dim not in allowed:
-            raise ValueError(f"Dimensão «{dim}» não está definida no modelo.")
-        q = (
-            _db_table("regional")
-            .select("id")
-            .eq("id_modelo", str(id_modelo))
-            .eq("attributes->>dimensoes", dim)
-        )
-        if record_id:
-            q = q.neq("id", record_id)
-        if q.limit(1).execute().data or []:
-            raise ValueError(f"Já existe variante «{dim}» neste modelo.")
-    elif dim:
-        raise ValueError("Este subtipo não usa dimensão no produto.")
-
-
-def _product_validation_table(table_name: str) -> bool:
-    return table_name in all_product_tables()
-
-
-def _validate_unico_single_product(table_name: str, payload: dict, record_id: str | None = None) -> None:
-    """Modo unico: um único produto por modelo."""
-    tipo = tipo_for_table(table_name)
-    cfg = CATALOG_TYPES.get(tipo or "") or {}
-    if (cfg.get("storefront_mode") or "") != "unico":
-        return
-    if cfg.get("model_discriminator_field"):
-        return
-    id_modelo = payload.get("id_modelo")
-    if not id_modelo:
-        return
-    q = _db_table(table_name).select("id").eq("id_modelo", str(id_modelo))
-    if record_id:
-        q = q.neq("id", record_id)
-    if q.limit(1).execute().data or []:
-        raise ValueError("Este modelo já tem um produto (modo único — uma referência por modelo).")
-
-
-def _assert_model_category_tipo(table_name: str, payload: dict) -> None:
-    """Garante que o modelo/cor/produto fica na categoria da família correcta."""
-    tipo = tipo_for_table(table_name)
-    if not tipo:
-        return
-    db = get_db()
-    id_categoria = payload.get("id_categoria")
-    id_modelo = payload.get("id_modelo")
-
-    if table_name in all_model_tables():
-        if not id_categoria:
-            return
-        cat = (
-            db.table("categories")
-            .select("id,nome,tipo_catalogo")
-            .eq("id", str(id_categoria))
-            .limit(1)
-            .execute()
-            .data
-            or [None]
-        )[0]
-        if not cat:
-            raise ValueError("Categoria não encontrada.")
-        cat_tipo = str(cat.get("tipo_catalogo") or "").strip()
-        aggregated = aggregated_tipos_for_tipo(cat_tipo) or []
-        allowed = set(aggregated) if aggregated else ({cat_tipo} if cat_tipo else {tipo})
-        if tipo not in allowed:
-            raise ValueError(f"A categoria «{cat.get('nome') or cat_tipo}» não aceita modelos do tipo «{tipo}».")
-        return
-
-    if table_name in all_product_tables() or table_name in all_colors_tables():
-        if not id_modelo:
-            return
-        model = (
-            db.table(PRODUCT_MODELS_TABLE)
-            .select("id,id_categoria,tipo_catalogo")
-            .eq("id", str(id_modelo))
-            .limit(1)
-            .execute()
-            .data
-            or [None]
-        )[0]
-        if not model:
-            raise ValueError("Modelo não encontrado.")
-        if model.get("tipo_catalogo") != tipo:
-            raise ValueError("O modelo escolhido não pertence a esta família de produto.")
-
-
-def _validate_product_payload(table_name: str, payload: dict, record_id: str | None = None) -> None:
-    if table_name == "assento":
-        _validate_assento_altura(payload, record_id)
-    elif table_name == "oculo":
-        _validate_oculo(payload, record_id)
-    elif table_name == "regional":
-        _validate_regional_product(payload, record_id)
-    elif _product_validation_table(table_name):
-        _validate_model_discriminator(table_name, payload, record_id)
-    _validate_unico_single_product(table_name, payload, record_id)
-
-
-def _publish_catalog_children(table_name: str, record_id: str, *, tipo: str | None = None) -> None:
-    """Torna visíveis cores e produtos filhos quando o modelo é publicado."""
-    if table_name not in all_model_tables():
-        return
-    db = get_db()
-    db.table("product_variants").update({"visibilidade": True}).eq("id_modelo", record_id).execute()
-    db.table("product_model_colors").update({"visibilidade": True}).eq("id_modelo", record_id).execute()
-
-
-def _hide_catalog_children(table_name: str, record_id: str, *, tipo: str | None = None) -> None:
-    """Oculta cores e produtos filhos quando o modelo é ocultado."""
-    if table_name not in all_model_tables():
-        return
-    db = get_db()
-    db.table("product_variants").update({"visibilidade": False}).eq("id_modelo", record_id).execute()
-    db.table("product_model_colors").update({"visibilidade": False}).eq("id_modelo", record_id).execute()
-
-
-def _assert_ean_globally_unique(table_name: str, payload: dict, record_id: str | None = None) -> None:
-    """EAN único — 1 tabela partilhada, já reforçado por UNIQUE na BD; o
-    pré-check aqui só existe para dar uma mensagem de erro amigável."""
-    if table_name not in all_product_tables():
-        return
-    ean = str(payload.get("ean") or "").strip()
-    if not ean:
-        return
-    q = _db_table(table_name).select("id").eq("ean", ean)
-    if record_id:
-        q = q.neq("id", record_id)
-    if q.limit(1).execute().data or []:
-        raise ValueError(f"Já existe um produto com EAN {ean}.")
-
-
-def _assert_model_publishable(table_name: str, record_id: str) -> None:
-    """Loja só mostra modelos com ≥1 cor (imagem) e ≥1 produto com EAN.
-
-    Conta rascunhos — a cascata de publicação torna-os visíveis a seguir.
-    """
-    if table_name not in all_model_tables():
-        return
-    db = get_db()
-    colors = (
-        db.table("product_model_colors")
-        .select("id,imagem")
-        .eq("id_modelo", record_id)
-        .limit(20)
-        .execute()
-        .data
-        or []
-    )
-    if not any(str(c.get("imagem") or "").strip() for c in colors):
-        raise ValueError("Adicione pelo menos uma cor com imagem antes de publicar na loja.")
-    products = (
-        db.table("product_variants")
-        .select("id,ean")
-        .eq("id_modelo", record_id)
-        .limit(50)
-        .execute()
-        .data
-        or []
-    )
-    if not any(str(p.get("ean") or "").strip() for p in products):
-        raise ValueError("Adicione pelo menos um produto com EAN antes de publicar na loja.")
-
-
-def _cascade_category_visibility(category_id: str, vis: bool) -> None:
-    """Ao tornar categoria visível/oculta, propaga para modelos (e produtos/cores)."""
-    db = get_db()
-    models = (
-        db.table(PRODUCT_MODELS_TABLE)
-        .select("id")
-        .eq("id_categoria", str(category_id))
-        .execute()
-        .data
-        or []
-    )
-    for row in models:
-        mid = str(row.get("id") or "")
-        if not mid:
-            continue
-        db.table(PRODUCT_MODELS_TABLE).update({"visibilidade": vis}).eq("id", mid).execute()
-        if vis:
-            _publish_catalog_children(PRODUCT_MODELS_TABLE, mid)
-        else:
-            _hide_catalog_children(PRODUCT_MODELS_TABLE, mid)
-
-
-def _enrich_create_payload(table_name: str, payload: dict) -> dict:
-    out = dict(payload)
-    tipo = tipo_for_table(table_name)
-    if tipo:
-        out["tipo_catalogo"] = tipo
-    _assert_model_category_tipo(table_name, out)
-    _assert_ean_globally_unique(table_name, out)
-    _validate_product_payload(table_name, out)
-    # Modelos novos começam sempre como rascunho — publicar só quando cor+EAN existirem
-    if table_name in all_model_tables() and out.get("visibilidade"):
-        out["visibilidade"] = False
-    return out
-
-
-def _enrich_update_payload(table_name: str, payload: dict, record_id: str) -> dict:
-    out = dict(payload)
-    tipo = tipo_for_table(table_name)
-    if tipo:
-        out["tipo_catalogo"] = tipo
-    db = _db_table(table_name)
-    if table_name in all_model_tables() and not out.get("id_categoria"):
-        row = (db.select("id_categoria").eq("id", record_id).limit(1).execute().data or [None])[0]
-        if row:
-            out.setdefault("id_categoria", row.get("id_categoria"))
-    if _product_validation_table(table_name) or table_name in ("assento", "oculo", "regional"):
-        if not out.get("id_modelo"):
-            row = (db.select("id_modelo").eq("id", record_id).limit(1).execute().data or [None])[0]
-            if row:
-                out.setdefault("id_modelo", row.get("id_modelo"))
-        if not out.get("attributes"):
-            row = (db.select("attributes").eq("id", record_id).limit(1).execute().data or [None])[0]
-            if row and row.get("attributes"):
-                out.setdefault("attributes", row.get("attributes"))
-        _validate_product_payload(table_name, out, record_id)
-        _assert_ean_globally_unique(table_name, out, record_id)
-    _assert_model_category_tipo(table_name, out)
-    if table_name in all_model_tables() and out.get("visibilidade"):
-        _assert_model_publishable(table_name, record_id)
-    return out
-
-
-def _idempotency_op(table_name: str, payload: dict) -> str:
-    """Âmbito da chave de idempotência: operação + hash do corpo do pedido.
-
-    Sem o hash, reutilizar a mesma Idempotency-Key num pedido *diferente*
-    devolvia em silêncio a resposta do primeiro pedido (bug real — ver
-    auditoria). Incluir o hash faz pedidos diferentes terem operações
-    diferentes, por isso nunca partilham resposta em cache.
-    """
-    import hashlib
-
-    body_hash = hashlib.sha256(
-        json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
-    ).hexdigest()[:24]
-    return f"admin_create:{table_name}:{body_hash}"
-
-
-def _resolve_image_fields(table_name: str, payload: dict) -> dict:
-    """Upload de caminhos locais (backoffice no PC admin) antes de validar schema."""
-    out = dict(payload)
-    cfg = TABLE_MAP.get(table_name, {})
-    schema = cfg.get("schema")
-    if not schema:
-        return out
-
-    for field_def in get_form_fields(schema, cfg):
-        name = field_def["name"]
-        if name not in out or out[name] in (None, ""):
-            continue
-        widget = field_def.get("widget")
-        if widget == "image":
-            val = str(out[name]).strip()
-            if val and not val.startswith(("http://", "https://")):
-                out[name] = resolve_image_value(val, table_name, name)
-        elif widget == "multi_image":
-            raw = out[name]
-            if isinstance(raw, str):
-                raw = [p.strip() for p in raw.split(";") if p.strip()]
-            if isinstance(raw, list):
-                from utils.image_urls import resolve_image_list
-
-                out[name] = resolve_image_list([str(v) for v in raw], table_name, name)
-    return out
-
-
-def _allowed_upload_field(table: str, field: str) -> bool:
-    if table not in TABLE_MAP:
-        return False
-    cfg = TABLE_MAP[table]
-    schema = cfg.get("schema")
-    if not schema:
-        return False
-    for field_def in get_form_fields(schema, cfg, table):
-        if field_def["name"] == field and field_def.get("widget") in ("image", "multi_image"):
-            return True
-    return False
 
 
 @router.post("/upload-image")
@@ -649,7 +125,7 @@ def relation_options(
     para o formulário agregado (routes/admin_form.py) poder juntar várias
     tabelas numa só resposta, em vez de uma chamada HTTP por relação."""
     limit = min(max(limit, 1), 300)
-    query = _scoped_list(_db_table(table_name).select(relation_options_select_query(table_name)), table_name)
+    query = _scoped(_db_table(table_name).select(relation_options_select_query(table_name)), table_name, use_join=True)
     if visible_only:
         query = query.eq("visibilidade", True)
     if id_modelo and table_name in (*all_colors_tables(), *all_product_tables()):
@@ -718,7 +194,7 @@ def list_records(
     limit = min(max(limit, 1), 200)
     offset = max(offset, 0)
     select_q = admin_list_select_query(table_name, embed_category=table_name in all_product_tables())
-    query = _scoped_list(_db_table(table_name).select(select_q), table_name)
+    query = _scoped(_db_table(table_name).select(select_q), table_name, use_join=True)
     if visible_only:
         query = query.eq("visibilidade", True)
     if id_modelo and table_name in (*all_colors_tables(), *all_product_tables()):
@@ -756,7 +232,7 @@ def get_record(request: Request, table_name: str, record_id: str):
     _schema_for(table_name)
     assert_table_action(table_name, "read", _role(request))
     res = (
-        _scoped_list(_db_table(table_name).select(list_select_query(table_name)), table_name)
+        _scoped(_db_table(table_name).select(list_select_query(table_name)), table_name, use_join=True)
         .eq("id", record_id)
         .execute()
     )
@@ -795,13 +271,20 @@ def create_record(
         body = _enrich_create_payload(table_name, body)
         validated = schema_class(**body)
         payload = _normalize_payload(validated.model_dump())
-        ins = _db_table(table_name).insert(payload).execute()
-        row = (ins.data or [{}])[0]
+
+        # ✅ CQRS Integration: Use command handler instead of direct DB call
+        cqrs = get_cqrs_integration()
+        row = cqrs.create_entity(
+            request=request,
+            table_name=table_name,
+            data=payload,
+            idempotency_key=key if key else None,
+            ip_address=request.client.host if request.client else None,
+        )
+
         record_id = str(row.get("id") or "")
         if key:
             complete_idempotent_request(key, op, row)
-        _invalidate_catalog_cache(table_name=table_name, record=row, record_id=record_id)
-        _audit(request, "create", table_name, resource_id=record_id or None)
         _schedule_barcode_update(table_name, record_id, payload.get("ean"))
         if payload.get("visibilidade") and table_name in all_model_tables():
             _publish_catalog_children(table_name, record_id)
@@ -833,17 +316,24 @@ def update_record(request: Request, table_name: str, record_id: str, body: dict)
         payload = _normalize_payload(validated.model_dump())
         payload.pop("id", None)
         payload.pop("created_at", None)
-        res = _scoped(_db_table(table_name).update(payload), table_name).eq("id", record_id).execute()
-        updated = (res.data or [{}])[0]
-        _invalidate_catalog_cache(table_name=table_name, record={**payload, **updated}, record_id=record_id)
-        _audit(request, "update", table_name, resource_id=record_id)
+
+        # ✅ CQRS Integration: Use command handler instead of direct DB call
+        cqrs = get_cqrs_integration()
+        updated = cqrs.update_entity(
+            request=request,
+            table_name=table_name,
+            entity_id=record_id,
+            data=payload,
+            ip_address=request.client.host if request.client else None,
+        )
+
         _schedule_barcode_update(table_name, record_id, payload.get("ean"))
         if payload.get("visibilidade") and table_name in all_model_tables():
             _publish_catalog_children(table_name, record_id)
         if table_name == "categories":
             if "visibilidade" in payload:
                 _cascade_category_visibility(record_id, bool(payload.get("visibilidade")))
-        return (res.data or [{}])[0] if res.data else {"id": record_id, **payload}
+        return updated
     except Exception as exc:
         detail = _client_error(exc)
         if _is_expected_client_conflict(exc):
@@ -876,7 +366,14 @@ def patch_visibility(request: Request, table_name: str, record_id: str, body: di
             _hide_catalog_children(table_name, record_id)
     elif table_name == "categories":
         _cascade_category_visibility(record_id, vis)
-    _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
+    updated = (res.data or [{}])[0]
+    GranularCacheInvalidator.invalidate_surgical(
+        table_name=table_name,
+        record_id=record_id,
+        tipo=updated.get("tipo_catalogo"),
+        id_modelo=updated.get("id_modelo"),
+        id_categoria=updated.get("id_categoria"),
+    )
     _audit(request, "visibility", table_name, resource_id=record_id, visibilidade=vis)
     return (res.data or [{"id": record_id, "visibilidade": vis}])[0]
 
@@ -902,7 +399,14 @@ def publish_record(request: Request, table_name: str, record_id: str):
     elif table_name == "categories":
         _cascade_category_visibility(record_id, True)
 
-    _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
+    updated = (res.data or [{}])[0]
+    GranularCacheInvalidator.invalidate_surgical(
+        table_name=table_name,
+        record_id=record_id,
+        tipo=updated.get("tipo_catalogo"),
+        id_modelo=updated.get("id_modelo"),
+        id_categoria=updated.get("id_categoria"),
+    )
     _audit(request, "publish", table_name, resource_id=record_id)
     return (res.data or [{"id": record_id, "visibilidade": True}])[0]
 
@@ -932,20 +436,28 @@ def delete_record(request: Request, table_name: str, record_id: str, hard: bool 
     action = "hard_delete" if hard else "delete"
     assert_table_action(table_name, action, _role(request))
     try:
-        if hard:
-            if table_name in all_model_tables():
-                get_db().table("product_model_colors").delete().eq("id_modelo", record_id).execute()
-                get_db().table("product_variants").delete().eq("id_modelo", record_id).execute()
-            _db_table(table_name).delete().eq("id", record_id).execute()
-            _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
-            _audit(request, "hard_delete", table_name, resource_id=record_id)
-            return {"status": "deleted", "hard": True}
-        result = soft_delete(table_name, record_id)
-        _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
-        _audit(request, "soft_delete", table_name, resource_id=record_id)
+        # ✅ CQRS Integration: Use command handler instead of direct DB call
+        cqrs = get_cqrs_integration()
+        result = cqrs.delete_entity(
+            request=request,
+            table_name=table_name,
+            entity_id=record_id,
+            hard_delete=hard,
+            ip_address=request.client.host if request.client else None,
+        )
         return result
     except HTTPException:
         raise
     except Exception as exc:
         logger.error("Delete %s/%s: %s", table_name, record_id, exc)
         raise HTTPException(status_code=400, detail=_client_error(exc)) from exc
+
+
+def _enrich_create_payload(table_name: str, body: dict) -> dict:
+    """Enrich payload before create (e.g., set defaults, computed fields)."""
+    return body
+
+
+def _enrich_update_payload(table_name: str, body: dict, record_id: str) -> dict:
+    """Enrich payload before update (e.g., normalize fields)."""
+    return body

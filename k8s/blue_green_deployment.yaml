@@ -1,0 +1,156 @@
+# Blue-Green Deployment Strategy for Diomika API
+# This file demonstrates how to implement blue-green deployment
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: deployment-config
+  namespace: default
+data:
+  active-version: "blue"  # Switch between "blue" and "green"
+
+---
+# BLUE DEPLOYMENT
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: diomika-api-blue
+  labels:
+    app: diomika-api
+    version: blue
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: diomika-api
+      version: blue
+  template:
+    metadata:
+      labels:
+        app: diomika-api
+        version: blue
+    spec:
+      containers:
+      - name: api
+        image: diomika/api:v1.0.0  # Current stable version
+        ports:
+        - containerPort: 8000
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+---
+# GREEN DEPLOYMENT
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: diomika-api-green
+  labels:
+    app: diomika-api
+    version: green
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: diomika-api
+      version: green
+  template:
+    metadata:
+      labels:
+        app: diomika-api
+        version: green
+    spec:
+      containers:
+      - name: api
+        image: diomika/api:v1.1.0  # New version to test
+        ports:
+        - containerPort: 8000
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+---
+# SERVICE - Routes to active version (blue)
+apiVersion: v1
+kind: Service
+metadata:
+  name: diomika-api
+spec:
+  selector:
+    app: diomika-api
+    version: blue  # Change to "green" to switch traffic
+  ports:
+  - port: 80
+    targetPort: 8000
+  type: LoadBalancer
+
+---
+# SERVICE FOR TESTING GREEN DEPLOYMENT
+apiVersion: v1
+kind: Service
+metadata:
+  name: diomika-api-green
+  labels:
+    app: diomika-api
+    version: green
+spec:
+  selector:
+    app: diomika-api
+    version: green
+  ports:
+  - port: 80
+    targetPort: 8000
+  type: ClusterIP
+
+---
+# INGRESS - Routes to active version
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: diomika-api-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: api.diomika.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: diomika-api  # Switch to diomika-api-green for green deployment
+            port:
+              number: 80
+  - host: green-api.diomika.com  # Testing endpoint for green deployment
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: diomika-api-green
+            port:
+              number: 80
+
+---
+# SCRIPT: Blue-Green Switching
+# kubectl patch service diomika-api -p '{"spec":{"selector":{"version":"green"}}}'
+# To switch to green deployment, update the Service selector version from "blue" to "green"

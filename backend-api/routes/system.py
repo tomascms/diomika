@@ -119,51 +119,70 @@ def order_picker_for_category(category_id: str):
     db = get_db()
 
     def _assento_lines(physical: str) -> list[dict]:
-        models_res = (
+        models = (
             db.table(PRODUCT_MODELS_TABLE)
             .select("id, nome, attributes")
             .eq("id_categoria", category_id)
             .eq("tipo_catalogo", physical)
             .eq("visibilidade", True)
             .execute()
+            .data
+            or []
         )
+        model_by_id = {str(m["id"]): m for m in models}
+        model_ids = list(model_by_id.keys())
+        if not model_ids:
+            return []
+
+        products = (
+            db.table(PRODUCT_VARIANTS_TABLE)
+            .select("ean, attributes, id_modelo")
+            .in_("id_modelo", model_ids)
+            .eq("visibilidade", True)
+            .execute()
+            .data
+            or []
+        )
+        products_by_model: dict[str, list] = {}
+        for p in products:
+            if str(p.get("ean") or "").strip():
+                mid = str(p["id_modelo"])
+                products_by_model.setdefault(mid, []).append(p)
+        for lst in products_by_model.values():
+            lst.sort(key=lambda p: str((p.get("attributes") or {}).get("altura") or ""))
+
+        cores_res = (
+            db.table(PRODUCT_MODEL_COLORS_TABLE)
+            .select("id_modelo, numero, nome")
+            .in_("id_modelo", model_ids)
+            .eq("visibilidade", True)
+            .execute()
+            .data
+            or []
+        )
+        cores_by_model: dict[str, list] = {}
+        for c in cores_res:
+            mid = str(c["id_modelo"])
+            cores_by_model.setdefault(mid, []).append({"numero": c["numero"], "nome": c.get("nome") or ""})
+
         lines = []
-        for m in models_res.data or []:
-            products = (
-                db.table(PRODUCT_VARIANTS_TABLE)
-                .select("ean, attributes")
-                .eq("id_modelo", m["id"])
-                .eq("visibilidade", True)
-                .execute()
-                .data
-                or []
-            )
-            products = [p for p in products if str(p.get("ean") or "").strip()]
-            products.sort(key=lambda p: str((p.get("attributes") or {}).get("altura") or ""))
-            cores = (
-                db.table(PRODUCT_MODEL_COLORS_TABLE)
-                .select("numero, nome")
-                .eq("id_modelo", m["id"])
-                .eq("visibilidade", True)
-                .execute()
-                .data
-                or []
-            )
-            lines.append(
-                {
-                    "modelo_id": m["id"],
-                    "modelo_nome": m["nome"],
-                    "ean": (products[0].get("ean") if products else None),
-                    "products": [
-                        {"ean": p["ean"], "altura": (p.get("attributes") or {}).get("altura")} for p in products
-                    ],
-                    "alturas": [
-                        (p.get("attributes") or {}).get("altura") for p in products if (p.get("attributes") or {}).get("altura")
-                    ]
-                    or ((m.get("attributes") or {}).get("alturas") or []),
-                    "cores": cores,
-                }
-            )
+        for m in models:
+            mid = str(m["id"])
+            prods = products_by_model.get(mid, [])
+            lines.append({
+                "modelo_id": mid,
+                "modelo_nome": m["nome"],
+                "ean": (prods[0].get("ean") if prods else None),
+                "products": [
+                    {"ean": p["ean"], "altura": (p.get("attributes") or {}).get("altura")}
+                    for p in prods
+                ],
+                "alturas": [
+                    (p.get("attributes") or {}).get("altura") for p in prods
+                    if (p.get("attributes") or {}).get("altura")
+                ] or ((m.get("attributes") or {}).get("alturas") or []),
+                "cores": cores_by_model.get(mid, []),
+            })
         return lines
 
     def _variant_products(physical: str) -> list[dict]:

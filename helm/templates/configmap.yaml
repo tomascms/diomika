@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "diomika.fullname" . }}-config
+  labels:
+    {{- include "diomika.labels" . | nindent 4 }}
+data:
+  environment: {{ .Values.environment }}
+  log_level: {{ .Values.app.log_level }}
+
+  # API Configuration
+  api_host: {{ .Values.app.api.host }}
+  api_port: "{{ .Values.app.api.port }}"
+  api_workers: "{{ .Values.app.api.workers }}"
+  api_timeout: "{{ .Values.app.api.timeout }}"
+
+  # Database
+  database_host: {{ .Values.app.database.host }}
+  database_port: "{{ .Values.app.database.port }}"
+  database_name: {{ .Values.app.database.name }}
+  database_pool_size: "{{ .Values.app.database.pool_size }}"
+  database_max_overflow: "{{ .Values.app.database.max_overflow }}"
+
+  # Cache
+  cache_host: {{ .Values.app.cache.host }}
+  cache_port: "{{ .Values.app.cache.port }}"
+  cache_ttl: "{{ .Values.app.cache.ttl }}"
+
+  # Security
+  api_key_header: {{ .Values.app.security.api_key_header }}
+  rate_limit_enabled: "{{ .Values.app.security.rate_limit.enabled }}"
+  rate_limit_rpm: "{{ .Values.app.security.rate_limit.requests_per_minute }}"
+  rate_limit_rph: "{{ .Values.app.security.rate_limit.requests_per_hour }}"
+
+  # CORS
+  cors_origins: |
+    {{- range .Values.app.security.cors_origins }}
+    - {{ . }}
+    {{- end }}
+
+  # Storage
+  storage_type: {{ .Values.app.storage.type }}
+  storage_bucket: {{ .Values.app.storage.bucket }}
+  storage_region: {{ .Values.region }}
+  storage_acl: {{ .Values.app.storage.acl }}
+
+  # Audit
+  audit_enabled: "{{ .Values.app.audit.enabled }}"
+  audit_retention_days: "{{ .Values.app.audit.retention_days }}"
+
+  # Workers
+  workers_embedded: "{{ .Values.app.workers.embedded }}"
+  email_poll_seconds: "{{ .Values.app.workers.email_poll_seconds }}"
+  outbox_poll_seconds: "{{ .Values.app.workers.outbox_poll_seconds }}"
+  saga_sweep_seconds: "{{ .Values.app.workers.saga_sweep_seconds }}"
+  saga_process_seconds: "{{ .Values.app.workers.saga_process_seconds }}"
+  retention_sweep_cycles: "{{ .Values.app.workers.retention_sweep_cycles }}"
+
+  # Observability
+  prometheus_enabled: "{{ .Values.app.observability.prometheus_enabled }}"
+  tracing_enabled: "{{ .Values.app.observability.tracing_enabled }}"

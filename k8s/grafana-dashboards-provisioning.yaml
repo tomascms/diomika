@@ -1,0 +1,309 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-provisioning
+  namespace: diomika
+data:
+  api-performance.json: |
+    {
+      "dashboard": {
+        "title": "API Performance",
+        "tags": ["api", "performance"],
+        "refresh": "30s",
+        "time": {"from": "now-1h", "to": "now"},
+        "panels": [
+          {
+            "title": "Request Rate (req/s)",
+            "targets": [
+              {
+                "expr": "rate(http_requests_total[5m])",
+                "legendFormat": "{{method}} {{path}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "title": "Error Rate (%)",
+            "targets": [
+              {
+                "expr": "100 * (sum(rate(http_requests_total{status=~'5..'}[5m])) / sum(rate(http_requests_total[5m])))",
+                "legendFormat": "Error Rate"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "title": "P50 Latency (ms)",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.50, http_request_duration_seconds_bucket)",
+                "legendFormat": "{{method}} {{path}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "title": "P95 Latency (ms)",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, http_request_duration_seconds_bucket)",
+                "legendFormat": "{{method}} {{path}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "title": "Cache Hit Rate (%)",
+            "targets": [
+              {
+                "expr": "100 * (sum(cache_hits_total) / (sum(cache_hits_total) + sum(cache_misses_total)))",
+                "legendFormat": "Hit Rate"
+              }
+            ],
+            "type": "gauge",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+          },
+          {
+            "title": "Active Connections",
+            "targets": [
+              {
+                "expr": "http_connections_active",
+                "legendFormat": "{{handler}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+          }
+        ]
+      }
+    }
+
+  database-performance.json: |
+    {
+      "dashboard": {
+        "title": "Database Performance",
+        "tags": ["database", "postgres"],
+        "refresh": "30s",
+        "time": {"from": "now-1h", "to": "now"},
+        "panels": [
+          {
+            "title": "Query Rate",
+            "targets": [
+              {
+                "expr": "rate(db_query_total[5m])",
+                "legendFormat": "{{query_type}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "title": "Query Duration (ms)",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, db_query_duration_seconds_bucket)",
+                "legendFormat": "P95 {{query_type}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "title": "Database Connections",
+            "targets": [
+              {
+                "expr": "pg_stat_activity_count",
+                "legendFormat": "{{state}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "title": "Slow Queries (>1s)",
+            "targets": [
+              {
+                "expr": "sum(rate(db_query_slow_total[5m]))",
+                "legendFormat": "Slow Queries"
+              }
+            ],
+            "type": "stat",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          }
+        ]
+      }
+    }
+
+  business-metrics.json: |
+    {
+      "dashboard": {
+        "title": "Business Metrics",
+        "tags": ["business", "sales"],
+        "refresh": "5m",
+        "time": {"from": "now-7d", "to": "now"},
+        "panels": [
+          {
+            "title": "Total Orders (7d)",
+            "targets": [
+              {
+                "expr": "sum(orders_created_total)"
+              }
+            ],
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+          },
+          {
+            "title": "Total Revenue (7d)",
+            "targets": [
+              {
+                "expr": "sum(order_revenue_total)"
+              }
+            ],
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+          },
+          {
+            "title": "Average Order Value",
+            "targets": [
+              {
+                "expr": "sum(order_revenue_total) / sum(orders_created_total)"
+              }
+            ],
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}
+          },
+          {
+            "title": "Conversion Rate (%)",
+            "targets": [
+              {
+                "expr": "100 * (sum(orders_created_total) / sum(catalog_views_total))"
+              }
+            ],
+            "type": "gauge",
+            "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}
+          },
+          {
+            "title": "Orders Timeline",
+            "targets": [
+              {
+                "expr": "sum(rate(orders_created_total[1h])) by (time)"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4}
+          },
+          {
+            "title": "Revenue Timeline",
+            "targets": [
+              {
+                "expr": "sum(rate(order_revenue_total[1h])) by (time)"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4}
+          }
+        ]
+      }
+    }
+
+  infrastructure.json: |
+    {
+      "dashboard": {
+        "title": "Infrastructure",
+        "tags": ["infrastructure", "system"],
+        "refresh": "30s",
+        "time": {"from": "now-1h", "to": "now"},
+        "panels": [
+          {
+            "title": "CPU Usage (%)",
+            "targets": [
+              {
+                "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode='idle'}[5m])))"
+              }
+            ],
+            "type": "gauge",
+            "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+          },
+          {
+            "title": "Memory Usage (%)",
+            "targets": [
+              {
+                "expr": "100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))"
+              }
+            ],
+            "type": "gauge",
+            "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0}
+          },
+          {
+            "title": "Disk Usage (%)",
+            "targets": [
+              {
+                "expr": "100 * (node_filesystem_avail_bytes{mountpoint='/'} / node_filesystem_size_bytes{mountpoint='/'})"
+              }
+            ],
+            "type": "gauge",
+            "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0}
+          },
+          {
+            "title": "Network I/O",
+            "targets": [
+              {
+                "expr": "rate(node_network_receive_bytes_total[5m])",
+                "legendFormat": "RX {{device}}"
+              },
+              {
+                "expr": "rate(node_network_transmit_bytes_total[5m])",
+                "legendFormat": "TX {{device}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "title": "Disk I/O",
+            "targets": [
+              {
+                "expr": "rate(node_disk_read_bytes_total[5m])",
+                "legendFormat": "Read {{device}}"
+              },
+              {
+                "expr": "rate(node_disk_written_bytes_total[5m])",
+                "legendFormat": "Write {{device}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          }
+        ]
+      }
+    }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources-provisioning
+  namespace: diomika
+data:
+  prometheus.yaml: |
+    apiVersion: 1
+    datasources:
+    - name: Prometheus
+      type: prometheus
+      url: http://prometheus:9090
+      access: proxy
+      isDefault: true
+      editable: true
+
+  loki.yaml: |
+    apiVersion: 1
+    datasources:
+    - name: Loki
+      type: loki
+      url: http://loki:3100
+      access: proxy
+      editable: true

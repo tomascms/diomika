@@ -19,3 +19,46 @@ redis
 sentry-sdk[fastapi]
 boto3
 vulture
+
+# CQRS & Event Sourcing
+sqlalchemy
+alembic
+
+# WebSocket & Real-time
+websockets
+python-socketio
+
+# Tracing & Monitoring
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-jaeger
+opentelemetry-instrumentation-fastapi
+opentelemetry-instrumentation-sqlalchemy
+opentelemetry-instrumentation-redis
+opentelemetry-instrumentation-requests
+prometheus-client
+
+# Security & API Versioning
+cryptography
+
+# Testing & Load Testing
+pytest-asyncio
+pytest-cov
+httpx
+locust
+playwright
+
+# HTTP & Async
+aiohttp
+
+# Logging
+python-json-logger
+
+# Security scanning
+bandit
+sqlmap
+safety
+
+# Async Task Queue
+celery
+rq

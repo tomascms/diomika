@@ -3,12 +3,14 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/lib/api'
 import { workspace } from '@/composables/useWorkspace'
+import { useAggregatedTipos } from '@/composables/useAggregatedTipos'
 import SchemaForm from '@/components/SchemaForm.vue'
 import ModelColorsPanel from '@/components/ModelColorsPanel.vue'
 import ModelVariantsPanel from '@/components/ModelVariantsPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
+const { getAggregatedTiposForCategory } = useAggregatedTipos()
 
 const table = computed(() => route.params.physicalTable || route.params.table)
 const recordId = computed(() => route.params.id)
@@ -30,6 +32,8 @@ const message = ref('')
 const createIdempotencyKey = ref(null)
 const categoryRows = ref([])
 const familyTipo = ref('')
+const bundleProductTable = ref(null)
+const bundleColorsTable = ref(null)
 let switchingSchema = false
 /** Campos a repor após mudar categoria/família (novo registo). */
 let formCarry = null
@@ -50,10 +54,7 @@ const isProductForm = computed(() =>
   catalogTypes.value.some((t) => t.product_table === table.value),
 )
 
-const modelCatalogTipo = computed(() =>
-  catalogTypes.value.find((t) => t.model_table === table.value) || null,
-)
-const productTableForModel = computed(() => modelCatalogTipo.value?.product_table || null)
+const productTableForModel = computed(() => bundleProductTable.value)
 
 const storefrontCheck = ref(null)
 
@@ -82,12 +83,11 @@ const storefrontIssues = computed(() => {
 const loadStorefrontCheck = async () => {
   storefrontCheck.value = null
   if (!isModelForm.value || isNew.value || !recordId.value) return
-  const cfg = modelCatalogTipo.value
-  if (!cfg?.product_table || !cfg?.colors_table) return
+  if (!bundleProductTable.value || !bundleColorsTable.value) return
   try {
     const [products, colors] = await Promise.all([
-      api.listRecords(cfg.product_table, { id_modelo: recordId.value, limit: '50' }),
-      api.listModelColors(cfg.colors_table, recordId.value),
+      api.listRecords(bundleProductTable.value, { id_modelo: recordId.value, limit: '50' }),
+      api.listModelColors(bundleColorsTable.value, recordId.value),
     ])
     storefrontCheck.value = {
       withEan: products.filter((p) => String(p.ean || '').trim()).length,
@@ -107,16 +107,7 @@ const selectedCategory = computed(() =>
   categoryRows.value.find((c) => String(c.id) === String(formData.value.id_categoria || '')) || null,
 )
 
-const aggregatedTipos = computed(() => {
-  const cat = selectedCategory.value
-  if (!cat?.tipo_catalogo) return null
-  for (const def of Object.values(categoryDefinitions.value || {})) {
-    if (def.tipo_catalogo === cat.tipo_catalogo && def.aggregated_tipos?.length) {
-      return def.aggregated_tipos
-    }
-  }
-  return null
-})
+const aggregatedTipos = computed(() => getAggregatedTiposForCategory(selectedCategory.value))
 
 const showFamilyPicker = computed(
   () => isNew.value && isModelForm.value && Boolean(aggregatedTipos.value?.length),
@@ -134,14 +125,7 @@ const modelTableForTipo = (tipo) =>
 
 const resolveTargetModelTable = (cat, preferredTipo = null) => {
   if (!cat?.tipo_catalogo) return null
-  const aggregated = (() => {
-    for (const def of Object.values(categoryDefinitions.value || {})) {
-      if (def.tipo_catalogo === cat.tipo_catalogo && def.aggregated_tipos?.length) {
-        return def.aggregated_tipos
-      }
-    }
-    return null
-  })()
+  const aggregated = getAggregatedTiposForCategory(cat)
   let tipo = preferredTipo || cat.tipo_catalogo
   if (aggregated?.length) {
     const currentTipo = catalogTipo.value
@@ -279,6 +263,8 @@ const load = async () => {
     categoryRows.value = bundleData.categories || []
     relations.value = bundleData.relations || {}
     fieldOptions.value = bundleData.field_options || {}
+    bundleProductTable.value = bundleData.product_table || null
+    bundleColorsTable.value = bundleData.colors_table || null
 
     const record = bundleData.record
     if (record) {

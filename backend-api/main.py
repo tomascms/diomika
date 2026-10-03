@@ -31,9 +31,19 @@ from core.middleware import (
     CatalogCacheHeadersMiddleware,
     BodySizeLimitMiddleware,
     LatencyAlertMiddleware,
+    BotDefenseMiddleware,
     ALLOWED_CORS_HEADERS,
 )
+from core.auth_token_middleware import AdminTokenRotationMiddleware
 from core.path_guard import PrivilegedPathMiddleware
+from core.rate_limiting import RateLimitingMiddleware
+from core.health_checks import (
+    HealthCheckRunner,
+    HealthCheckMiddleware,
+    HealthEndpointHandler,
+    ComponentType,
+)
+from core.advanced_error_handling import ErrorFormatter, DiomikaException
 from core.version import VERSION
 from routes import (
     categories,
@@ -99,10 +109,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Initialize health check runner
+health_runner = HealthCheckRunner()
+health_runner.register_component("database", ComponentType.DATABASE)
+health_runner.register_component("cache", ComponentType.CACHE)
+
 # Ordem: path guard primeiro (outermost = last add) — Starlette inverte
 app.add_middleware(GZipMiddleware, minimum_size=500)
+app.add_middleware(AdminTokenRotationMiddleware)
 app.add_middleware(GlobalRateLimitMiddleware)
 app.add_middleware(BodySizeLimitMiddleware)
+app.add_middleware(BotDefenseMiddleware)
+app.add_middleware(RateLimitingMiddleware)
+app.add_middleware(HealthCheckMiddleware, health_runner=health_runner)
 app.add_middleware(LatencyAlertMiddleware)
 app.add_middleware(CatalogCacheHeadersMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
@@ -155,6 +174,18 @@ app.include_router(admin.router)
 app.include_router(ops_analytics.router)
 
 
+@app.exception_handler(DiomikaException)
+async def _diomika_exception_handler(request, exc: DiomikaException):  # type: ignore[no-untyped-def]
+    """Handle custom Diomika exceptions."""
+    from fastapi.responses import JSONResponse
+
+    ErrorFormatter.log_error(exc)
+    return JSONResponse(
+        status_code=exc.http_status,
+        content=ErrorFormatter.format_error(exc),
+    )
+
+
 @app.exception_handler(Exception)
 async def _unhandled_exception(request, exc):  # type: ignore[no-untyped-def]
     """Em produção não devolve stack traces ao cliente."""
@@ -162,6 +193,8 @@ async def _unhandled_exception(request, exc):  # type: ignore[no-untyped-def]
 
     if isinstance(exc, HTTPException):
         raise exc
+    if isinstance(exc, DiomikaException):
+        return await _diomika_exception_handler(request, exc)
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     try:
         capture_exception(
@@ -214,6 +247,31 @@ def health_ready():
 def health_detail():
     """Detalhe ops — só localhost em produção final (público: /health e /health/ready)."""
     return build_health(detailed=True)
+
+
+# New comprehensive health check endpoints
+health_handler = HealthEndpointHandler(health_runner)
+
+
+@app.get("/health/comprehensive")
+async def health_comprehensive():
+    """Comprehensive health check with component checks."""
+    return await health_handler.health_detailed()
+
+
+@app.get("/health/live")
+async def health_live():
+    """Kubernetes liveness probe."""
+    return await health_handler.health_live()
+
+
+@app.get("/health/startup")
+async def health_startup():
+    """Kubernetes startup probe."""
+    health = health_runner.get_system_health()
+    if health.overall_status.value == "healthy":
+        return {"started": True, "status": "ready"}
+    return {"started": False, "status": health.overall_status.value}
 
 
 if __name__ == "__main__":

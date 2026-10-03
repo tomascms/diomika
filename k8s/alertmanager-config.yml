@@ -1,0 +1,189 @@
+global:
+  resolve_timeout: 5m
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+route:
+  receiver: 'default'
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+
+  routes:
+    # Database alerts — route to DBA team with escalation
+    - match:
+        team: 'database'
+      receiver: 'database-team'
+      continue: true
+      group_wait: 1s
+      repeat_interval: 15m
+
+    # Saga execution failures — route to dev team
+    - match:
+        alertname: 'SagaExecutionFailed|SagaStepFailed'
+      receiver: 'saga-failures'
+      continue: true
+      group_wait: 30s
+      repeat_interval: 1h
+
+    # Business metrics alerts — route to sales/business team
+    - match_re:
+        alertname: 'LowConversionRate|HighCartAbandonmentRate|RevenueDecline'
+      receiver: 'business-metrics'
+      continue: true
+      group_wait: 5m
+      repeat_interval: 6h
+
+    # Security/audit alerts — route to security team
+    - match_re:
+        alertname: 'AuditLogFailure|UnauthorizedAccess|DataIntegrityCheck'
+      receiver: 'security-team'
+      continue: true
+      group_wait: 30s
+      repeat_interval: 30m
+
+    # Critical alerts — escalate to on-call via PagerDuty
+    - match:
+        severity: critical
+      receiver: 'critical'
+      continue: true
+      group_wait: 1s
+      repeat_interval: 30m
+
+    # Warning alerts — route to general warnings
+    - match:
+        severity: warning
+      receiver: 'warning'
+      group_wait: 5m
+      repeat_interval: 4h
+
+    # Default fallback
+    - match:
+        severity: info
+      receiver: 'default'
+      group_wait: 15m
+      repeat_interval: 24h
+
+receivers:
+  - name: 'default'
+    slack_configs:
+      - channel: '#monitoring'
+        title: '{{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: '{{ if eq .Status "firing" }}#FF9900{{ else }}#36a64f{{ end }}'
+        send_resolved: true
+
+  - name: 'critical'
+    slack_configs:
+      - channel: '#critical-alerts'
+        title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: '#FF0000'
+        send_resolved: true
+    pagerduty_configs:
+      - service_key: '${PAGERDUTY_SERVICE_KEY}'
+        client: 'Diomika AlertManager'
+        description: '{{ .GroupLabels.alertname }}: {{ .Alerts.Firing | len }} firing'
+        details:
+          firing: '{{ template "pagerduty.default.instances" .Alerts.Firing }}'
+
+  - name: 'warning'
+    slack_configs:
+      - channel: '#incidents'
+        title: '⚠️ Warning: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: '#FFD700'
+        send_resolved: false
+
+  - name: 'database-team'
+    slack_configs:
+      - channel: '#database-alerts'
+        title: '🗄️ Database Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}Instance: {{ .Labels.instance }}\nDuration: {{ .Annotations.duration }}\n{{ .Annotations.description }}{{ end }}'
+        color: '{{ if eq .Status "firing" }}#FF6B6B{{ else }}#36a64f{{ end }}'
+        send_resolved: true
+    email_configs:
+      - to: '${DBA_EMAIL}'
+        from: 'alertmanager@diomika.com'
+        smarthost: 'smtp.diomika.com:587'
+        auth_username: '${SMTP_USER}'
+        auth_password: '${SMTP_PASSWORD}'
+        headers:
+          Subject: '[Database] {{ .GroupLabels.alertname }}'
+
+  - name: 'saga-failures'
+    slack_configs:
+      - channel: '#saga-failures'
+        title: '⛓️ Saga Execution: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}Saga ID: {{ .Labels.saga_id }}\nError: {{ .Annotations.description }}{{ end }}'
+        color: '#FF6B6B'
+        send_resolved: true
+
+  - name: 'business-metrics'
+    slack_configs:
+      - channel: '#sales-alerts'
+        title: '📊 Business Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: '#FF9800'
+        send_resolved: true
+    email_configs:
+      - to: '${SALES_EMAIL}'
+        from: 'alertmanager@diomika.com'
+        smarthost: 'smtp.diomika.com:587'
+        auth_username: '${SMTP_USER}'
+        auth_password: '${SMTP_PASSWORD}'
+        headers:
+          Subject: '[Business] {{ .GroupLabels.alertname }}'
+
+  - name: 'security-team'
+    slack_configs:
+      - channel: '#security-alerts'
+        title: '🔒 Security Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}User: {{ .Labels.user_id }}\nAction: {{ .Labels.action }}\n{{ .Annotations.description }}{{ end }}'
+        color: '#FF0000'
+        send_resolved: true
+    email_configs:
+      - to: '${SECURITY_EMAIL}'
+        from: 'alertmanager@diomika.com'
+        smarthost: 'smtp.diomika.com:587'
+        auth_username: '${SMTP_USER}'
+        auth_password: '${SMTP_PASSWORD}'
+        headers:
+          Subject: '[SECURITY] {{ .GroupLabels.alertname }}'
+
+inhibit_rules:
+  # Suppress warnings if critical is firing for same alert
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+
+  # Suppress info if warning is firing
+  - source_match:
+      severity: 'warning'
+    target_match:
+      severity: 'info'
+    equal: ['alertname', 'instance']
+
+  # Suppress 4xx if 5xx is firing for same path
+  - source_match_re:
+      status: '5..'
+    target_match_re:
+      status: '4..'
+    equal: ['path', 'instance']
+
+  # Suppress slow query warnings if database is down
+  - source_match:
+      alertname: 'DatabaseDown'
+    target_match:
+      alertname: 'SlowQueries'
+    equal: ['instance']
+
+  # Suppress cache hit rate warnings if cache service is down
+  - source_match:
+      alertname: 'CacheServiceDown'
+    target_match:
+      alertname: 'LowCacheHitRate'
+    equal: ['instance']

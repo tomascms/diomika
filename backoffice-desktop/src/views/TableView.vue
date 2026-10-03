@@ -5,6 +5,7 @@ import { ref, computed, watch, onMounted, onActivated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/lib/api'
 import { useWorkspace } from '@/composables/useWorkspace'
+import { useAggregatedTipos } from '@/composables/useAggregatedTipos'
 import DataList from '@/components/DataList.vue'
 import CategoryCreatePanel from '@/components/CategoryCreatePanel.vue'
 
@@ -13,6 +14,7 @@ const PAGE_SIZE = 40
 const route = useRoute()
 const router = useRouter()
 const { tableConfig, workspace } = useWorkspace()
+const { getAggregatedTiposForCategory } = useAggregatedTipos()
 
 const rows = ref([])
 const loading = ref(true)
@@ -124,17 +126,8 @@ const selectedCategory = computed(() =>
   categories.value.find((c) => c.id === newCategoryId.value) || null,
 )
 
-const aggregatedTiposForCategory = (cat) => {
-  if (!cat?.tipo_catalogo) return null
-  for (const def of Object.values(categoryDefinitions.value || {})) {
-    if (def.tipo_catalogo === cat.tipo_catalogo && def.aggregated_tipos?.length) {
-      return def.aggregated_tipos
-    }
-  }
-  return null
-}
 
-const isAggregatedCategory = computed(() => Boolean(aggregatedTiposForCategory(selectedCategory.value)))
+const isAggregatedCategory = computed(() => Boolean(getAggregatedTiposForCategory(selectedCategory.value)))
 
 const loadRows = async ({ append = false } = {}) => {
   const seq = ++loadSeq
@@ -244,7 +237,7 @@ const deleteRow = async (row) => {
 const physicalTableForCategory = (categoryId, physicalTipo = null) => {
   const cat = categories.value.find((c) => c.id === categoryId)
   if (!cat?.tipo_catalogo) return null
-  const aggregated = aggregatedTiposForCategory(cat)
+  const aggregated = getAggregatedTiposForCategory(cat)
   const tipo = physicalTipo || cat.tipo_catalogo
   if (aggregated && !physicalTipo) return null
   const ct = catalogTypes.value.find((t) => t.tipo === tipo)
@@ -271,7 +264,7 @@ const confirmNew = () => {
     return
   }
   const cat = selectedCategory.value
-  const aggregated = aggregatedTiposForCategory(cat)
+  const aggregated = getAggregatedTiposForCategory(cat)
   if (aggregated && !newPhysicalTipo.value) {
     error.value = 'Escolha a família de produto.'
     return
@@ -437,7 +430,7 @@ onActivated(() => {
         <select v-model="newPhysicalTipo" class="input">
           <option value="">— Escolher família —</option>
           <option
-            v-for="tipo in aggregatedTiposForCategory(selectedCategory)"
+            v-for="tipo in getAggregatedTiposForCategory(selectedCategory)"
             :key="tipo"
             :value="tipo"
           >

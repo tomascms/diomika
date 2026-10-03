@@ -128,3 +128,18 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
             except ValueError:
                 return Response("Content-Length inválido", status_code=400)
         return await call_next(request)
+
+
+class BotDefenseMiddleware(BaseHTTPMiddleware):
+    """Bloqueia bots agressivos conhecidos por User-Agent."""
+
+    async def dispatch(self, request: Request, call_next):
+        from core.bot_defense import is_bot_user_agent, log_bot_attempt
+
+        user_agent = request.headers.get("user-agent", "")
+        if is_bot_user_agent(user_agent):
+            client_ip = request.client.host if request.client else "unknown"
+            log_bot_attempt(client_ip, user_agent, request.url.path)
+            return Response("Acesso negado", status_code=403)
+
+        return await call_next(request)

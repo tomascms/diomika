@@ -15,7 +15,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from core.admin_form_schema import build_form_schema
 from core.auth import assert_table_action, require_admin
 from core.local_only import admin_must_be_local
-from models.catalog_registry import tipo_for_table
+<<<<<<< HEAD
+from models.catalog_registry import tipo_for_table, product_table_for_tipo, colors_table_for_tipo
 from routes.admin_crud import _db_table, _scoped, relation_options
 from models.catalog_registry import list_select_query
 
@@ -119,11 +120,14 @@ def form_bundle(
         except Exception:
             categories = []
 
+    tipo = tipo_for_table(table_name)
     return {
         **schema,
         "record": record,
         "relations": relations,
         "categories": [c for c in categories if c.get("tipo_catalogo")],
         "field_options": _discriminator_options(fields, (record or {}).get("id_modelo") or None),
-        "tipo_catalogo": tipo_for_table(table_name),
+        "tipo_catalogo": tipo,
+        "product_table": product_table_for_tipo(tipo),
+        "colors_table": colors_table_for_tipo(tipo),
     }
