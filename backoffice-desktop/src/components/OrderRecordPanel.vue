@@ -81,14 +81,150 @@ const downloadPdf = async () => {
 </template>
 
 <style scoped>
-.detail { padding: 20px; }
-.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.head h3 { margin: 8px 0 0; }
-.meta { white-space: pre-line; color: var(--text-muted); font-size: 0.9rem; }
-.obs { font-size: 0.9rem; }
-.lines { list-style: none; padding: 0; margin: 0 0 16px; }
-.lines li { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.92rem; }
-.empty { color: var(--text-muted); }
-.err { color: var(--danger); }
-.btn-sm { padding: 4px 10px; font-size: 0.8rem; }
+.detail {
+  padding: 20px;
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(59, 130, 246, 0.02) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  gap: 16px;
+  animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.1);
+}
+
+.head h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.meta {
+  white-space: pre-line;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+  padding: 12px;
+  background: rgba(59, 130, 246, 0.04);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+.obs {
+  margin: 0;
+  font-size: 0.9rem;
+  padding: 12px;
+  background: rgba(120, 120, 120, 0.04);
+  border: 1px solid rgba(120, 120, 120, 0.15);
+  border-left: 3px solid var(--text-muted);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.detail h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--accent);
+}
+
+.lines {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.01) 0%, transparent 100%);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.lines li {
+  padding: 12px;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.08);
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  transition: all var(--transition);
+  position: relative;
+}
+
+.lines li:last-child {
+  border-bottom: none;
+}
+
+.lines li:hover {
+  background: rgba(59, 130, 246, 0.06);
+  color: var(--text-primary);
+}
+
+.empty {
+  margin: 0;
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.04) 0%, transparent 100%);
+  border: 1px dashed rgba(59, 130, 246, 0.15);
+  border-radius: var(--radius-sm);
+}
+
+.err {
+  margin: 0;
+  padding: 12px;
+  color: var(--danger);
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.04) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-left: 4px solid var(--danger);
+  border-radius: var(--radius-sm);
+  animation: slideDown 0.3s ease-out;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.1);
+}
+
+.btn-sm {
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 </style>
