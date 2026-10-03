@@ -84,6 +84,20 @@ def _maintenance_loop() -> None:
         _stop.wait(poll)
 
 
+def _saga_executor_loop() -> None:
+    """Background loop para executar sagas assincronamente."""
+    from workers.saga_executor import background_saga_processor
+
+    poll = int(os.getenv("SAGA_PROCESS_SECONDS", "10"))
+    logger.info("Saga executor embutido (poll=%ss)", poll)
+    while not _stop.is_set():
+        try:
+            asyncio.run(background_saga_processor(check_interval=poll))
+        except Exception as exc:
+            logger.error("Saga executor: %s", exc)
+        _stop.wait(poll)
+
+
 def start_background_workers() -> None:
     if not should_run_embedded():
         logger.info("Workers embutidos desactivados (RUN_EMBEDDED_WORKERS)")
@@ -95,11 +109,12 @@ def start_background_workers() -> None:
         (_email_loop, "email"),
         (_outbox_loop, "outbox"),
         (_maintenance_loop, "saga-maint"),
+        (_saga_executor_loop, "saga-executor"),
     ):
         t = threading.Thread(target=target, name=f"diomika-{name}", daemon=True)
         t.start()
         _threads.append(t)
-    logger.info("Workers embutidos iniciados (API + email + outbox num processo)")
+    logger.info("Workers embutidos iniciados (API + email + outbox + saga-executor num processo)")
 
 
 def stop_background_workers() -> None:
