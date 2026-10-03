@@ -41,8 +41,21 @@ cryptography
 
 # Testing & Load Testing
 pytest-asyncio
+pytest-cov
 httpx
 locust
+playwright
+
+# HTTP & Async
+aiohttp
+
+# Logging
+python-json-logger
+
+# Security scanning
+bandit
+sqlmap
+safety
 
 # Async Task Queue
 celery

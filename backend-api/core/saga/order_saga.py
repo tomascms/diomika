@@ -280,7 +280,7 @@ class OrderSagaOrchestrator:
             raise
 
     async def _generate_invoice(self, order_id: str, customer_data: dict[str, Any], lines: list[OrderLine]) -> Optional[str]:
-        """Gera PDF da fatura."""
+        """Gera PDF da fatura com ReportLab."""
         saga_log(
             self.saga_id,
             "order_submission",
@@ -290,12 +290,56 @@ class OrderSagaOrchestrator:
         )
 
         try:
-            # Placeholder: em produção, usar reportlab/weasyprint
-            invoice_url = f"https://invoices.diomika.com/orders/{order_id}.pdf"
+            from core.invoice_generator import get_invoice_generator
+            import boto3
+            from datetime import datetime
+            from decimal import Decimal
+
+            generator = get_invoice_generator()
+
+            # Convert OrderLine to invoice items format
+            invoice_items = [
+                {
+                    "description": f"EAN {line.ean}" + (f" ({line.color_code})" if line.color_code else ""),
+                    "quantity": Decimal(str(line.quantity)),
+                    "unit_price": Decimal(str(line.price)),
+                }
+                for line in lines
+            ]
+
+            subtotal = sum(Decimal(str(line.price)) * Decimal(str(line.quantity)) for line in lines)
+
+            # Generate PDF bytes
+            pdf_bytes = generator.generate_invoice_pdf(
+                order_id=order_id,
+                customer_name=customer_data.get("name", "Cliente"),
+                customer_email=customer_data.get("email", ""),
+                customer_address=customer_data.get("address", ""),
+                order_date=datetime.utcnow(),
+                items=invoice_items,
+                subtotal=subtotal,
+                tax_rate=Decimal("0.23"),
+            )
+
+            # Upload PDF to S3
+            s3_key = f"invoices/{order_id}.pdf"
+            s3_client = boto3.client("s3")
+            bucket = "diomika-invoices"
+
+            s3_client.put_object(
+                Bucket=bucket,
+                Key=s3_key,
+                Body=pdf_bytes,
+                ContentType="application/pdf",
+                Metadata={"order-id": order_id},
+            )
+
+            invoice_url = f"https://{bucket}.s3.amazonaws.com/{s3_key}"
 
             # Store invoice URL in order
             self.db.table("orders").update({
                 "invoice_url": invoice_url,
+                "invoice_generated_at": datetime.utcnow().isoformat(),
             }).eq("id", order_id).execute()
 
             saga_log(
@@ -318,7 +362,7 @@ class OrderSagaOrchestrator:
             raise
 
     async def _send_notification(self, customer_data: dict[str, Any], order_id: str, lines: list[OrderLine]) -> bool:
-        """Envia email de confirmação de encomenda."""
+        """Envia email de confirmação de encomenda com template profissional."""
         saga_log(
             self.saga_id,
             "order_submission",
@@ -328,6 +372,10 @@ class OrderSagaOrchestrator:
         )
 
         try:
+            from datetime import datetime
+            from decimal import Decimal
+            from core.email_templates import render_order_confirmation
+
             customer_email = customer_data.get("email", "")
             if not customer_email:
                 saga_log(
@@ -339,26 +387,43 @@ class OrderSagaOrchestrator:
                 )
                 return False
 
-            # Build email
-            subject = f"[Diomika] Confirmação de Encomenda #{order_id[:8]}"
-            lines_text = "\n".join([
-                f"- EAN {line.ean}: {line.quantity} un. @ {line.price}€ = {line.quantity * line.price}€"
+            # Convert OrderLine to email template format
+            email_items = [
+                {
+                    "description": f"EAN {line.ean}" + (f" ({line.color_code})" if line.color_code else ""),
+                    "quantity": line.quantity,
+                    "unit_price": Decimal(str(line.price)),
+                }
                 for line in lines
-            ])
-            total = sum(line.price * line.quantity for line in lines)
+            ]
 
-            body = (
-                f"Obrigado pela sua encomenda!\n\n"
-                f"Referência: {order_id}\n"
-                f"Cliente: {customer_data.get('name', 'N/A')}\n"
-                f"Contacto: {customer_data.get('phone', 'N/A')}\n\n"
-                f"Linhas:\n{lines_text}\n\n"
-                f"Total: {total}€\n\n"
-                f"A sua encomenda será processada nos próximos dias úteis.\n"
+            subtotal = Decimal(str(sum(line.price * line.quantity for line in lines)))
+            tax = subtotal * Decimal("0.23")
+            shipping = Decimal("10.00")  # Fixed shipping cost
+            total = subtotal + tax + shipping
+
+            # Render HTML email using template
+            subject = f"[Diomika] Order Confirmation #{order_id[:8]}"
+            body = render_order_confirmation(
+                order_id=order_id,
+                customer_name=customer_data.get("name", "Customer"),
+                order_date=datetime.utcnow(),
+                items=email_items,
+                subtotal=subtotal,
+                tax=tax,
+                shipping=shipping,
+                total=total,
+                shipping_address=customer_data.get("address", ""),
+                tracking_url=None,  # Will be added when shipment is dispatched
             )
 
-            # Send
-            email_sent = await send_email_async(to_email=customer_email, subject=subject, body=body)
+            # Send HTML email
+            email_sent = await send_email_async(
+                to_email=customer_email,
+                subject=subject,
+                body=body,
+                is_html=True,
+            )
 
             if email_sent:
                 saga_log(
