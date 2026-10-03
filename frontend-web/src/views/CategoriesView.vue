@@ -73,36 +73,64 @@ const breadcrumbItems = [
 <style scoped>
 .categories-page {
   background: #fff;
-  padding-bottom: 2.5rem;
+  padding-bottom: 3rem;
 }
 
 .page-hero {
-  background: linear-gradient(155deg, #0b1f3a 0%, #1b365d 100%);
+  background:
+    radial-gradient(ellipse 70% 80% at 85% 15%, rgba(27, 54, 93, 0.35), transparent 55%),
+    radial-gradient(ellipse 50% 70% at 15% 85%, rgba(59, 130, 246, 0.12), transparent 50%),
+    linear-gradient(155deg, #0b1f3a 0%, #1b365d 100%);
   color: #fff;
+  position: relative;
+  overflow: hidden;
+  animation: fadeIn 0.6s ease-out;
+}
+
+.page-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.08) 0%,
+    transparent 50%,
+    rgba(59, 130, 246, 0.04) 100%
+  );
+  pointer-events: none;
+  z-index: 0;
 }
 
 .hero-inner {
-  padding-top: 2.25rem;
-  padding-bottom: 2.25rem;
+  position: relative;
+  z-index: 1;
+  padding-top: 3rem;
+  padding-bottom: 3rem;
 }
 
 .page-hero h1 {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.75rem;
   color: #fff;
   font-size: clamp(1.85rem, 3.5vw, 2.5rem);
+  font-weight: 800;
+  letter-spacing: -0.015em;
 }
 
 .page-hero p {
   margin: 0;
-  opacity: 0.92;
-  max-width: 36rem;
+  opacity: 0.93;
+  max-width: 40rem;
+  font-size: 1.1rem;
+  font-weight: 500;
+  line-height: 1.6;
 }
 
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-  gap: 1.25rem;
-  padding-top: 0.25rem;
+  gap: 1.5rem;
+  padding-top: 0.5rem;
+  animation: slideUp 0.6s ease-out;
 }
 
 .cat-card {
@@ -112,21 +140,37 @@ const breadcrumbItems = [
   flex-direction: column;
   border-radius: 14px;
   overflow: hidden;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  background: #fff;
+  border: 1px solid rgba(59, 130, 246, 0.08);
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.05);
 }
 
 .cat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-md);
-  border-color: var(--color-border-strong);
+  transform: translateY(-6px);
+  border-color: rgba(59, 130, 246, 0.2);
+  box-shadow: 0 16px 48px rgba(59, 130, 246, 0.15);
 }
 
 .cat-media {
   aspect-ratio: 16 / 10;
   background: linear-gradient(145deg, #1b365d, #0b1f3a);
   overflow: hidden;
+  position: relative;
+}
+
+.cat-media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.1) 0%,
+    transparent 50%,
+    rgba(59, 130, 246, 0.05) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
 }
 
 .cat-media :deep(.soft-image),
@@ -141,7 +185,7 @@ const breadcrumbItems = [
 }
 
 .cat-card:hover :deep(.soft-image__img) {
-  transform: scale(1.04);
+  transform: scale(1.05);
 }
 
 .cat-placeholder {
@@ -150,8 +194,9 @@ const breadcrumbItems = [
   display: grid;
   place-items: center;
   font-size: 2.75rem;
-  font-weight: 700;
+  font-weight: 800;
   color: rgba(255, 255, 255, 0.9);
+  z-index: 0;
 }
 
 .cat-body {
@@ -159,18 +204,24 @@ const breadcrumbItems = [
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1.1rem 1.2rem;
+  padding: 1.3rem 1.4rem;
+  background: linear-gradient(135deg, #fff 0%, rgba(59, 130, 246, 0.01) 100%);
 }
 
 .cat-body h2 {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--color-ink-deep);
+  letter-spacing: -0.01em;
 }
 
 .cat-go {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--color-ink-deep);
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--color-ink-soft);
   white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 </style>
