@@ -26,7 +26,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE = ROOT / "backoffice-desktop" / "release"
-REMOTE_DIR = "$HOME/diomika/backend-api/data/desktop-updates"
+# Relativo à home: o scp (SFTP) não expande $HOME; o ssh começa na home.
+REMOTE_DIR = "diomika/backend-api/data/desktop-updates"
 FEED = "https://api.diomika.com/system/desktop-updates"
 
 
