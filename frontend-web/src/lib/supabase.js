@@ -71,7 +71,7 @@ export async function getSignedImageUrl(path, expiresIn = DEFAULT_EXPIRES, trans
 }
 
 async function mapPool(items, concurrency, fn) {
-  const out = new Array(items.length)
+  const out = Array.from({ length: items.length })
   let next = 0
   async function worker() {
     while (next < items.length) {
@@ -91,7 +91,7 @@ export async function getSignedImageUrls(paths, expiresIn = DEFAULT_EXPIRES, tra
   const client = await ensureSupabase()
   if (!client) return list.map(() => '')
 
-  const out = new Array(list.length).fill('')
+  const out = Array.from({ length: list.length }, () => '')
   const storagePaths = []
   const storageIdx = []
 

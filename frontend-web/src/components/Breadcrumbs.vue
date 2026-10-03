@@ -1,4 +1,6 @@
 <script setup>
+defineOptions({ name: 'BreadcrumbTrail' })
+
 defineProps({
   items: {
     type: Array,

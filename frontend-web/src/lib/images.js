@@ -136,7 +136,7 @@ export async function resolveImageUrls(paths, placeholder = PLACEHOLDER, options
     })
   }
 
-  const out = new Array(input.length).fill(placeholder)
+  const out = Array.from({ length: input.length }, () => placeholder)
   const needIdx = []
   const needPaths = []
 

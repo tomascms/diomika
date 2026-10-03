@@ -50,7 +50,7 @@ export function storageObjectPath(path) {
 
   if (/^https?:\/\//i.test(value)) return ''
 
-  if (/^[\[{]/.test(value)) {
+  if (/^[[{]/.test(value)) {
     try {
       const parsed = JSON.parse(value)
       if (Array.isArray(parsed)) return storageObjectPath(parsed[0])
