@@ -96,10 +96,82 @@ onMounted(load)
   grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.4fr);
   gap: 20px;
   align-items: start;
+  animation: slideUp 0.5s ease-out;
 }
-.list-pane h2 { margin: 0 0 6px; font-size: 1.1rem; }
-.hint { margin: 0 0 12px; color: var(--text-muted); font-size: 0.88rem; }
-.err { color: var(--danger); font-size: 0.9rem; }
-.ok { color: var(--success); font-size: 0.9rem; }
-@media (max-width: 900px) { .contact-layout { grid-template-columns: 1fr; } }
+
+.list-pane {
+  animation: slideDown 0.4s ease-out;
+}
+
+.list-pane h2 {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
+}
+
+.hint {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.err {
+  margin: 0 0 12px;
+  color: var(--danger);
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.04) 100%);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-left: 4px solid var(--danger);
+  animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.12);
+}
+
+.ok {
+  margin: 0 0 12px;
+  color: var(--success);
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.04) 100%);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-left: 4px solid var(--success);
+  animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.12);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 900px) {
+  .contact-layout {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
