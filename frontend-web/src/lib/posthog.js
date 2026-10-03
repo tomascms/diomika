@@ -22,6 +22,11 @@ export async function initPosthog() {
       autocapture: true,
       capture_pageview: false,
       capture_pageleave: true,
+      // A CSP só permite scripts do próprio domínio: sem isto o PostHog tentava
+      // carregar surveys/config remotos de eu-assets.i.posthog.com e enchia a
+      // consola de erros. Os eventos continuam a ser enviados normalmente.
+      disable_external_dependency_loading: true,
+      disable_surveys: true,
     })
     client = posthog
     window.__diomikaPosthog = posthog
