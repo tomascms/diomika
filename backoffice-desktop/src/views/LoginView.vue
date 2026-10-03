@@ -188,18 +188,60 @@ async function submit() {
   place-items: center;
   padding: 32px 20px;
   background:
-    radial-gradient(ellipse 70% 50% at 15% 0%, rgba(59, 130, 246, 0.08), transparent 55%),
-    radial-gradient(ellipse 50% 40% at 90% 100%, rgba(15, 23, 42, 0.04), transparent 50%),
+    radial-gradient(ellipse 70% 50% at 15% 0%, rgba(59, 130, 246, 0.12), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 90% 100%, rgba(15, 23, 42, 0.08), transparent 50%),
     var(--bg);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-page::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background:
+    radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(30, 64, 175, 0.03) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .login-panel {
   width: min(420px, 100%);
-  padding: 40px;
-  background: var(--surface);
+  padding: 44px;
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(59, 130, 246, 0.02) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
+  position: relative;
+  z-index: 1;
+  animation: slideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  overflow: hidden;
+}
+
+.login-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.3) 50%, transparent 100%);
+  pointer-events: none;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .brand {
@@ -230,56 +272,71 @@ h1 {
 
 .form {
   display: grid;
-  gap: 16px;
+  gap: 18px;
+  animation: slideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s both;
 }
 
 label {
   display: grid;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
+  letter-spacing: 0.6px;
+  color: var(--accent);
 }
 
 .input {
-  padding: 10px 12px;
+  padding: 12px 13px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-family: inherit;
   font-size: 14px;
-  background: var(--surface);
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(59, 130, 246, 0.01) 100%);
   color: var(--text-primary);
   transition: all var(--transition);
+  position: relative;
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+.input:hover {
+  border-color: var(--accent-light);
 }
 
 .input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12), inset 0 0 0 1px rgba(59, 130, 246, 0.1);
+  background: linear-gradient(135deg, var(--surface), rgba(59, 130, 246, 0.04));
 }
 
 .input:disabled {
   background: var(--bg-secondary);
   color: var(--text-muted);
   cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .mfa-setup {
   display: grid;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: var(--radius);
-  background: var(--accent-soft);
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0.04) 100%);
+  animation: slideDown 0.3s ease-out;
 }
 
 .mfa-title {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
   color: var(--accent);
+  text-transform: uppercase;
 }
 
 .secret,
@@ -288,32 +345,57 @@ label {
   font-size: 12px;
   word-break: break-all;
   color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 .secret code,
 .uri code {
   font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 2px 4px;
+  font-size: 10px;
+  padding: 3px 6px;
   background: var(--surface);
-  border-radius: 3px;
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
+  transition: all var(--transition-fast);
+  user-select: all;
+}
+
+.secret code:hover,
+.uri code:hover {
+  background: var(--bg-secondary);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
 }
 
 .error {
   margin: 0;
-  padding: 10px 12px;
+  padding: 12px;
   color: var(--danger);
   font-size: 13px;
   font-weight: 500;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.04) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-md);
+  animation: slideDown 0.3s ease-out;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.1);
 }
 
 .muted {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>
