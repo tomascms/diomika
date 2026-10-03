@@ -68,13 +68,12 @@ const create = async () => {
   <div class="card panel">
     <h3>Nova categoria</h3>
     <p class="hint">
-      Dá-lhe um nome e uma imagem, e escolhe a família de produto que vai conter (define que
-      campos os modelos desta categoria têm). Podes criar quantas categorias quiseres para a
-      mesma família — ex.: "Almofadas" e "Almofadas de Natal" podem coexistir.
+      A família de produto define os campos dos modelos (tipo, dimensões, composição…). Pode
+      haver várias categorias da mesma família, como «Almofadas» e «Almofadas de Natal».
     </p>
 
     <label for="cat-nome">Nome</label>
-    <input id="cat-nome" v-model="nome" class="input" placeholder="ex: Almofadas de Natal" />
+    <input id="cat-nome" v-model="nome" class="input" placeholder="Ex.: Almofadas de Natal" />
 
     <label for="cat-imagem">Imagem</label>
     <ImageField id="cat-imagem" v-model="imagem" @file-selected="onImageFile" />
@@ -83,18 +82,14 @@ const create = async () => {
     <select id="cat-tipo" v-model="tipoCatalogo" class="input" :disabled="loadingTipos">
       <option v-for="t in tipos" :key="t.tipo" :value="t.tipo">{{ t.label }}</option>
     </select>
-    <p class="hint small">
-      Uma família nova (com campos diferentes das 12 atuais) precisa de uma alteração de código —
-      todo o resto de uma categoria é livre.
-    </p>
 
     <div class="grid-2">
       <div>
-        <label for="cat-step">Passo carrinho</label>
+        <label for="cat-step">Incremento no carrinho</label>
         <input id="cat-step" v-model="carrinhoStep" class="input" type="number" placeholder="6" />
       </div>
       <div>
-        <label for="cat-min">Mínimo carrinho</label>
+        <label for="cat-min">Quantidade mínima</label>
         <input id="cat-min" v-model="carrinhoMin" class="input" type="number" placeholder="6" />
       </div>
     </div>
@@ -106,10 +101,10 @@ const create = async () => {
 </template>
 
 <style scoped>
-.panel { padding: 1.2rem 1.25rem; margin-bottom: 1rem; display: grid; gap: 0.65rem; }
-.panel h3 { margin: 0; font-family: var(--font-display); font-weight: 560; }
-.hint { color: var(--text-muted); font-size: 0.9rem; margin: 0; }
-.hint.small { font-size: 0.78rem; }
-label { font-size: 0.84rem; font-weight: 600; color: var(--text-muted); }
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.panel { max-width: 640px; padding: 18px 20px; display: grid; gap: 8px; }
+.panel h3 { margin: 0; }
+.hint { margin: 0 0 4px; }
+label { margin-top: 6px; font-size: 13px; font-weight: 560; color: var(--text-secondary); }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.panel > .btn { justify-self: start; margin-top: 8px; }
 </style>

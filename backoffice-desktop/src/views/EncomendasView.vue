@@ -86,6 +86,7 @@ onMounted(load)
       <p v-if="message" class="ok">{{ message }}</p>
       <p v-if="error" class="err">{{ error }}</p>
       <DataList
+        :active-id="selected?.id"
         :rows="rows"
         :columns="columns"
         :loading="loading"

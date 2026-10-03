@@ -61,7 +61,7 @@ function onError() {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: linear-gradient(120deg, #eef2f6 25%, #e2e8f0 37%, #eef2f6 63%);
+  background: linear-gradient(120deg, var(--color-bg-soft) 25%, var(--color-bg) 37%, var(--color-bg-soft) 63%);
   background-size: 200% 100%;
   animation: soft-shimmer 1.1s ease-in-out infinite;
 }

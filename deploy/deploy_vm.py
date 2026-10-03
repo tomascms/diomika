@@ -137,8 +137,14 @@ def main() -> int:
             "--exclude=backend-api/data/admin_users.json",
             "--exclude=backend-api/data/admin_users.json.bak",
             "--exclude=backend-api/data/admin_users.tmp",
+            "--exclude=backend-api/logs",
+            "--exclude=*.jsonl",
         ]
-        tar_cmd = ["tar", "-cf", tar_path, *excludes, "-C", str(ROOT), "."]
+        # Só o que a imagem Docker precisa — antes ia o repo inteiro (instaladores
+        # do backoffice, credenciais em cliente-backoffice/, node_modules de
+        # ferramentas…), lento e desnecessariamente sensível.
+        ship = ["backend-api", "requirements.txt", "Dockerfile", ".dockerignore", "deploy/docker-compose.free.yml"]
+        tar_cmd = ["tar", "-cf", tar_path, *excludes, "-C", str(ROOT), *ship]
         if subprocess.run(tar_cmd, cwd=ROOT).returncode != 0:
             print("ERRO a criar tarball local")
             return 1
@@ -180,7 +186,7 @@ def main() -> int:
     up = (
         "set -euo pipefail; cd $HOME/diomika; "
         "sudo docker compose --env-file .env -f deploy/docker-compose.free.yml --profile tunnel up -d --build; "
-        "sleep 8; curl -sf http://127.0.0.1:8000/health; echo"
+        "sleep 8; curl -sf -A DiomikaHealthcheck/1.0 http://127.0.0.1:8000/health; echo"
     )
     if subprocess.run([*ssh_base, up], cwd=ROOT).returncode != 0:
         print("ERRO compose na VM")

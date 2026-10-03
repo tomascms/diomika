@@ -13,17 +13,28 @@ const props = defineProps({
 
 defineEmits(['navigate', 'logout'])
 
+const ROLE_LABELS = {
+  admin: 'Administrador',
+  catalog: 'Catálogo',
+  pedidos: 'Pedidos',
+  mensagens: 'Mensagens',
+  ops: 'Operações',
+}
+
 const displayName = computed(() => {
   const name = props.user?.username || ''
-  if (!name || name === 'api-key') return 'Sessão local'
+  if (!name || name === 'api-key' || name === 'dev-open') return 'Sessão de desenvolvimento'
   return name
 })
+
+const initial = computed(() => displayName.value.charAt(0).toUpperCase() || 'D')
+const roleLabel = computed(() => ROLE_LABELS[props.user?.role] || props.user?.role || '')
 </script>
 
 <template>
   <aside class="sidebar">
     <div class="brand">
-      <span class="logo" aria-hidden="true">D</span>
+      <img class="logo" src="/mark.svg" alt="" width="24" height="29" />
       <div>
         <strong>Diomika</strong>
         <small>Backoffice</small>
@@ -31,13 +42,16 @@ const displayName = computed(() => {
     </div>
 
     <nav class="nav" aria-label="Secções">
-      <p v-if="loading" class="nav-status">A carregar…</p>
+      <template v-if="loading && !items.length">
+        <span v-for="n in 6" :key="n" class="nav-skeleton sk-line" aria-hidden="true" />
+      </template>
       <RouterLink
         v-for="item in items"
         :key="item.key"
         :to="`/workspace/${item.key}`"
         class="nav-item"
         :class="{ active: active === item.key }"
+        :aria-current="active === item.key ? 'page' : undefined"
         @click="$emit('navigate')"
       >
         <AppIcon :name="item.icon || 'folder'" :size="17" />
@@ -47,18 +61,18 @@ const displayName = computed(() => {
 
     <div class="sidebar-footer">
       <div v-if="user" class="user-box">
-        <p class="user-line">
-          <span>{{ displayName }}</span>
-          <span class="role">{{ user.role }}</span>
-        </p>
-        <button type="button" class="logout-btn" @click="$emit('logout')">
-          Terminar sessão
+        <span class="avatar" aria-hidden="true">{{ initial }}</span>
+        <div class="user-meta">
+          <span class="user-name">{{ displayName }}</span>
+          <span class="user-role">{{ roleLabel }}</span>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm logout-btn" @click="$emit('logout')">
+          Sair
         </button>
       </div>
-
-      <p class="hint">
-        <span class="status-dot" :class="{ online, offline: online === false }" />
-        {{ online ? 'API local ligada' : online === false ? 'API offline' : 'A verificar API…' }}
+      <p class="conn">
+        <span class="status-dot" :class="{ online, offline: online === false }" aria-hidden="true" />
+        {{ online ? 'Ligado à API' : online === false ? 'Sem ligação à API' : 'A ligar à API…' }}
       </p>
     </div>
   </aside>
@@ -67,176 +81,165 @@ const displayName = computed(() => {
 <style scoped>
 .sidebar {
   width: var(--sidebar-w);
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  padding: 16px 12px;
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  min-height: 100vh;
-  overflow-y: auto;
+  gap: 8px;
+  padding: 14px 10px 12px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 8px;
+  gap: 11px;
+  padding: 6px 10px 16px;
 }
 
 .logo {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius);
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
-  color: white;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 18px;
-  box-shadow: var(--shadow-sm);
+  flex: none;
 }
 
 .brand strong {
   display: block;
-  font-family: var(--font-display);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  font-stretch: 118%;
+  letter-spacing: 0.02em;
   color: var(--text-primary);
 }
 
 .brand small {
   display: block;
+  margin-top: 1px;
+  font-size: 12px;
   color: var(--text-muted);
-  font-size: 11px;
-  margin-top: 2px;
-  font-weight: 500;
 }
 
 .nav {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
 }
 
-.nav-status {
-  margin: 0;
-  padding: 8px 12px;
-  font-size: 12px;
-  color: var(--text-muted);
+.nav-skeleton {
+  height: 34px;
+  margin: 2px 0;
 }
 
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  min-height: 36px;
+  padding: 0 10px;
   border-radius: var(--radius);
   color: var(--text-secondary);
   text-decoration: none;
-  font-weight: 500;
   font-size: 14px;
-  border: 1px solid transparent;
-  transition: all var(--transition);
+  font-weight: 500;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .nav-item .app-icon {
-  opacity: 0.6;
-  transition: opacity var(--transition);
-}
-
-.nav-item.active .app-icon,
-.nav-item:hover .app-icon {
-  opacity: 1;
+  opacity: 0.7;
 }
 
 .nav-item:hover {
-  background: var(--bg-secondary);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
 .nav-item.active {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(30, 64, 175, 0.1) 100%);
+  background: var(--accent-soft);
   color: var(--accent);
-  border-color: rgba(59, 130, 246, 0.2);
   font-weight: 600;
+}
+
+.nav-item.active .app-icon {
+  opacity: 1;
+}
+
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
 }
 
 .sidebar-footer {
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
-  margin-top: auto;
   display: grid;
-  gap: 8px;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
 }
 
 .user-box {
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-}
-
-.user-line {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-secondary);
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
   align-items: center;
+  gap: 10px;
+  padding: 4px 4px 0 6px;
 }
 
-.user-line .role {
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-size: 10px;
-  font-weight: 700;
+.avatar {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
   color: var(--accent);
+  font-weight: 700;
+  font-size: 13px;
 }
 
-.logout-btn {
-  margin-top: 6px;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  background: transparent;
-  border: none;
-  padding: 4px 0;
-  font: inherit;
-  font-size: 12px;
+.user-meta {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  line-height: 1.25;
+}
+
+.user-name {
+  font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary);
-  transition: color var(--transition);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.logout-btn:hover {
-  color: var(--danger);
-}
-
-.hint {
-  margin: 0;
-  padding: 0 8px;
-  font-size: 11px;
+.user-role {
+  font-size: 12px;
   color: var(--text-muted);
+}
+
+.conn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .status-dot {
-  width: 6px;
-  height: 6px;
+  flex: none;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--text-muted);
-  flex-shrink: 0;
 }
 
 .status-dot.online {

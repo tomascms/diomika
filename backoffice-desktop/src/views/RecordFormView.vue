@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/lib/api'
 import { workspace } from '@/composables/useWorkspace'
 import { useAggregatedTipos } from '@/composables/useAggregatedTipos'
+import AppIcon from '@/components/AppIcon.vue'
 import SchemaForm from '@/components/SchemaForm.vue'
 import ModelColorsPanel from '@/components/ModelColorsPanel.vue'
 import ModelVariantsPanel from '@/components/ModelVariantsPanel.vue'
@@ -522,7 +523,10 @@ watch(() => route.fullPath, load, { immediate: true })
 <template>
   <div class="form-view">
     <div class="form-header">
-      <button class="btn btn-ghost" @click="router.back()">← Voltar</button>
+      <button class="btn btn-ghost btn-sm back" type="button" @click="router.back()">
+        <AppIcon name="chevron-left" :size="16" />
+        Voltar
+      </button>
       <h2>{{ title }}</h2>
       <span v-if="isCatalogRecord && !isNew" class="vis-chip" :class="{ live: isPublished }">
         {{ isPublished ? 'Visível na loja' : 'Oculto no site' }}
@@ -604,7 +608,7 @@ watch(() => route.fullPath, load, { immediate: true })
         :model-id="savedModelId"
         :product-table="productTableForModel"
       />
-      <div class="actions actions-sticky">
+      <div class="actions">
         <button class="btn btn-ghost" type="button" :disabled="saving" @click="saveDraft">
           {{ saving ? 'A guardar…' : 'Guardar rascunho' }}
         </button>
@@ -630,90 +634,142 @@ watch(() => route.fullPath, load, { immediate: true })
 </template>
 
 <style scoped>
+.form-view {
+  max-width: 920px;
+}
+
+/* Cabeçalho fixo: Guardar/Publicar sempre à mão sem tapar campos. */
 .form-header {
+  position: sticky;
+  top: -24px;
+  z-index: 5;
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  margin-bottom: 1.1rem;
   flex-wrap: wrap;
+  gap: 10px;
+  margin: -24px -28px 16px;
+  padding: 18px 28px 14px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
 }
+
 .form-header h2 {
-  margin: 0;
   flex: 1;
   min-width: 160px;
-  font-family: var(--font-display);
-  font-size: 1.35rem;
-  font-weight: 560;
-  letter-spacing: -0.02em;
+  font-size: 18px;
+  font-weight: 650;
 }
-.header-save { margin-left: auto; }
+
+.back {
+  margin-left: -8px;
+}
+
+.header-save {
+  margin-left: auto;
+}
+
 .vis-chip {
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 0.25rem 0.55rem;
+  padding: 2px 9px;
   border-radius: 999px;
-  background: rgba(120, 120, 120, 0.15);
+  background: var(--bg-secondary);
   color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 560;
 }
+
 .vis-chip.live {
-  background: rgba(34, 140, 70, 0.15);
-  color: var(--success, #1a7a3a);
+  background: var(--success-soft);
+  color: var(--success);
 }
-.error { color: var(--danger); margin: 0 0 0.75rem; }
-.ok { color: var(--success, #1a7a3a); margin: 0 0 0.75rem; }
+
+.error {
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.ok {
+  margin: 0 0 12px;
+}
+
 .storefront-banner {
-  margin-bottom: 0.85rem;
-  padding: 0.85rem 1rem;
-  border-left: 3px solid #c47a00;
-  background: rgba(196, 122, 0, 0.08);
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+  color: var(--text-primary);
 }
+
 .storefront-banner strong {
   display: block;
-  margin-bottom: 0.4rem;
-  font-size: 0.9rem;
+  margin-bottom: 4px;
+  font-size: 13.5px;
+  color: var(--warning);
 }
+
 .storefront-banner ul {
   margin: 0;
-  padding-left: 1.1rem;
-  font-size: 0.86rem;
-  color: var(--text-muted);
+  padding-left: 18px;
   display: grid;
-  gap: 0.25rem;
+  gap: 2px;
+  font-size: 13.5px;
+  color: var(--text-secondary);
 }
-.loading-banner { color: var(--text-muted); }
-.form-card { padding: 1.25rem; }
-.form-skeleton { display: grid; gap: 0.75rem; }
-.sk-line {
+
+.loading-banner {
+  color: var(--text-muted);
+}
+
+.form-card {
+  padding: 22px 24px;
+}
+
+.form-skeleton {
+  display: grid;
+  gap: 12px;
+}
+
+.form-skeleton .sk-line {
   height: 14px;
-  border-radius: 6px;
-  background: linear-gradient(90deg, var(--bg-hover), transparent);
 }
-.actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1.25rem; }
-.actions-sticky {
-  position: sticky;
-  bottom: 0;
-  padding: 0.75rem 0;
-  background: var(--bg, #fff);
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
 }
+
 .create-flex {
-  padding: 0.85rem 1rem;
-  margin-bottom: 0.85rem;
   display: grid;
-  gap: 0.65rem;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
 }
+
 .create-flex-hint {
-  margin: 0;
-  font-size: 0.88rem;
-  color: var(--text-muted);
+  font-size: 13.5px;
+  color: var(--text-secondary);
 }
+
 .family-field {
   display: grid;
-  gap: 0.35rem;
+  gap: 6px;
   max-width: 320px;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 560;
+  color: var(--text-secondary);
 }
-.family-field .input {
-  font-weight: 500;
+
+@media (max-width: 900px) {
+  .form-header {
+    top: -16px;
+    margin: -16px -12px 14px;
+    padding: 12px;
+  }
 }
 </style>

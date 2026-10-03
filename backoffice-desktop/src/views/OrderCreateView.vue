@@ -35,7 +35,7 @@ const loadPicker = async () => {
 const addVariantLine = () => {
   const p = picker.value?.products?.find((x) => x.ean === variantForm.value.ean)
   if (!p) {
-    error.value = 'Escolhe um produto válido.'
+    error.value = 'Escolha um produto válido.'
     return
   }
   lines.value.push({

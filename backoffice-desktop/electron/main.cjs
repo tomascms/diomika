@@ -3,7 +3,7 @@
  * Proxy /api → API cloud com header de gate (WAF + API).
  * Usa electron.net (Chromium) — fiável com antivirus/SSL inspection (AVG, etc.).
  */
-const { app, BrowserWindow, shell, dialog, net } = require('electron')
+const { app, BrowserWindow, shell, dialog, net, nativeTheme } = require('electron')
 const http = require('http')
 const fs = require('fs')
 const path = require('path')
@@ -27,6 +27,10 @@ function loadDesktopGate() {
 
 const DESKTOP_GATE = loadDesktopGate()
 const DIST_DIR = path.join(__dirname, '../dist')
+const APP_ICON = path.join(__dirname, 'icon.png')
+// Porta fixa → origem estável (http://127.0.0.1:47815). Com porta aleatória a
+// origem mudava a cada arranque e o browser perdia a sessão guardada.
+const PREFERRED_PORTS = [47815, 47816, 47817, 47818]
 
 function apiTargetUrl(reqUrl) {
   const incoming = new URL(reqUrl || '/', 'http://127.0.0.1')
@@ -178,32 +182,50 @@ function serveStatic(req, res) {
   fs.createReadStream(filePath).pipe(res)
 }
 
-function createLocalServer() {
+function listenOn(server, port) {
   return new Promise((resolve, reject) => {
-    const server = http.createServer((req, res) => {
-      try {
-        const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname
-        if (pathname === '/api' || pathname.startsWith('/api/')) {
-          proxyToApi(req, res)
-          return
-        }
-        if (req.method !== 'GET' && req.method !== 'HEAD') {
-          res.writeHead(405)
-          res.end('Method Not Allowed')
-          return
-        }
-        serveStatic(req, res)
-      } catch (err) {
-        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' })
-        res.end(String(err && err.message ? err.message : err))
-      }
-    })
-    server.on('error', reject)
-    server.listen(0, '127.0.0.1', () => {
-      const addr = server.address()
-      resolve({ server, port: addr.port })
-    })
+    const onError = (err) => {
+      server.removeListener('listening', onListening)
+      reject(err)
+    }
+    const onListening = () => {
+      server.removeListener('error', onError)
+      resolve(server.address().port)
+    }
+    server.once('error', onError)
+    server.once('listening', onListening)
+    server.listen(port, '127.0.0.1')
   })
+}
+
+async function createLocalServer() {
+  const server = http.createServer((req, res) => {
+    try {
+      const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname
+      if (pathname === '/api' || pathname.startsWith('/api/')) {
+        proxyToApi(req, res)
+        return
+      }
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.writeHead(405)
+        res.end('Method Not Allowed')
+        return
+      }
+      serveStatic(req, res)
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end(String(err && err.message ? err.message : err))
+    }
+  })
+  for (const candidate of [...PREFERRED_PORTS, 0]) {
+    try {
+      const port = await listenOn(server, candidate)
+      return { server, port }
+    } catch (err) {
+      if (err && err.code !== 'EADDRINUSE') throw err
+    }
+  }
+  throw new Error('Sem porta local livre para a interface.')
 }
 
 async function createWindow() {
@@ -213,13 +235,21 @@ async function createWindow() {
     minWidth: 960,
     minHeight: 640,
     title: 'Diomika Backoffice',
-    backgroundColor: '#0c0e14',
+    icon: APP_ICON,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0f1417' : '#f2f4f6',
+    show: false,
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
+  })
+
+  mainWindow = win
+  win.once('ready-to-show', () => win.show())
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = null
   })
 
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -241,6 +271,20 @@ async function createWindow() {
 }
 
 let localServer = null
+let mainWindow = null
+
+// Uma só instância: um segundo duplo-clique foca a janela já aberta em vez de
+// arrancar outro servidor local (noutra porta → outra origem, sem a sessão).
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    const win = mainWindow || BrowserWindow.getAllWindows()[0]
+    if (!win) return
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  })
+}
 
 app.whenReady().then(async () => {
   if (!isDev && !DESKTOP_GATE) {

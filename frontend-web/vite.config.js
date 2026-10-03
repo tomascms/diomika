@@ -7,6 +7,11 @@ import vue from '@vitejs/plugin-vue'
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const rootEnv = loadEnv(mode, path.resolve(fileURLToPath(new URL('.', import.meta.url)), '..'), '')
+  // `npm run dev` fala com a API em produção por omissão (como o backoffice):
+  // antes apontava sempre para 127.0.0.1:8001 e, sem API local a correr, todos
+  // os pedidos davam «Failed to fetch». DIOMIKA_LOCAL_API=1 → API local.
+  const useLocalApi = (process.env.DIOMIKA_LOCAL_API || rootEnv.DIOMIKA_LOCAL_API) === '1'
+  const apiOrigin = (rootEnv.DIOMIKA_API_ORIGIN || 'https://api.diomika.com').replace(/\/+$/, '')
   let supabaseOrigin = ''
   try {
     if (rootEnv.VITE_SUPABASE_URL) {
@@ -37,7 +42,7 @@ export default defineConfig(({ mode }) => {
             }
             if (ctx.bundle) {
               for (const fileName of Object.keys(ctx.bundle)) {
-                if (/arimo-latin-400.*\.woff2$/.test(fileName) || /arimo-latin-700.*\.woff2$/.test(fileName)) {
+                if (/archivo-latin-wdth-normal.*\.woff2$/.test(fileName)) {
                   const href = fileName.startsWith('assets/') ? `/${fileName}` : `/assets/${fileName}`
                   hints.push(
                     `<link rel="preload" href="${href}" as="font" type="font/woff2" crossorigin>`,
@@ -82,9 +87,16 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:8001',
+          target: useLocalApi ? 'http://127.0.0.1:8001' : apiOrigin,
           changeOrigin: true,
+          secure: true,
           rewrite: (p) => p.replace(/^\/api/, ''),
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq) => {
+              // A origem do Vite (127.0.0.1:5173) não está no CORS de produção.
+              proxyReq.removeHeader('origin')
+            })
+          },
         },
       },
     },

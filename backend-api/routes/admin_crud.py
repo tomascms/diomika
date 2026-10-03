@@ -16,13 +16,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
 
 from core.auth import Role, SENSITIVE_BUSINESS_TABLES, assert_table_action, require_admin
-from core.cache_invalidation_strategy import (
-    CacheInvalidationAnalyzer,
-    GranularCacheInvalidator,
-)
 from core.cqrs.commands.catalog import soft_delete
 from core.database import get_db
 from core.idempotency import (
@@ -43,7 +39,9 @@ from models.catalog_registry import (
     fold_attributes,
     list_select_query,
     relation_options_select_query,
+    tipo_for_table,
 )
+from models.catalog_attributes import CATEGORY_ATTRIBUTE_SCHEMAS
 from models.schemas import PRODUCT_MODELS_TABLE, TABLE_MAP
 from utils.image_urls import content_type_for_path
 from utils.image_validation import validate_upload_bytes
@@ -56,6 +54,7 @@ from .admin_crud_helpers import (
     _audit,
     _client_error,
     _db_table,
+    _invalidate_catalog_cache,
     _is_expected_client_conflict,
     _normalize_payload,
     _resolve_image_fields,
@@ -75,7 +74,6 @@ from .admin_crud_validation import (
     _product_validation_table,
     _validate_product_payload,
 )
-from .admin_crud_cqrs_integration import get_cqrs_integration
 
 logger = logging.getLogger("diomika-api")
 
@@ -271,20 +269,13 @@ def create_record(
         body = _enrich_create_payload(table_name, body)
         validated = schema_class(**body)
         payload = _normalize_payload(validated.model_dump())
-
-        # ✅ CQRS Integration: Use command handler instead of direct DB call
-        cqrs = get_cqrs_integration()
-        row = cqrs.create_entity(
-            request=request,
-            table_name=table_name,
-            data=payload,
-            idempotency_key=key if key else None,
-            ip_address=request.client.host if request.client else None,
-        )
-
+        ins = _db_table(table_name).insert(payload).execute()
+        row = (ins.data or [{}])[0]
         record_id = str(row.get("id") or "")
         if key:
             complete_idempotent_request(key, op, row)
+        _invalidate_catalog_cache(table_name=table_name, record=row, record_id=record_id)
+        _audit(request, "create", table_name, resource_id=record_id or None)
         _schedule_barcode_update(table_name, record_id, payload.get("ean"))
         if payload.get("visibilidade") and table_name in all_model_tables():
             _publish_catalog_children(table_name, record_id)
@@ -316,17 +307,12 @@ def update_record(request: Request, table_name: str, record_id: str, body: dict)
         payload = _normalize_payload(validated.model_dump())
         payload.pop("id", None)
         payload.pop("created_at", None)
-
-        # ✅ CQRS Integration: Use command handler instead of direct DB call
-        cqrs = get_cqrs_integration()
-        updated = cqrs.update_entity(
-            request=request,
-            table_name=table_name,
-            entity_id=record_id,
-            data=payload,
-            ip_address=request.client.host if request.client else None,
-        )
-
+        res = _scoped(_db_table(table_name).update(payload), table_name).eq("id", record_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Registo não encontrado")
+        updated = res.data[0]
+        _invalidate_catalog_cache(table_name=table_name, record={**payload, **updated}, record_id=record_id)
+        _audit(request, "update", table_name, resource_id=record_id)
         _schedule_barcode_update(table_name, record_id, payload.get("ean"))
         if payload.get("visibilidade") and table_name in all_model_tables():
             _publish_catalog_children(table_name, record_id)
@@ -334,6 +320,8 @@ def update_record(request: Request, table_name: str, record_id: str, body: dict)
             if "visibilidade" in payload:
                 _cascade_category_visibility(record_id, bool(payload.get("visibilidade")))
         return updated
+    except HTTPException:
+        raise
     except Exception as exc:
         detail = _client_error(exc)
         if _is_expected_client_conflict(exc):
@@ -366,14 +354,7 @@ def patch_visibility(request: Request, table_name: str, record_id: str, body: di
             _hide_catalog_children(table_name, record_id)
     elif table_name == "categories":
         _cascade_category_visibility(record_id, vis)
-    updated = (res.data or [{}])[0]
-    GranularCacheInvalidator.invalidate_surgical(
-        table_name=table_name,
-        record_id=record_id,
-        tipo=updated.get("tipo_catalogo"),
-        id_modelo=updated.get("id_modelo"),
-        id_categoria=updated.get("id_categoria"),
-    )
+    _invalidate_catalog_cache(table_name=table_name, record=res.data[0], record_id=record_id)
     _audit(request, "visibility", table_name, resource_id=record_id, visibilidade=vis)
     return (res.data or [{"id": record_id, "visibilidade": vis}])[0]
 
@@ -399,14 +380,7 @@ def publish_record(request: Request, table_name: str, record_id: str):
     elif table_name == "categories":
         _cascade_category_visibility(record_id, True)
 
-    updated = (res.data or [{}])[0]
-    GranularCacheInvalidator.invalidate_surgical(
-        table_name=table_name,
-        record_id=record_id,
-        tipo=updated.get("tipo_catalogo"),
-        id_modelo=updated.get("id_modelo"),
-        id_categoria=updated.get("id_categoria"),
-    )
+    _invalidate_catalog_cache(table_name=table_name, record=res.data[0], record_id=record_id)
     _audit(request, "publish", table_name, resource_id=record_id)
     return (res.data or [{"id": record_id, "visibilidade": True}])[0]
 
@@ -436,21 +410,39 @@ def delete_record(request: Request, table_name: str, record_id: str, hard: bool 
     action = "hard_delete" if hard else "delete"
     assert_table_action(table_name, action, _role(request))
     try:
-        # ✅ CQRS Integration: Use command handler instead of direct DB call
-        cqrs = get_cqrs_integration()
-        result = cqrs.delete_entity(
-            request=request,
-            table_name=table_name,
-            entity_id=record_id,
-            hard_delete=hard,
-            ip_address=request.client.host if request.client else None,
-        )
+        if hard:
+            if table_name in all_model_tables():
+                get_db().table("product_model_colors").delete().eq("id_modelo", record_id).execute()
+                get_db().table("product_variants").delete().eq("id_modelo", record_id).execute()
+            _scoped(_db_table(table_name).delete(), table_name).eq("id", record_id).execute()
+            _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
+            _audit(request, "hard_delete", table_name, resource_id=record_id)
+            return {"status": "deleted", "hard": True}
+        result = soft_delete(table_name, record_id)
+        _invalidate_catalog_cache(table_name=table_name, record_id=record_id)
+        _audit(request, "soft_delete", table_name, resource_id=record_id)
         return result
     except HTTPException:
         raise
     except Exception as exc:
         logger.error("Delete %s/%s: %s", table_name, record_id, exc)
         raise HTTPException(status_code=400, detail=_client_error(exc)) from exc
+
+
+def _idempotency_op(table_name: str, payload: dict) -> str:
+    """Âmbito da chave de idempotência: operação + hash do corpo do pedido.
+
+    Sem o hash, reutilizar a mesma Idempotency-Key num pedido *diferente*
+    devolvia em silêncio a resposta do primeiro pedido. Incluir o hash faz
+    pedidos diferentes terem operações diferentes, por isso nunca partilham
+    resposta em cache.
+    """
+    import hashlib
+
+    body_hash = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()[:24]
+    return f"admin_create:{table_name}:{body_hash}"
 
 
 def _enrich_create_payload(table_name: str, body: dict) -> dict:

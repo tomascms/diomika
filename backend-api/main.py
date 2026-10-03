@@ -249,29 +249,10 @@ def health_detail():
     return build_health(detailed=True)
 
 
-# New comprehensive health check endpoints
-health_handler = HealthEndpointHandler(health_runner)
-
-
-@app.get("/health/comprehensive")
-async def health_comprehensive():
-    """Comprehensive health check with component checks."""
-    return await health_handler.health_detailed()
-
-
 @app.get("/health/live")
-async def health_live():
-    """Kubernetes liveness probe."""
-    return await health_handler.health_live()
-
-
-@app.get("/health/startup")
-async def health_startup():
-    """Kubernetes startup probe."""
-    health = health_runner.get_system_health()
-    if health.overall_status.value == "healthy":
-        return {"started": True, "status": "ready"}
-    return {"started": False, "status": health.overall_status.value}
+def health_live():
+    """Liveness: o processo responde (sem tocar na BD)."""
+    return {"status": "alive"}
 
 
 if __name__ == "__main__":

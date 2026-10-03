@@ -22,7 +22,8 @@ from models.catalog_registry import (
 )
 from models.schemas import PRODUCT_MODELS_TABLE, TABLE_MAP
 from models.ui_schema import get_form_fields
-from utils.barcode_gen import apply_barcode_on_save, apply_barcode_url
+from models.catalog_registry import apply_barcode_on_save
+from utils.barcode_gen import apply_barcode_url
 
 logger = logging.getLogger("diomika-api")
 

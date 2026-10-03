@@ -25,6 +25,7 @@ const filterText = ref('')
 const filterCategoriaId = ref('')
 const filterModeloId = ref('')
 const showNewPicker = ref(false)
+const showCategoryCreate = ref(false)
 const importInput = ref(null)
 const importBusy = ref(false)
 const categories = ref([])
@@ -140,13 +141,6 @@ const loadRows = async ({ append = false } = {}) => {
   }
   error.value = ''
   try {
-    if (isMerged.value && !filterCategoriaId.value) {
-      if (seq !== loadSeq) return
-      rows.value = []
-      hasMore.value = false
-      totalApprox.value = 0
-      return
-    }
     if (isMerged.value) {
       const viewKey = table.value === 'produtos' ? 'produtos' : 'modelos'
       const offset = append ? listOffset.value : 0
@@ -199,8 +193,16 @@ const loadMore = () => {
 const onCategoryCreated = async () => {
   message.value = 'Categoria criada.'
   error.value = ''
+  showCategoryCreate.value = false
   await loadRows()
 }
+
+// Mensagens de sucesso desaparecem sozinhas; erros ficam até à próxima acção.
+let messageTimer = null
+watch(message, (text) => {
+  clearTimeout(messageTimer)
+  if (text) messageTimer = setTimeout(() => { message.value = '' }, 3500)
+})
 
 const openRow = (row) => {
   const ptable = row._ptable || table.value
@@ -351,6 +353,10 @@ const ensureCategories = async () => {
 }
 
 watch(table, (next, prev) => {
+  showCategoryCreate.value = false
+  showNewPicker.value = false
+  message.value = ''
+  error.value = ''
   filterCategoriaId.value = ''
   filterModeloId.value = ''
   filterText.value = ''
@@ -390,22 +396,35 @@ onActivated(() => {
 
 <template>
   <div class="page-view">
-    <CategoryCreatePanel v-if="isCategories" @created="onCategoryCreated" @error="error = $event" />
-
     <div class="toolbar toolbar-panel">
-      <input v-model="filterText" class="input search" type="search" placeholder="Filtrar registos…" />
+      <input v-model="filterText" class="input search" type="search" placeholder="Pesquisar…" aria-label="Pesquisar registos" />
       <template v-if="isMerged">
-        <select v-model="filterCategoriaId" class="input filter-mini">
-          <option value="">— Escolher categoria —</option>
+        <select v-model="filterCategoriaId" class="input filter-mini" aria-label="Filtrar por categoria">
+          <option value="">Todas as categorias</option>
           <option v-for="c in categories" :key="c.id" :value="c.id">
             {{ c.nome }}{{ c.visibilidade === false ? ' (oculta no site)' : '' }}
           </option>
         </select>
-        <select v-if="table === 'produtos'" v-model="filterModeloId" class="input filter-mini">
-          <option value="">Todos modelos</option>
+        <select
+          v-if="table === 'produtos'"
+          v-model="filterModeloId"
+          class="input filter-mini"
+          :disabled="!filterCategoriaId"
+          aria-label="Filtrar por modelo"
+        >
+          <option value="">Todos os modelos</option>
           <option v-for="m in filterModeloOptions" :key="m.id" :value="m.id">{{ m.label }}</option>
         </select>
       </template>
+      <button
+        v-if="isCategories"
+        type="button"
+        class="btn btn-primary"
+        :aria-expanded="showCategoryCreate"
+        @click="showCategoryCreate = !showCategoryCreate"
+      >
+        {{ showCategoryCreate ? 'Fechar' : 'Nova categoria' }}
+      </button>
       <button v-if="canShowNew" type="button" class="btn btn-primary" @click="startNew">Novo registo</button>
       <template v-if="canImportExport">
         <button class="btn btn-ghost" @click="exportTable">Exportar CSV</button>
@@ -415,6 +434,12 @@ onActivated(() => {
         <input ref="importInput" type="file" accept=".csv,text/csv" class="hidden-file" @change="onImportFile" />
       </template>
     </div>
+
+    <CategoryCreatePanel
+      v-if="isCategories && showCategoryCreate"
+      @created="onCategoryCreated"
+      @error="error = $event"
+    />
 
     <div v-if="showNewPicker" class="card picker">
       <h3>Novo registo — {{ sectionLabel }}</h3>
@@ -444,12 +469,8 @@ onActivated(() => {
       </div>
     </div>
 
-    <p v-if="message" class="ok">{{ message }}</p>
-    <p v-if="error" class="err">{{ error }}</p>
-
-    <p v-if="isMerged && !filterCategoriaId && !loading" class="notice">
-      Escolha uma categoria acima para carregar modelos ou produtos — evita esperas longas.
-    </p>
+    <p v-if="message" class="ok" role="status">{{ message }}</p>
+    <p v-if="error" class="err" role="alert">{{ error }}</p>
 
     <DataList
       :rows="filteredRows"
@@ -480,145 +501,67 @@ onActivated(() => {
 <style scoped>
 .page-view {
   display: grid;
-  gap: 16px;
+  gap: 14px;
+  max-width: 1100px;
 }
 
 .toolbar-panel {
   display: flex;
-  gap: 12px;
-  align-items: center;
   flex-wrap: wrap;
-  padding: 12px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-xs);
-}
-
-@media (max-width: 768px) {
-  .toolbar-panel {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .input.search {
-    order: -1;
-  }
-}
-
-.input {
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-family: inherit;
-  font-size: 14px;
-  background: var(--surface);
-  color: var(--text-primary);
-  transition: all var(--transition);
-}
-
-.input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  align-items: center;
+  gap: 8px;
 }
 
 .input.search {
-  flex: 1;
+  flex: 1 1 260px;
+  width: auto;
   min-width: 200px;
 }
 
 .input.filter-mini {
-  min-width: 150px;
+  flex: 0 1 220px;
+  width: auto;
 }
 
 .hidden-file {
   display: none;
 }
 
-.notice {
-  margin: 0;
-  padding: 12px 16px;
-  border-radius: var(--radius);
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  font-size: 14px;
-  font-weight: 500;
-}
-
 .picker {
-  padding: 20px;
-  margin-bottom: 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
+  display: grid;
+  gap: 8px;
+  max-width: 520px;
+  padding: 18px 20px;
 }
 
 .picker h3 {
-  margin: 0 0 16px 0;
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-primary);
+  margin-bottom: 4px;
 }
 
 .picker label {
-  display: block;
-  margin: 16px 0 8px 0;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 560;
   color: var(--text-secondary);
 }
 
 .picker-actions {
   display: flex;
-  gap: 12px;
-  margin-top: 20px;
   justify-content: flex-end;
-}
-
-.ok {
-  color: var(--success);
-  margin: 0 0 12px 0;
-  font-weight: 600;
-  font-size: 14px;
-  padding: 8px 12px;
-  background: rgba(16, 185, 129, 0.08);
-  border-radius: var(--radius);
-  border-left: 3px solid var(--success);
-}
-
-.err {
-  color: var(--danger);
-  margin: 0 0 12px 0;
-  font-weight: 600;
-  font-size: 14px;
-  padding: 8px 12px;
-  background: rgba(239, 68, 68, 0.08);
-  border-radius: var(--radius);
-  border-left: 3px solid var(--danger);
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .pager {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-top: 16px;
-  padding: 12px 16px;
-  background: var(--bg-secondary);
-  border-radius: var(--radius);
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .pager-meta {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-secondary);
-  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--text-muted);
 }
 </style>

@@ -3,17 +3,18 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import Breadcrumbs from '@/components/Breadcrumbs.vue'
-import LoadingState from '@/components/LoadingState.vue'
 import SoftImage from '@/components/SoftImage.vue'
 import { useCatalog } from '@/composables/useCatalog'
+import { useCategories } from '@/composables/useCategories'
 import { watchDynamicTitle } from '@/composables/usePageMeta'
 import { apiGet } from '@/lib/api'
-import { modelDetailRoute } from '@/lib/catalogRoutes'
+import { categorySlug as slugOfCategory, modelDetailRoute } from '@/lib/catalogRoutes'
 import { PLACEHOLDER, resolveImageUrl, resolveImageUrls, safeCssUrl, IMG_CARD } from '@/lib/images'
 import { ensureSupabase, subscribeRealtime, supabaseConfigured } from '@/lib/supabase'
 
 const route = useRoute()
 const catalog = useCatalog()
+const { categories: knownCategories } = useCategories()
 
 const products = ref([])
 const loading = ref(true)
@@ -180,7 +181,11 @@ async function fetchProducts({ resetCategory = false, silent = false } = {}) {
 
     let category = categoryData.value
     if (resetCategory || !category) {
-      const rawCategory = await apiGet(`/categorias/slug/${encodeURIComponent(categorySlug)}`)
+      // A lista de categorias já está em memória (cabeçalho/rodapé) — evita
+      // uma ida ao servidor só para traduzir o slug em id.
+      const rawCategory =
+        knownCategories.value.find((cat) => slugOfCategory(cat) === categorySlug && cat.tipo_catalogo) ||
+        (await apiGet(`/categorias/slug/${encodeURIComponent(categorySlug)}`))
       if (seq !== fetchSeq) return
 
       category = { ...rawCategory, imagem: PLACEHOLDER }
@@ -257,7 +262,9 @@ async function fetchProducts({ resetCategory = false, silent = false } = {}) {
     void hydrateGalleries(nextProducts, seq)
   } catch (err) {
     if (seq !== fetchSeq) return
-    error.value = `Erro ao carregar produtos: ${err.message}`
+    error.value = err?.status === 404
+      ? 'Esta categoria não existe ou deixou de estar disponível.'
+      : err.message || 'Não foi possível carregar os modelos.'
     console.error(err)
   } finally {
     if (seq === fetchSeq && !silent) loading.value = false
@@ -355,73 +362,42 @@ onUnmounted(() => {
 
 </script>
 
-
-
 <template>
-
   <div class="products-page">
-
     <Breadcrumbs :items="breadcrumbItems" />
 
-
-
-    <header
-
-      v-if="categoryData"
-
-      class="category-hero"
-
-      :class="{ 'has-image': !!heroImageUrl }"
-
-    >
-
-      <img
-
-        v-if="heroImageUrl"
-
-        class="category-hero__img"
-
-        :src="heroImageUrl"
-
-        alt=""
-
-        aria-hidden="true"
-        decoding="async"
-        fetchpriority="high"
-
-      />
-
-      <div class="page-shell page-shell--hero">
-
-        <h1>{{ categoryData.nome }}</h1>
-
-        <p v-if="!loading" class="category-count">{{ displayedProducts.length }} de {{ products.length }} modelos</p>
-
+    <header class="category-head">
+      <div class="head-inner">
+        <div class="head-text">
+          <h1>{{ categoryData?.nome || 'Catálogo' }}</h1>
+          <p v-if="categoryData && !loading" class="head-count">
+            {{ products.length }} {{ products.length === 1 ? 'modelo' : 'modelos' }}
+            <template v-if="hasActiveFilters"> · a mostrar {{ displayedProducts.length }}</template>
+          </p>
+          <p v-else class="head-count">&nbsp;</p>
+        </div>
+        <div v-if="heroImageUrl && heroImageUrl !== PLACEHOLDER" class="head-media" aria-hidden="true">
+          <img :src="heroImageUrl" alt="" decoding="async" fetchpriority="high" />
+        </div>
       </div>
-
     </header>
 
-
-
-    <div v-if="categoryData" class="catalog-tools">
-      <div class="page-shell tools-inner">
-        <label class="tool-search">
-          <span class="field-label">Pesquisar</span>
-          <input v-model="localSearch" class="field-input" type="search" placeholder="Modelo ou EAN…" />
+    <div v-if="categoryData" class="toolbar">
+      <div class="toolbar-inner">
+        <label class="tool tool--search">
+          <span class="tool-label">Pesquisar</span>
+          <input v-model="localSearch" class="field-input" type="search" placeholder="Nome do modelo, cor ou EAN" />
         </label>
-        <label>
-          <span class="field-label">Ordenar</span>
+        <label class="tool">
+          <span class="tool-label">Ordenar</span>
           <select v-model="sortBy" class="field-select">
-            <option value="az">A–Z</option>
-            <option value="za">Z–A</option>
-            <option value="recent">Recentes</option>
+            <option value="az">Nome (A–Z)</option>
+            <option value="za">Nome (Z–A)</option>
+            <option value="recent">Mais recentes</option>
           </select>
         </label>
-        <label
-          v-for="filterDef in filterDefs"
-          :key="filterDef.field"
-        >
-          <span class="field-label">{{ filterDef.label }}</span>
+        <label v-for="filterDef in filterDefs" :key="filterDef.field" class="tool">
+          <span class="tool-label">{{ filterDef.label }}</span>
           <select
             class="field-select"
             :value="selectedFilters[filterDef.field] ?? ''"
@@ -432,530 +408,362 @@ onUnmounted(() => {
               v-for="opt in catalog.filterOptionsForField(filterDef).filter((item) => item.value !== '')"
               :key="opt.value"
               :value="opt.value"
-            >
-              {{ opt.label }}
-            </option>
+            >{{ opt.label }}</option>
           </select>
         </label>
       </div>
     </div>
 
-    <LoadingState v-if="loading && !products.length" message="A carregar modelos…" />
-
-
-
-    <p v-else-if="error" class="alert alert-error page-shell">{{ error }}</p>
-
-
-
-    <div v-else-if="displayedProducts.length > 0" class="page-shell page-shell--grid product-grid">
-
-      <RouterLink
-        v-for="product in displayedProducts"
-        v-memo="[product.id, product.nome, coverImage(product)]"
-        :key="product.id"
-
-        :to="modelDetailRoute(categoryData, product)"
-
-        class="product-card surface-card surface-card--elevated"
-
-      >
-
-        <div class="card-image-container">
-
-          <SoftImage
-            :src="coverImage(product)"
-            :alt="product.nome"
-            img-class="cover-image"
-          />
-
-          <div v-if="hasGallery(product)" class="carousel-nav">
-            <button
-              type="button"
-              class="nav-btn"
-              aria-label="Imagem anterior"
-              @click.prevent.stop="prevImg($event, product)"
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
-            </button>
-            <button
-              type="button"
-              class="nav-btn"
-              aria-label="Próxima imagem"
-              @click.prevent.stop="nextImg($event, product)"
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
-            </button>
-          </div>
-
-          <span v-if="tipoLabel(product)" class="type-chip">{{ tipoLabel(product) }}</span>
-
+    <div class="page-shell page-shell--grid">
+      <div v-if="loading && !products.length" class="grid" aria-busy="true" aria-label="A carregar modelos">
+        <div v-for="n in 8" :key="n" class="card card--skeleton">
+          <span class="card-media" />
+          <span class="card-body"><span class="sk sk-title" /><span class="sk sk-sub" /></span>
         </div>
-
-
-
-        <div class="card-body">
-
-          <h2>{{ product.nome }}</h2>
-
-          <span class="card-link">Ver detalhes</span>
-
-        </div>
-
-      </RouterLink>
-
-    </div>
-
-
-
-    <div v-else class="page-shell page-shell--grid">
-
-      <div class="empty-state-block surface-card empty-card">
-
-        <h2>{{ hasActiveFilters ? 'Sem modelos para estes filtros' : 'Sem modelos nesta categoria' }}</h2>
-
-        <p>{{ hasActiveFilters ? 'Ajuste a pesquisa ou os filtros para ver outros modelos.' : 'Ainda não existem modelos com produtos visíveis. Volte mais tarde ou escolha outra categoria.' }}</p>
-
-        <RouterLink to="/categorias" class="btn btn-secondary">Ver categorias</RouterLink>
-
       </div>
 
+      <div v-else-if="error" class="state alert alert-error" role="alert">
+        <p>{{ error }}</p>
+        <div class="state-actions">
+          <button type="button" class="btn btn-secondary btn-sm" @click="fetchProducts({ resetCategory: true })">Tentar de novo</button>
+          <RouterLink to="/categorias" class="btn btn-ghost btn-sm">Ver catálogo</RouterLink>
+        </div>
+      </div>
+
+      <ul v-else-if="displayedProducts.length" class="grid">
+        <li v-for="(product, i) in displayedProducts" :key="product.id" v-memo="[product.id, product.nome, coverImage(product), tipoLabel(product)]">
+          <RouterLink :to="modelDetailRoute(categoryData, product)" class="card">
+            <span class="card-media">
+              <SoftImage :src="coverImage(product)" :alt="product.nome" :eager="i < 4" img-class="card-img" />
+              <span v-if="tipoLabel(product)" class="card-badge">{{ tipoLabel(product) }}</span>
+              <span v-if="hasGallery(product)" class="card-nav">
+                <button type="button" class="nav-btn" aria-label="Cor anterior" @click.prevent.stop="prevImg($event, product)">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+                </button>
+                <button type="button" class="nav-btn" aria-label="Cor seguinte" @click.prevent.stop="nextImg($event, product)">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg>
+                </button>
+              </span>
+            </span>
+            <span class="card-body">
+              <span class="card-name">{{ product.nome }}</span>
+              <span class="card-meta">
+                {{ (product.modelo_cores || []).length > 1 ? `${(product.modelo_cores || []).length} cores` : 'Ver detalhes' }}
+              </span>
+            </span>
+          </RouterLink>
+        </li>
+      </ul>
+
+      <div v-else-if="categoryData" class="state empty">
+        <div>
+          <h2>{{ hasActiveFilters ? 'Nenhum modelo corresponde aos filtros' : 'Ainda não há modelos nesta categoria' }}</h2>
+          <p>
+            {{ hasActiveFilters
+              ? 'Altere a pesquisa ou escolha «Todos» nos filtros.'
+              : 'Estamos a preparar esta categoria. Veja as outras ou peça-nos um orçamento directamente.' }}
+          </p>
+        </div>
+        <button v-if="hasActiveFilters" type="button" class="btn btn-secondary" @click="resetPageControls(); fetchProducts({ silent: true })">Limpar filtros</button>
+        <RouterLink v-else to="/categorias" class="btn btn-secondary">Ver catálogo</RouterLink>
+      </div>
     </div>
-
   </div>
-
 </template>
 
-
-
 <style scoped>
-
-.products-page {
-
-  padding-bottom: 2rem;
-
-}
-
-
-
-.category-hero {
-
-  background: linear-gradient(165deg, #0b1f3a 0%, #1b365d 100%);
-
-  color: #fff;
-
-  position: relative;
-
-  overflow: hidden;
-
-}
-
-
-
-.category-hero__img {
-
-  position: absolute;
-
-  inset: 0;
-
-  width: 100%;
-
-  height: 100%;
-
-  object-fit: cover;
-
-  z-index: 0;
-
-}
-
-
-
-.category-hero .page-shell {
-
-  position: relative;
-
-  z-index: 1;
-
-  padding-top: 2rem;
-
-  padding-bottom: 2rem;
-
-}
-
-
-
-.category-hero.has-image::before {
-
-  content: '';
-
-  position: absolute;
-
-  inset: 0;
-
-  z-index: 1;
-
-  background: linear-gradient(90deg, rgba(11, 31, 58, 0.88), rgba(27, 54, 93, 0.4));
-
-  pointer-events: none;
-
-}
-
-
-
-.category-hero h1 {
-
-  margin: 0 0 0.35rem;
-
-  font-size: clamp(1.75rem, 3.5vw, 2.4rem);
-
-  color: #fff;
-
-  text-transform: capitalize;
-
-}
-
-
-
-.category-count {
-
-  margin: 0;
-
-  opacity: 0.85;
-
-  font-size: 0.95rem;
-
-}
-
-
-
-.filters-bar {
-
+/* ---------- Cabeçalho da categoria ---------- */
+.category-head {
   background: var(--color-surface);
-
   border-bottom: 1px solid var(--color-border);
-
-  padding: 1rem 0;
-
 }
 
-
-
-.filters-inner {
-
-  display: flex;
-
-  flex-wrap: wrap;
-
-  align-items: flex-end;
-
-  gap: 0.75rem 1rem;
-
-}
-
-
-
-.filter-select {
-
-  min-width: min(100%, 220px);
-
-  max-width: 320px;
-
-  flex: 1 1 220px;
-
-}
-
-
-
-.catalog-tools { background: #fff; border-bottom: 1px solid var(--color-border); padding: 1rem 0; }
-.tools-inner { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.8rem; }
-.tools-inner label { flex: 0 1 220px; }
-.tools-inner .tool-search { flex: 1 1 300px; }
-.tools-inner .field-input, .tools-inner .field-select { width: 100%; }
-
-.product-grid {
-
+.head-inner {
   display: grid;
-
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-
-  gap: 0.85rem;
-
-  justify-items: stretch;
-
-}
-
-
-
-@media (max-width: 1400px) {
-
-  .product-grid {
-
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-
-  }
-
-}
-
-
-
-@media (max-width: 1100px) {
-
-  .product-grid {
-
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-
-  }
-
-}
-
-
-
-@media (max-width: 800px) {
-
-  .product-grid {
-
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-
-  }
-
-}
-
-
-
-@media (max-width: 480px) {
-
-  .product-grid {
-
-    grid-template-columns: 1fr;
-
-  }
-
-}
-
-
-
-.product-card {
-
-  position: relative;
-
-  text-decoration: none;
-
-  color: inherit;
-
-  overflow: hidden;
-
-  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
-
-}
-
-
-
-.product-card:hover {
-
-  transform: translateY(-4px);
-
-  box-shadow: var(--shadow-lg);
-
-}
-
-
-
-.card-image-container {
-
-  position: relative;
-
-  aspect-ratio: 1;
-
-  overflow: hidden;
-
-  background: var(--color-cream-dark);
-
-}
-
-
-
-.cover-image {
-
-  width: 100%;
-
-  height: 100%;
-
-  object-fit: cover;
-
-  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-
-}
-
-
-
-.card-image-container :deep(.soft-image),
-.card-image-container :deep(.soft-image__img) {
-  width: 100%;
-  height: 100%;
-}
-
-.card-image-container :deep(.soft-image__img) {
-  object-fit: cover;
-}
-
-.product-card:hover :deep(.soft-image__img) {
-
-  transform: scale(1.03);
-
-}
-
-.card-image-container :deep(.soft-image__img) {
-  transition: opacity 0.4s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-
-
-.type-chip {
-
-  position: absolute;
-
-  left: 0.75rem;
-
-  bottom: 0.75rem;
-
-  padding: 0.3rem 0.65rem;
-
-  background: rgba(26, 37, 47, 0.78);
-
-  color: #fff;
-
-  border-radius: var(--radius-pill);
-
-  font-size: 0.72rem;
-
-  font-weight: 600;
-
-  letter-spacing: 0.02em;
-
-  backdrop-filter: blur(4px);
-
-  z-index: 2;
-
-}
-
-
-
-.carousel-nav {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  display: flex;
-  justify-content: space-between;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  gap: 2rem;
+  max-width: calc(var(--content-max) + 2 * var(--page-pad));
+  margin: 0 auto;
+  padding: 2.25rem var(--page-pad);
+}
+
+.head-text h1 {
+  text-transform: capitalize;
+}
+
+.head-count {
+  margin: 0.4rem 0 0;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.head-media {
+  width: min(320px, 32vw);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-soft);
+}
+
+.head-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ---------- Filtros ---------- */
+.toolbar {
+  position: sticky;
+  top: var(--header-h);
+  z-index: 50;
+  background: rgba(243, 245, 247, 0.96);
+  border-bottom: 1px solid var(--color-border);
+  backdrop-filter: blur(6px);
+}
+
+.toolbar-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  max-width: calc(var(--content-max) + 2 * var(--page-pad));
+  margin: 0 auto;
+  padding: 0.85rem var(--page-pad);
+}
+
+.tool {
+  display: grid;
+  gap: 0.3rem;
+  flex: 0 1 200px;
+}
+
+.tool--search {
+  flex: 1 1 280px;
+}
+
+.tool-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.tool .field-input,
+.tool .field-select {
+  min-height: 40px;
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+  font-size: 0.95rem;
+}
+
+/* ---------- Grelha de modelos ---------- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: inherit;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.card:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-md);
+  color: inherit;
+}
+
+.card-media {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--color-bg-soft);
+}
+
+.card-media :deep(.soft-image),
+.card-media :deep(.soft-image__img) {
+  width: 100%;
+  height: 100%;
+}
+
+.card-media :deep(.soft-image__img) {
+  object-fit: cover;
+  transition: opacity 0.3s ease, transform 0.5s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.card:hover .card-media :deep(.soft-image__img) {
+  transform: scale(1.03);
+}
+
+.card-badge {
+  position: absolute;
+  left: 0.6rem;
+  top: 0.6rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--color-ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.card-nav {
+  position: absolute;
+  inset: auto 0.5rem 0.5rem auto;
+  display: flex;
+  gap: 0.35rem;
   opacity: 0;
   transition: opacity var(--transition);
-  pointer-events: none;
 }
 
-.card-image-container:hover .carousel-nav,
-.card-image-container:focus-within .carousel-nav {
+.card:hover .card-nav,
+.card:focus-within .card-nav {
   opacity: 1;
 }
 
-.nav-btn {
-  pointer-events: auto;
-  z-index: 4;
-  width: 2.25rem;
-  height: 2.25rem;
-  margin: 0 0.4rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--color-ink);
-  cursor: pointer;
-  line-height: 1;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-}
-
 @media (hover: none) {
-  .carousel-nav {
+  .card-nav {
     opacity: 1;
   }
 }
 
+.nav-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
 
+.nav-btn:hover {
+  color: var(--color-accent);
+}
 
 .card-body {
-
-  padding: 0.75rem 0.85rem 0.9rem;
-
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem 1rem;
 }
 
-
-
-.card-body h2 {
-
-  margin: 0 0 0.25rem;
-
-  font-size: 0.92rem;
-
-  line-height: 1.25;
-
+.card-name {
+  color: var(--color-ink-deep);
+  font-weight: 640;
+  line-height: 1.3;
 }
 
-
-
-.card-link {
-
-  font-size: 0.88rem;
-
-  font-weight: 600;
-
-  color: var(--color-accent);
-
-}
-
-
-
-.empty-card {
-
-  padding: 2.5rem;
-
-  text-align: center;
-
-  display: flex;
-
-  flex-direction: column;
-
-  align-items: center;
-
-  gap: 0.75rem;
-
-  max-width: 480px;
-
-  margin: 0 auto;
-
-}
-
-
-
-.empty-card h2 {
-
-  margin: 0;
-
-  font-size: 1.25rem;
-
-}
-
-
-
-.empty-card p {
-
-  margin: 0;
-
+.card-meta {
   color: var(--color-muted);
-
-  line-height: 1.5;
-
+  font-size: 0.875rem;
 }
 
-</style>
+/* ---------- Estados ---------- */
+.card--skeleton {
+  pointer-events: none;
+}
 
+.card--skeleton .card-media,
+.sk {
+  background: linear-gradient(90deg, var(--color-bg-soft), var(--color-bg), var(--color-bg-soft));
+  background-size: 200% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+
+.sk {
+  display: block;
+  height: 12px;
+  border-radius: var(--radius-sm);
+}
+
+.sk-title {
+  width: 70%;
+}
+
+.sk-sub {
+  width: 35%;
+  margin-top: 0.4rem;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.state p {
+  margin: 0;
+}
+
+.state-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.empty {
+  padding: 2rem;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.empty h2 {
+  margin-bottom: 0.35rem;
+  font-size: 1.2rem;
+}
+
+.empty p {
+  color: var(--color-muted);
+}
+
+@media (max-width: 720px) {
+  .head-inner {
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+  }
+
+  .head-media {
+    display: none;
+  }
+
+  .toolbar {
+    position: static;
+  }
+
+  .tool {
+    flex: 1 1 140px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .card-body {
+    padding: 0.65rem 0.75rem 0.8rem;
+  }
+}
+</style>

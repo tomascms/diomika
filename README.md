@@ -44,6 +44,13 @@ python deploy/verify_production.py
 powershell -ExecutionPolicy Bypass -File deploy/dev.ps1
 ```
 
+Por omissão `npm run dev` (loja e backoffice) usa a API de produção através do
+proxy do Vite. Para usar uma API local em `127.0.0.1:8001`, defina
+`DIOMIKA_LOCAL_API=1`. Dependências Python: `requirements.txt` (produção) e
+`requirements-dev.txt` (testes, CI e módulos opcionais).
+
+Ícones da marca (favicon, PWA, app de secretária): `python scripts/generate_brand_icons.py`.
+
 Docs: [`docs/INSTRUCOES.md`](docs/INSTRUCOES.md) (operar) · [`docs/RELATORIO_TECNICO.md`](docs/RELATORIO_TECNICO.md) (manual completo) · Scripts: [`deploy/README.md`](deploy/README.md)
 
 ## Config (servidor / developers)

@@ -1,5 +1,6 @@
 """Bot defense: User-Agent blocking e comportamento suspeito."""
 import logging
+import re
 from typing import Optional
 
 logger = logging.getLogger("diomika-api")
@@ -405,7 +406,19 @@ ALLOWED_BOT_PATTERNS = [
     "naver",
     "daum",
     "sogou",
+    # Monitores de uptime (o UptimeRobot é o monitor deste projecto)
+    "uptimerobot",
+    "betteruptime",
+    "pingdom",
+    "statuscake",
 ]
+
+# Cada padrão só conta no início de um "token" do User-Agent. Com substring
+# simples, "obot" apanhava "UptimeRobot" e "lcc"/"pex"/"query" apanhavam texto
+# inocente; "HeadlessChrome" e "curl/8.5" continuam bloqueados.
+_BLOCKED_RE = re.compile(
+    r"(?<![a-z0-9])(?:" + "|".join(re.escape(p) for p in BLOCKED_BOT_PATTERNS) + r")"
+)
 
 
 def is_bot_user_agent(user_agent: Optional[str]) -> bool:
@@ -426,10 +439,7 @@ def is_bot_user_agent(user_agent: Optional[str]) -> bool:
         return False
 
     # Blacklist (bots agressivos)
-    if any(pattern in ua_lower for pattern in BLOCKED_BOT_PATTERNS):
-        return True
-
-    return False
+    return _BLOCKED_RE.search(ua_lower) is not None
 
 
 def log_bot_attempt(ip: str, user_agent: str, endpoint: str) -> None:

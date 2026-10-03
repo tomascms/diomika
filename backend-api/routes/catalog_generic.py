@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -278,6 +279,12 @@ async def admin_merged_list(
     """Lista merged para backoffice (modelos ou produtos) — paginada no servidor."""
     if not is_catalog_view(view_key):
         raise HTTPException(status_code=400, detail="Vista inválida")
+    for label, value in (("categoria_id", categoria_id), ("modelo_id", modelo_id)):
+        if value:
+            try:
+                UUID(value)
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"{label} inválido") from None
     limit = min(max(limit, 1), 200)
     offset = max(offset, 0)
     tipos = _resolve_merged_tipos(tipo_catalogo)

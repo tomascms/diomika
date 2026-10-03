@@ -78,13 +78,44 @@ def field_widget(field: FieldInfo | None, field_name: str) -> str:
     return "text"
 
 
+# Nomes de coluna → rótulo em português correcto (sem isto o formulário mostrava
+# «Descricao», «Ean», «Carrinho Step»…).
+FIELD_LABELS_PT = {
+    "nome": "Nome",
+    "descricao": "Descrição",
+    "imagem": "Imagem",
+    "imagens": "Imagens",
+    "ean": "EAN",
+    "numero": "Número",
+    "slug": "Endereço (slug)",
+    "visibilidade": "Visível na loja",
+    "carrinho_step": "Incremento no carrinho",
+    "carrinho_min": "Quantidade mínima no carrinho",
+    "dimensao": "Dimensão",
+    "dimensoes": "Dimensões",
+    "altura": "Altura",
+    "cor": "Cor",
+    "tipo": "Tipo",
+    "observacoes": "Observações",
+    "mensagem": "Mensagem",
+    "telefone": "Telefone",
+    "empresa": "Empresa",
+    "email": "Email",
+    "quantidade": "Quantidade",
+    "preco": "Preço",
+}
+
+
 def field_label(field_name: str, field: FieldInfo) -> str:
     extra = field_extra(field)
     if extra.get("description"):
         return extra["description"]
     if extra.get("ui_label"):
         return extra["ui_label"]
-    return field_name.replace("id_", "").replace("_", " ").title()
+    base = field_name[3:] if field_name.startswith("id_") else field_name
+    if base in FIELD_LABELS_PT:
+        return FIELD_LABELS_PT[base]
+    return base.replace("_", " ").capitalize()
 
 
 def relation_table(field_name: str, field: FieldInfo, table_config: dict | None = None) -> Optional[str]:
@@ -188,7 +219,7 @@ def get_list_display(item: dict, table_config: dict) -> str:
         val = item.get(f)
         if val:
             if f == "tipo":
-                from models.schemas import TIPO_ALMOFADA_LABELS
+                from models.catalog_attributes import TIPO_ALMOFADA_LABELS
                 parts.append(TIPO_ALMOFADA_LABELS.get(val, val))
             elif f == "tipo_catalogo":
                 from models.schemas import TIPO_CATALOGO_LABELS

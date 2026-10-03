@@ -1,4 +1,7 @@
-# Diomika — dependências únicas (API, workers)
+# Diomika — dependências de produção (API + workers embutidos).
+# Só o que a API importa a correr. Testes, scanners e os extras dos módulos
+# opcionais (tracing, websockets, sagas…) estão em requirements-dev.txt, para
+# a imagem Docker da VM (e2-micro, 1 GB) ficar pequena e o build não falhar.
 fastapi
 uvicorn
 python-multipart
@@ -11,54 +14,11 @@ psycopg2-binary
 Pillow
 python-barcode
 reportlab
-pytest
 certifi
 pip-system-certs
 pyotp
 redis
 sentry-sdk[fastapi]
 boto3
-vulture
-
-# CQRS & Event Sourcing
-sqlalchemy
-alembic
-
-# WebSocket & Real-time
-websockets
-python-socketio
-
-# Tracing & Monitoring
-opentelemetry-api
-opentelemetry-sdk
-opentelemetry-exporter-jaeger
-opentelemetry-instrumentation-fastapi
-opentelemetry-instrumentation-sqlalchemy
-opentelemetry-instrumentation-redis
-opentelemetry-instrumentation-requests
-prometheus-client
-
-# Security & API Versioning
 cryptography
-
-# Testing & Load Testing
-pytest-asyncio
-pytest-cov
 httpx
-locust
-playwright
-
-# HTTP & Async
-aiohttp
-
-# Logging
-python-json-logger
-
-# Security scanning
-bandit
-sqlmap
-safety
-
-# Async Task Queue
-celery
-rq

@@ -1,64 +1,79 @@
 <script setup>
-import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api, clearApiCaches } from '@/lib/api'
-import {
-  mapApiError,
-  saveSettings,
-  writeSessionUser,
-  clearSession,
-  isAuthenticated,
-} from '@/lib/settings'
+import { clearSession, isAuthenticated, storeSession } from '@/lib/settings'
 
 const router = useRouter()
+const route = useRoute()
+
 const username = ref('')
 const password = ref('')
 const totpCode = ref('')
+const remember = ref(true)
 const mfaRequired = ref(false)
 const mfaSetupMode = ref(false)
 const mfaSecret = ref('')
 const mfaUri = ref('')
 const error = ref('')
 const loading = ref(false)
-const loginRequired = ref(true)
 const checking = ref(true)
 
+const credentialsLocked = computed(() => mfaSetupMode.value || mfaRequired.value)
+
+const submitLabel = computed(() => {
+  if (loading.value) return 'A entrar…'
+  if (mfaSetupMode.value) return 'Confirmar código e entrar'
+  if (mfaRequired.value) return 'Confirmar código'
+  return 'Entrar'
+})
+
+function destination() {
+  const target = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+  return target.startsWith('/') && !target.startsWith('/login')
+    ? target
+    : { name: 'workspace', params: { table: 'categories' } }
+}
+
 onMounted(async () => {
-  try {
-    const st = await api.authStatus()
-    loginRequired.value = Boolean(st.login_required)
-    if (!st.login_required) {
-      // Sem autenticação necessária, entra direto
-      saveSettings({ accessToken: 'no-auth' })
-      writeSessionUser({ username: 'admin', role: 'admin' })
-      router.replace({ name: 'workspace', params: { table: 'categories' } })
+  // Já com sessão guardada → confirma-a e entra directamente.
+  if (isAuthenticated()) {
+    try {
+      await api.me(true)
+      await router.replace(destination())
       return
-    }
-    if (isAuthenticated()) {
-      try {
-        await api.me()
-        router.replace({ name: 'workspace', params: { table: 'categories' } })
-      } catch {
+    } catch (e) {
+      if (e?.status === 401) {
         clearApiCaches()
         clearSession()
+      } else {
+        // API em baixo ou sem rede: mantém a sessão; o painel mostra o estado da ligação.
+        await router.replace(destination())
+        return
       }
     }
-  } catch (e) {
-    loginRequired.value = true
-    error.value = mapApiError(e.message || e)
-  } finally {
-    checking.value = false
   }
+  checking.value = false
 })
 
 async function completeLogin(res) {
-  if (!res?.access_token) {
-    throw new Error(res?.detail || 'Resposta de login inválida')
-  }
-  saveSettings({ accessToken: res.access_token })
-  writeSessionUser({ username: res.username, role: res.role })
+  if (!res?.access_token) throw new Error(res?.detail || 'Resposta de login inválida.')
+  storeSession({
+    token: res.access_token,
+    user: { username: res.username, role: res.role },
+    remember: remember.value,
+  })
   clearApiCaches()
-  await router.replace({ name: 'workspace', params: { table: 'categories' } })
+  await router.replace(destination())
+}
+
+function resetMfa() {
+  mfaRequired.value = false
+  mfaSetupMode.value = false
+  mfaSecret.value = ''
+  mfaUri.value = ''
+  totpCode.value = ''
+  error.value = ''
 }
 
 async function submit() {
@@ -67,17 +82,14 @@ async function submit() {
   try {
     const user = username.value.trim()
     const pass = password.value
-    const code = totpCode.value.trim()
+    const code = totpCode.value.replace(/\s+/g, '')
 
     if (mfaSetupMode.value) {
       if (!code) {
-        error.value = 'Introduza o código de 6 dígitos da app autenticadora.'
+        error.value = 'Introduza o código de 6 dígitos da aplicação de autenticação.'
         return
       }
       await api.mfaConfirm(user, pass, code)
-      mfaSetupMode.value = false
-      mfaSecret.value = ''
-      mfaUri.value = ''
       const res = await api.login(user, pass, code)
       await completeLogin(res)
       return
@@ -86,22 +98,21 @@ async function submit() {
     const res = await api.login(user, pass, mfaRequired.value ? code : undefined)
     if (res?.mfa_required) {
       mfaRequired.value = true
-      error.value = ''
       return
     }
     if (res?.mfa_setup_required) {
       const setup = await api.mfaSetup(user, pass)
       mfaSetupMode.value = true
-      mfaRequired.value = false
       mfaSecret.value = setup.secret || ''
       mfaUri.value = setup.otpauth_uri || ''
       totpCode.value = ''
-      error.value = ''
       return
     }
     await completeLogin(res)
   } catch (e) {
-    error.value = mapApiError(e.message || e)
+    error.value = e?.status === 401
+      ? 'Utilizador ou palavra-passe incorrectos.'
+      : e?.message || 'Não foi possível entrar.'
   } finally {
     loading.value = false
   }
@@ -110,79 +121,94 @@ async function submit() {
 
 <template>
   <div class="login-page">
-    <div class="login-panel card">
-      <p class="brand">Diomika</p>
-      <h1>Backoffice</h1>
-      <p class="lead">Sessão local do administrador. Expira automaticamente por segurança.</p>
+    <main class="login-panel" aria-labelledby="login-title">
+      <header class="login-head">
+        <img class="mark" src="/mark.svg" alt="" width="34" height="41" />
+        <div>
+          <h1 id="login-title">Backoffice Diomika</h1>
+          <p class="lead">Gestão do catálogo, orçamentos e encomendas.</p>
+        </div>
+      </header>
 
-      <p v-if="checking" class="muted">A verificar…</p>
+      <div v-if="checking" class="checking" role="status">
+        <span class="spinner" aria-hidden="true" />
+        A verificar a sessão…
+      </div>
 
-      <form v-else class="form" @submit.prevent="submit">
-        <label>
-          Utilizador
+      <form v-else class="form" novalidate @submit.prevent="submit">
+        <div class="field">
+          <label class="field-label" for="login-user">Utilizador</label>
           <input
+            id="login-user"
             v-model="username"
             class="input"
             type="text"
             autocomplete="username"
+            autocapitalize="none"
+            spellcheck="false"
             required
             autofocus
-            :disabled="mfaSetupMode || mfaRequired"
+            :disabled="credentialsLocked"
           />
-        </label>
-        <label>
-          Password
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="login-pass">Palavra-passe</label>
           <input
+            id="login-pass"
             v-model="password"
             class="input"
             type="password"
             autocomplete="current-password"
             required
-            :disabled="mfaSetupMode || mfaRequired"
+            :disabled="credentialsLocked"
           />
-        </label>
-
-        <div v-if="mfaSetupMode" class="mfa-setup">
-          <p class="mfa-title">Configure o MFA (obrigatório)</p>
-          <p class="muted">
-            Adicione esta conta na Google Authenticator / Authy (scan do URI ou secret manual) e
-            confirme com o código de 6 dígitos.
-          </p>
-          <p v-if="mfaSecret" class="secret">
-            Secret: <code>{{ mfaSecret }}</code>
-          </p>
-          <p v-if="mfaUri" class="uri"><code>{{ mfaUri }}</code></p>
         </div>
 
-        <label v-if="mfaRequired || mfaSetupMode">
-          Código MFA
+        <section v-if="mfaSetupMode" class="mfa-setup" aria-label="Configurar verificação em dois passos">
+          <p class="mfa-title">Active a verificação em dois passos</p>
+          <p class="hint">
+            Na Google Authenticator, Microsoft Authenticator ou Authy, adicione uma conta com esta chave e
+            introduza o código de 6 dígitos que aparece.
+          </p>
+          <p v-if="mfaSecret" class="secret"><code>{{ mfaSecret }}</code></p>
+          <details v-if="mfaUri" class="uri">
+            <summary>Ligação otpauth</summary>
+            <code>{{ mfaUri }}</code>
+          </details>
+        </section>
+
+        <div v-if="mfaRequired || mfaSetupMode" class="field">
+          <label class="field-label" for="login-totp">Código de verificação</label>
           <input
+            id="login-totp"
             v-model="totpCode"
-            class="input"
+            class="input code-input"
             type="text"
             inputmode="numeric"
             autocomplete="one-time-code"
-            placeholder="6 dígitos"
+            maxlength="8"
+            placeholder="000000"
             required
           />
+        </div>
+
+        <label v-if="!credentialsLocked" class="remember">
+          <input v-model="remember" type="checkbox" />
+          Manter sessão iniciada neste computador
         </label>
-        <p v-if="error" class="error">{{ error }}</p>
-        <p v-if="!loginRequired" class="muted">
-          Login ainda não configurado no servidor (ADMIN_BOOTSTRAP_*). Em desenvolvimento pode usar API key.
-        </p>
-        <button type="submit" class="btn btn-primary" :disabled="loading">
-          {{
-            loading
-              ? 'A entrar…'
-              : mfaSetupMode
-                ? 'Confirmar MFA e entrar'
-                : mfaRequired
-                  ? 'Confirmar MFA'
-                  : 'Entrar'
-          }}
+
+        <p v-if="error" class="err" role="alert">{{ error }}</p>
+
+        <button type="submit" class="btn btn-primary btn-lg submit" :disabled="loading">
+          {{ submitLabel }}
+        </button>
+        <button v-if="credentialsLocked" type="button" class="btn btn-ghost" @click="resetMfa">
+          Usar outra conta
         </button>
       </form>
-    </div>
+    </main>
+    <p class="foot">Sessões terminam ao fim de 30 dias ou ao sair.</p>
   </div>
 </template>
 
@@ -190,46 +216,51 @@ async function submit() {
 .login-page {
   min-height: 100vh;
   display: grid;
-  place-items: center;
-  padding: 32px 20px;
+  place-content: center;
+  justify-items: center;
+  gap: 18px;
+  padding: 32px 16px;
   background:
-    radial-gradient(ellipse 70% 50% at 15% 0%, rgba(59, 130, 246, 0.08), transparent 55%),
-    radial-gradient(ellipse 50% 40% at 90% 100%, rgba(15, 23, 42, 0.04), transparent 50%),
+    linear-gradient(160deg, transparent 0 62%, var(--accent-soft) 62% 63%, transparent 63%),
     var(--bg);
 }
 
 .login-panel {
-  width: min(420px, 100%);
-  padding: 40px;
+  width: min(400px, 100%);
+  padding: 32px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
 }
 
-.brand {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 32px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.login-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 26px;
+}
+
+.mark {
+  flex: none;
 }
 
 h1 {
-  margin: 8px 0 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-size: 19px;
+  font-stretch: 112%;
+  font-weight: 680;
 }
 
 .lead {
-  margin: 16px 0 24px;
-  font-size: 14px;
-  line-height: 1.6;
+  margin-top: 3px;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+
+.checking {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: var(--text-secondary);
 }
 
@@ -238,87 +269,65 @@ h1 {
   gap: 16px;
 }
 
-label {
-  display: grid;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.code-input {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  letter-spacing: 0.3em;
+}
+
+.remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
   color: var(--text-secondary);
+  cursor: pointer;
 }
 
-.input {
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-family: inherit;
-  font-size: 14px;
-  background: var(--surface);
-  color: var(--text-primary);
-  transition: all var(--transition);
-}
-
-.input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.input:disabled {
-  background: var(--bg-secondary);
-  color: var(--text-muted);
-  cursor: not-allowed;
+.submit {
+  width: 100%;
+  margin-top: 4px;
 }
 
 .mfa-setup {
   display: grid;
   gap: 8px;
-  padding: 12px;
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  padding: 14px;
   border-radius: var(--radius);
   background: var(--accent-soft);
 }
 
 .mfa-title {
-  margin: 0;
-  font-size: 14px;
   font-weight: 600;
   color: var(--accent);
 }
 
-.secret,
-.uri {
-  margin: 0;
-  font-size: 12px;
-  word-break: break-all;
-  color: var(--text-secondary);
-}
-
-.secret code,
-.uri code {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 2px 4px;
+.secret code {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
-  border-radius: 3px;
   color: var(--text-primary);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  word-break: break-all;
+  user-select: all;
 }
 
-.error {
-  margin: 0;
-  padding: 10px 12px;
-  color: var(--danger);
-  font-size: 13px;
-  font-weight: 500;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: var(--radius);
-}
-
-.muted {
-  margin: 0;
-  font-size: 13px;
+.uri {
+  font-size: 12px;
   color: var(--text-secondary);
+}
+
+.uri code {
+  display: block;
+  margin-top: 6px;
+  word-break: break-all;
+  user-select: all;
+}
+
+.foot {
+  font-size: 12.5px;
+  color: var(--text-muted);
 }
 </style>

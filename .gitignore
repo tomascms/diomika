@@ -17,6 +17,9 @@ __pycache__/
 venv/
 temp/
 *.png
+# Ícones da marca (gerados por scripts/generate_brand_icons.py) — versionados
+!frontend-web/public/*.png
+!backoffice-desktop/electron/icon.png
 
 # Logs & runtime state
 backend-api/logs/

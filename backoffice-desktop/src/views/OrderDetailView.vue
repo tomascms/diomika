@@ -78,6 +78,7 @@ onMounted(load)
       <p v-if="message" class="ok">{{ message }}</p>
       <p v-if="error" class="err">{{ error }}</p>
       <DataList
+        :active-id="selected?.id"
         variant="conversation"
         :rows="rows"
         :columns="columns"
@@ -94,8 +95,8 @@ onMounted(load)
       @close="selected = null"
     />
     <div v-else class="placeholder card">
-      <h3>Seleciona um orçamento</h3>
-      <p>Clica em <strong>Abrir</strong> na lista para ver detalhes e descarregar PDF.</p>
+      <h3>Nenhum orçamento aberto</h3>
+      <p>Escolha um orçamento na lista para ver os detalhes e descarregar o PDF.</p>
     </div>
   </div>
 </template>

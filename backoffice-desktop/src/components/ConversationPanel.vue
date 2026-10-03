@@ -52,8 +52,8 @@ watch(() => props.message?.id, loadHistory, { immediate: true })
 
 <template>
   <div v-if="!message" class="placeholder card">
-    <h3>Seleciona uma mensagem</h3>
-    <p>Clica em <strong>Abrir</strong> na lista para ver o histórico da conversa por email.</p>
+    <h3>Nenhuma mensagem aberta</h3>
+    <p>Escolha uma mensagem na lista para ver a conversa completa.</p>
   </div>
 
   <div v-else class="conversation card">

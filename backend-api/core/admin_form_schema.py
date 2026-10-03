@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
-from models.schemas import CRUD_INFRA_BLOCKED, TABLE_MAP
+from core.auth import CRUD_INFRA_BLOCKED
+from models.schemas import TABLE_MAP
 from models.ui_schema import get_form_fields
 
 

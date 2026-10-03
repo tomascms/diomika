@@ -6,12 +6,15 @@ const SITE_ORIGIN = typeof window !== 'undefined' ? window.location.origin : ''
 
 const ROUTE_META = {
   home: {
-    title: 'Diomika — Catálogo',
-    description: 'Explore o catálogo por categoria e peça orçamento.',
+    // Título completo — sem o sufixo « | Diomika» (ver applyMeta).
+    title: 'Diomika — Têxteis para o lar, para revenda',
+    fullTitle: true,
+    description:
+      'Catálogo B2B da Diomika: almofadas, assentos, toalhas de mesa, aventais e mais. Escolha modelos, cores e medidas e peça orçamento online.',
   },
   categories: {
-    title: 'Categorias',
-    description: 'Explore o catálogo Diomika por categoria.',
+    title: 'Catálogo',
+    description: 'Todas as categorias do catálogo Diomika — almofadas, assentos, toalhas, aventais e mais.',
   },
   products: {
     title: 'Catálogo',
@@ -88,8 +91,8 @@ function setCanonical(href) {
   el.setAttribute('href', href)
 }
 
-export function applyPageMeta({ title, description, image, path } = {}) {
-  const fullTitle = title ? `${title} | Diomika` : DEFAULT_TITLE
+export function applyPageMeta({ title, description, image, path, fullTitle: isFull = false } = {}) {
+  const fullTitle = title ? (isFull ? title : `${title} | Diomika`) : DEFAULT_TITLE
   const desc = description || DEFAULT_DESC
   document.title = fullTitle
   setMeta('description', desc)
@@ -100,7 +103,7 @@ export function applyPageMeta({ title, description, image, path } = {}) {
   setMeta('twitter:card', 'summary_large_image')
   setMeta('twitter:title', fullTitle)
   setMeta('twitter:description', desc)
-  const metaImage = image || `${SITE_ORIGIN}/brand/logo.svg`
+  const metaImage = image || `${SITE_ORIGIN}/icon-512.png`
   const img = metaImage.startsWith('http') ? metaImage : `${SITE_ORIGIN}${metaImage.startsWith('/') ? '' : '/'}${metaImage}`
   setOg('og:image', img)
   setMeta('twitter:image', img)
@@ -118,6 +121,7 @@ export function useRouteMeta(router) {
     const base = ROUTE_META[to.name] || {}
     applyPageMeta({
       title: to.meta?.title || base.title,
+      fullTitle: Boolean(base.fullTitle && !to.meta?.title),
       description: to.meta?.description || base.description,
       path: to.fullPath,
     })

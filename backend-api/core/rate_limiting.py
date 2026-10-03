@@ -22,6 +22,10 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Optional
 
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
 logger = logging.getLogger("diomika-api")
 
 
@@ -217,31 +221,35 @@ class RateLimitChecker:
         }
 
 
-class RateLimitingMiddleware:
-    """Middleware that enforces rate limiting per User-Agent."""
+class RateLimitingMiddleware(BaseHTTPMiddleware):
+    """Middleware that enforces rate limiting per User-Agent.
 
-    def __init__(self):
+    O limite é verificado ANTES de chamar a rota (antes corria a rota e só
+    depois decidia), e o IP vem de core.rate_limit.get_client_ip, que só
+    confia em X-Forwarded-For atrás de um proxy de confiança — ler o header
+    directamente deixava qualquer cliente escolher o próprio IP.
+    """
+
+    def __init__(self, app):
+        super().__init__(app)
         self.checker = RateLimitChecker()
         self.cleanup_counter = 0
         self.cleanup_interval = 1000  # Cleanup every N requests
 
-    async def __call__(self, request, call_next):
-        """Rate limit check before forwarding request."""
+    async def dispatch(self, request: Request, call_next):
         from core.bot_defense import is_bot_user_agent
+        from core.rate_limit import get_client_ip
 
-        ip = self._get_client_ip(request)
+        ip = get_client_ip(request)
         user_agent = request.headers.get("user-agent", "unknown")
         endpoint = f"{request.method} {request.url.path}"
 
-        # Determine tier based on User-Agent
         if is_bot_user_agent(user_agent):
             tier = RateLimitTier.AGGRESSIVE_BOT
+        elif user_agent.startswith("DiomikaMonitor/") or user_agent.startswith("Uptime"):
+            tier = RateLimitTier.TRUSTED
         else:
-            # Check for trusted services (internal monitoring, etc)
-            if user_agent.startswith("DiomikaMonitor/") or user_agent.startswith("Uptime"):
-                tier = RateLimitTier.TRUSTED
-            else:
-                tier = RateLimitTier.HUMAN
+            tier = RateLimitTier.HUMAN
 
         client_id = self.checker._make_client_id(ip, user_agent)
         allowed, metadata = self.checker.check_limit(client_id, tier, endpoint)
@@ -251,36 +259,19 @@ class RateLimitingMiddleware:
             self.checker.cleanup_stale_quotas()
             self.cleanup_counter = 0
 
-        # Add rate limit headers to response
-        response = await call_next(request)
+        if not allowed:
+            retry_after = int(metadata.get("blocked_for_seconds", 60))
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Demasiados pedidos. Tente novamente dentro de instantes."},
+                headers={"Retry-After": str(retry_after), "X-RateLimit-Tier": tier.value},
+            )
 
+        response = await call_next(request)
         response.headers["X-RateLimit-Tier"] = tier.value
         response.headers["X-RateLimit-Remaining"] = str(metadata.get("requests_remaining", -1))
         response.headers["X-RateLimit-Reset"] = str(int(metadata.get("window_remaining_seconds", 0)))
-
-        if not allowed:
-            from fastapi import HTTPException
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "Rate limit exceeded",
-                    "tier": tier.value,
-                    "limit": metadata.get("limit"),
-                    "retry_after_seconds": metadata.get("blocked_for_seconds", 60),
-                },
-            )
-
         return response
-
-    @staticmethod
-    def _get_client_ip(request) -> str:
-        """Extract client IP from request (handles proxies)."""
-        # Check X-Forwarded-For header (proxy)
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        # Fallback to direct connection
-        return request.client.host if request.client else "0.0.0.0"
 
 
 # Global instance

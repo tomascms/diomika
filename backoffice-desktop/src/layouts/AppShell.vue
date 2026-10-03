@@ -1,10 +1,12 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterView } from 'vue-router'
 import { useWorkspace } from '@/composables/useWorkspace'
-import { mapApiError, clearSession, readSessionUser, writeSessionUser } from '@/lib/settings'
+import { clearSession, readSessionUser } from '@/lib/settings'
 import { api, clearApiCaches } from '@/lib/api'
 import Sidebar from '@/components/Sidebar.vue'
+
+const HEALTH_RETRY_MS = 15000
 
 const route = useRoute()
 const router = useRouter()
@@ -12,6 +14,8 @@ const { sidebarItems, loadWorkspace, workspace, error, loading } = useWorkspace(
 const currentTable = computed(() => route.params.table || '')
 const sidebarOpen = ref(false)
 const sessionUser = ref(readSessionUser())
+const apiOnline = ref(null)
+const retrying = ref(false)
 
 const pageTitle = computed(() =>
   workspace.value?.sidebar?.[currentTable.value]?.label
@@ -19,9 +23,9 @@ const pageTitle = computed(() =>
     || 'Painel',
 )
 
-const apiOnline = ref(null)
+let healthTimer = null
 
-const checkHealth = async () => {
+async function checkHealth() {
   try {
     await api.health()
     apiOnline.value = true
@@ -30,13 +34,25 @@ const checkHealth = async () => {
   }
 }
 
-const retryAll = async () => {
-  await checkHealth()
-  await loadWorkspace(true).catch(() => {})
-}
+// Sem ligação → volta a tentar sozinho; quando a API regressa, recarrega o
+// menu se ele tinha falhado. O utilizador não tem de reabrir a app.
+watch(apiOnline, (online, wasOnline) => {
+  clearInterval(healthTimer)
+  if (online === false) {
+    healthTimer = setInterval(checkHealth, HEALTH_RETRY_MS)
+  } else if (online && wasOnline === false && !workspace.value) {
+    loadWorkspace(true).catch(() => {})
+  }
+})
 
-const closeSidebar = () => {
-  sidebarOpen.value = false
+async function retryAll() {
+  retrying.value = true
+  try {
+    await checkHealth()
+    await loadWorkspace(true).catch(() => {})
+  } finally {
+    retrying.value = false
+  }
 }
 
 async function logout() {
@@ -47,20 +63,40 @@ async function logout() {
   }
   clearSession()
   sessionUser.value = null
+  workspace.value = null
   await router.replace({ name: 'login' })
+}
+
+function onBrowserOnline() {
+  void checkHealth()
 }
 
 onMounted(() => {
   void checkHealth()
-  loadWorkspace().catch(() => {})
+  if (!workspace.value) loadWorkspace().catch(() => {})
   api.me()
     .then((me) => {
       sessionUser.value = { username: me.username, role: me.role }
-      writeSessionUser(sessionUser.value)
     })
-    .catch(() => {
-      sessionUser.value = readSessionUser()
-    })
+    .catch(() => {})
+  window.addEventListener('online', onBrowserOnline)
+})
+
+onBeforeUnmount(() => {
+  clearInterval(healthTimer)
+  window.removeEventListener('online', onBrowserOnline)
+})
+
+watch(() => route.fullPath, () => {
+  sidebarOpen.value = false
+})
+
+const bannerMessage = computed(() => {
+  if (apiOnline.value === false) {
+    return 'Sem ligação à API. As alterações não são guardadas até a ligação voltar — a app volta a tentar sozinha.'
+  }
+  if (error.value) return `Não foi possível carregar o menu: ${error.value}`
+  return ''
 })
 
 const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route.fullPath))
@@ -68,7 +104,7 @@ const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route
 
 <template>
   <div class="shell" :class="{ 'sidebar-open': sidebarOpen }">
-    <div v-if="sidebarOpen" class="overlay" @click="closeSidebar" />
+    <div v-if="sidebarOpen" class="overlay" @click="sidebarOpen = false" />
 
     <Sidebar
       :items="sidebarItems"
@@ -76,28 +112,37 @@ const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route
       :loading="loading"
       :online="apiOnline"
       :user="sessionUser"
-      @navigate="closeSidebar"
+      @navigate="sidebarOpen = false"
       @logout="logout"
     />
 
     <div class="main">
       <header class="topbar">
-        <button type="button" class="menu-btn btn btn-ghost" aria-label="Menu" @click="sidebarOpen = !sidebarOpen">
-          Menu
+        <button
+          type="button"
+          class="menu-btn btn btn-ghost btn-icon"
+          aria-label="Abrir menu"
+          :aria-expanded="sidebarOpen"
+          @click="sidebarOpen = !sidebarOpen"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
         </button>
-        <div class="topbar-title">
-          <p class="eyebrow">Diomika Backoffice</p>
-          <h1>{{ pageTitle }}</h1>
-        </div>
-        <span class="status-chip" :class="{ online: apiOnline, offline: apiOnline === false }">
-          <span class="dot" />
-          {{ apiOnline ? 'API ligada' : apiOnline === false ? 'API offline' : 'A verificar…' }}
+        <h1 class="page-title">{{ pageTitle }}</h1>
+        <span
+          class="status-chip"
+          :class="{ online: apiOnline, offline: apiOnline === false }"
+          role="status"
+        >
+          <span class="dot" aria-hidden="true" />
+          {{ apiOnline ? 'Ligado' : apiOnline === false ? 'Sem ligação' : 'A ligar…' }}
         </span>
       </header>
 
-      <div v-if="error || apiOnline === false" class="banner error">
-        <p>{{ apiOnline === false ? mapApiError('fetch failed') : mapApiError(error) }}</p>
-        <button type="button" class="btn btn-ghost btn-sm" @click="retryAll">Tentar novamente</button>
+      <div v-if="bannerMessage" class="banner" role="alert">
+        <p>{{ bannerMessage }}</p>
+        <button type="button" class="btn btn-secondary btn-sm" :disabled="retrying" @click="retryAll">
+          {{ retrying ? 'A tentar…' : 'Tentar agora' }}
+        </button>
       </div>
 
       <main class="content">
@@ -114,97 +159,62 @@ const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route
 <style scoped>
 .shell {
   display: grid;
-  grid-template-columns: var(--sidebar-w) 1fr;
-  grid-template-rows: var(--header-height) 1fr;
-  min-height: 100vh;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  height: 100vh;
   background: var(--bg);
-  gap: 0;
 }
 
 .main {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  grid-column: 2;
-  grid-row: 1 / -1;
+  min-height: 0;
 }
 
 .topbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 2rem;
-  padding: 0 2rem;
-  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  height: var(--header-height);
+  padding: 0 28px;
   background: var(--surface);
-  backdrop-filter: blur(12px);
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  box-shadow: var(--shadow-sm);
+  border-bottom: 1px solid var(--border);
+  flex: none;
 }
 
 .menu-btn {
   display: none;
-  padding: 8px 12px;
-  font-size: 14px;
-  border-radius: var(--radius);
 }
 
-.topbar-title {
+.page-title {
   flex: 1;
-}
-
-.topbar-title h1 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
-}
-
-.eyebrow {
-  margin: 0 0 4px 0;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--text-muted);
-  font-weight: 600;
+  min-width: 0;
+  font-size: 18px;
+  font-weight: 650;
+  font-stretch: 108%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: 7px;
+  padding: 4px 10px;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
   border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 560;
   white-space: nowrap;
-  transition: all var(--transition);
 }
 
 .status-chip .dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--text-muted);
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.status-chip.online {
-  color: var(--success);
-  border-color: rgba(16, 185, 129, 0.2);
-  background: var(--success-soft);
 }
 
 .status-chip.online .dot {
@@ -213,41 +223,34 @@ const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route
 
 .status-chip.offline {
   color: var(--danger);
-  border-color: rgba(239, 68, 68, 0.2);
+  border-color: var(--danger);
   background: var(--danger-soft);
 }
 
 .status-chip.offline .dot {
   background: var(--danger);
-  animation: none;
 }
 
-.content {
-  padding: 24px;
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-}
-
-.banner.error {
-  margin: 0 0 16px 0;
-  padding: 12px 16px;
-  background: var(--danger-soft);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: var(--radius);
-  color: var(--danger);
+.banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  flex-wrap: wrap;
+  margin: 16px 28px 0;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 13.5px;
+  font-weight: 500;
 }
 
-.banner.error p {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 500;
+.content {
+  flex: 1;
+  min-height: 0;
+  padding: 24px 28px 40px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .overlay {
@@ -256,11 +259,7 @@ const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route
 
 @media (max-width: 900px) {
   .shell {
-    grid-template-columns: 1fr;
-  }
-
-  .main {
-    grid-column: 1;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .menu-btn {
@@ -268,45 +267,37 @@ const viewKey = computed(() => (route.name === 'workspace' ? 'workspace' : route
   }
 
   .topbar {
-    gap: 1rem;
-    padding: 0 1rem;
+    padding: 0 12px;
   }
 
-  .topbar-title h1 {
-    font-size: 18px;
+  .banner {
+    margin: 12px 12px 0;
   }
 
-  .status-chip {
-    display: none;
+  .content {
+    padding: 16px 12px 32px;
   }
 
   .overlay {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.5);
+    background: rgba(10, 14, 18, 0.45);
     z-index: 90;
-    backdrop-filter: blur(4px);
   }
 
   .shell :deep(.sidebar) {
     position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
+    inset: 0 auto 0 0;
     z-index: 100;
-    transform: translateX(-105%);
-    transition: transform var(--transition) cubic-bezier(0.4, 0, 0.2, 1);
     width: min(280px, 86vw);
+    transform: translateX(-105%);
+    transition: transform 180ms cubic-bezier(0.2, 0, 0, 1);
     box-shadow: var(--shadow-lg);
   }
 
   .shell.sidebar-open :deep(.sidebar) {
     transform: translateX(0);
-  }
-
-  .content {
-    padding: 16px;
   }
 }
 </style>

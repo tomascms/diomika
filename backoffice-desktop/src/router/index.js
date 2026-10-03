@@ -1,14 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import {
-  bootstrapSettings,
-  isAuthenticated,
-  clearSession,
-  readSessionToken,
-  saveSettings,
-  writeSessionUser,
-} from '@/lib/settings'
+import { bootstrapSettings, isAuthenticated } from '@/lib/settings'
 import { loadWorkspace, workspace } from '@/composables/useWorkspace'
-import { api, clearApiCaches } from '@/lib/api'
+import { UNAUTHORIZED_EVENT } from '@/lib/api'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -46,23 +39,34 @@ const router = createRouter({
         },
       ],
     },
+    { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
+
+function loginRoute(to) {
+  const redirect = to?.fullPath && to.fullPath !== '/' ? to.fullPath : undefined
+  return { name: 'login', query: redirect ? { redirect } : {} }
+}
 
 router.beforeEach(async (to) => {
   bootstrapSettings()
 
   if (to.meta.public) return true
+  if (!isAuthenticated()) return loginRoute(to)
 
-  // Auto-login sem verificação
-  if (!isAuthenticated()) {
-    saveSettings({ accessToken: 'dev-mode' })
-    writeSessionUser({ username: 'admin', role: 'admin' })
-  }
+  // O workspace (menu + schema) carrega uma vez; se falhar, o AppShell mostra
+  // o erro com «Tentar novamente» em vez de bloquear a navegação.
+  if (!workspace.value) await loadWorkspace().catch(() => {})
+  return true
+})
 
-  if (!workspace.value) {
-    await loadWorkspace().catch(() => {})
-  }
+// Sessão recusada pela API a meio do trabalho → volta ao login e regressa
+// à mesma página depois de entrar.
+window.addEventListener(UNAUTHORIZED_EVENT, () => {
+  const current = router.currentRoute.value
+  if (current.meta?.public) return
+  workspace.value = null
+  router.replace(loginRoute(current))
 })
 
 export default router

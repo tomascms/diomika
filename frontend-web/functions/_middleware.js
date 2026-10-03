@@ -12,8 +12,18 @@ const BLOCK = [
   /^\/node_modules(?:$|\/)/i,
 ];
 
+// Domínio canónico: diomika.com (sem www) → https://www.diomika.com, mesmo caminho.
+const CANONICAL_HOST = "www.diomika.com";
+const REDIRECT_HOSTS = new Set(["diomika.com"]);
+
 export async function onRequest(context) {
-  const path = new URL(context.request.url).pathname;
+  const url = new URL(context.request.url);
+  if (REDIRECT_HOSTS.has(url.hostname)) {
+    url.hostname = CANONICAL_HOST;
+    url.protocol = "https:";
+    return Response.redirect(url.toString(), 301);
+  }
+  const path = url.pathname;
   if (BLOCK.some((re) => re.test(path))) {
     return new Response("Not Found", {
       status: 404,

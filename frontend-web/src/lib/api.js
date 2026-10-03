@@ -10,10 +10,25 @@ export const API_BASE_URL = base
 
 const DEFAULT_TIMEOUT_MS = 25000
 
+const NETWORK_ERROR_MESSAGE = 'Sem ligação ao servidor. Verifique a internet e tente de novo.'
+
+function newRequestId() {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  }
+}
+
+/**
+ * Cabeçalhos dos POST. Os GET vão sem cabeçalhos próprios de propósito: assim
+ * são «simple requests» de CORS e o browser não manda um OPTIONS antes de cada
+ * URL novo — eram duas idas ao servidor por página em vez de uma.
+ */
 function requestHeaders(json = true) {
   const h = {}
   if (json) h['Content-Type'] = 'application/json'
-  h['X-Request-Id'] = crypto.randomUUID()
+  h['X-Request-Id'] = newRequestId()
   return h
 }
 
@@ -43,8 +58,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_M
     return await fetch(url, { ...options, signal: controller.signal })
   } catch (err) {
     if (err.name === 'AbortError') {
-      throw new Error('O servidor demorou demasiado a responder. Tente novamente.')
+      throw new Error('O servidor demorou demasiado a responder. Tente novamente.', { cause: err })
     }
+    // fetch() rejeita com TypeError («Failed to fetch») quando não há rede.
+    if (err instanceof TypeError) throw new Error(NETWORK_ERROR_MESSAGE, { cause: err })
     throw err
   } finally {
     clearTimeout(timer)
@@ -55,32 +72,33 @@ async function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export async function apiGet(path, { retries = 1 } = {}) {
-  const headers = requestHeaders(false)
-  let lastError = null
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
+const RETRYABLE_STATUS = new Set([502, 503, 504])
+
+/** GET com repetição (backoff) só em falhas transitórias: sem rede ou 502/503/504. */
+export async function apiGet(path, { retries = 2 } = {}) {
+  for (let attempt = 0; ; attempt += 1) {
+    let resp
     try {
-      const resp = await fetchWithTimeout(`${base}${path}`, { headers })
-      const requestId = resp.headers.get('X-Request-Id') || headers['X-Request-Id']
-      if (!resp.ok) {
-        if ([502, 503, 504].includes(resp.status) && attempt < retries) {
-          await sleep(200 * (attempt + 1))
-          continue
-        }
-        const err = await resp.json().catch(() => ({}))
-        throw new Error(parseApiDetail(err, resp.status, requestId))
-      }
-      return resp.json()
+      resp = await fetchWithTimeout(`${base}${path}`)
     } catch (err) {
-      lastError = err
-      if (attempt < retries && !String(err.message || '').includes('HTTP 4')) {
-        await sleep(200 * (attempt + 1))
+      // Um timeout (25 s) não se repete — só falhas rápidas de rede.
+      const timedOut = String(err?.message || '').includes('demorou')
+      if (!timedOut && attempt < retries) {
+        await sleep(300 * 2 ** attempt)
         continue
       }
       throw err
     }
+    if (resp.ok) return resp.json()
+    if (RETRYABLE_STATUS.has(resp.status) && attempt < retries) {
+      await sleep(300 * 2 ** attempt)
+      continue
+    }
+    const body = await resp.json().catch(() => ({}))
+    const error = new Error(parseApiDetail(body, resp.status, resp.headers.get('X-Request-Id') || ''))
+    error.status = resp.status
+    throw error
   }
-  throw lastError || new Error('Pedido falhou.')
 }
 
 export async function apiPost(path, body, options = {}) {
@@ -98,7 +116,7 @@ export async function apiPost(path, body, options = {}) {
     }, timeoutMs)
   } catch (err) {
     if (err.message?.includes('demasiado')) throw err
-    throw new Error('Não foi possível contactar o servidor. Verifique se a API está a correr.')
+    throw new Error(NETWORK_ERROR_MESSAGE, { cause: err })
   }
 
   const requestId = resp.headers.get('X-Request-Id') || headers['X-Request-Id']

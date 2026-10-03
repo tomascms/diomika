@@ -525,20 +525,18 @@ defineExpose({ validate })
 <style scoped>
 .schema-form {
   display: grid;
-  gap: 20px;
+  gap: 18px;
 }
 
 .field {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .field label {
   display: block;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-size: 13px;
+  font-weight: 560;
   color: var(--text-secondary);
 }
 
@@ -546,94 +544,61 @@ defineExpose({ validate })
   color: var(--danger);
 }
 
-.input {
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-family: inherit;
-  font-size: 14px;
-  background: var(--surface);
-  color: var(--text-primary);
-  transition: all var(--transition);
-}
-
-.input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.input:disabled {
-  background: var(--bg-secondary);
-  color: var(--text-muted);
-  cursor: not-allowed;
-}
-
 .field.has-error .input {
   border-color: var(--danger);
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+  box-shadow: 0 0 0 3px var(--danger-soft);
 }
 
 .field-error {
   margin: 0;
-  padding: 6px 8px;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--danger);
-  background: rgba(239, 68, 68, 0.05);
-  border-left: 2px solid var(--danger);
-  border-radius: 2px;
 }
 
 .textarea {
-  resize: vertical;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .checkbox-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  min-height: 36px;
+  padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
   font-weight: 500;
-}
-
-.checkbox-row input[type="checkbox"] {
   cursor: pointer;
 }
 
 .readonly-val {
   margin: 0;
-  padding: 10px 12px;
-  background: var(--bg-secondary);
+  padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  background: var(--surface-secondary);
   color: var(--text-secondary);
-  font-size: 14px;
 }
 
 .dim-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .dim {
-  width: 100px;
+  width: 110px;
 }
 
 .dim-row > span {
-  color: var(--text-secondary);
+  color: var(--text-muted);
   font-weight: 600;
 }
 
 .string-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .sl-row {
@@ -645,11 +610,4 @@ defineExpose({ validate })
 .sl-row .input {
   flex: 1;
 }
-
-.btn-sm {
-  padding: 8px 12px;
-  font-size: 12px;
-}
 </style>
-
-

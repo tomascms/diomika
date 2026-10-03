@@ -289,22 +289,37 @@ class HealthCheckRunner:
 
 
 class HealthCheckMiddleware:
-    """Middleware to track health metrics."""
+    """Middleware ASGI que regista latência e erros por pedido.
+
+    ASGI puro (scope/receive/send): a versão anterior tinha a assinatura de
+    BaseHTTPMiddleware.dispatch em __call__ e rebentava em todos os pedidos.
+    """
 
     def __init__(self, app, health_runner: HealthCheckRunner):
         self.app = app
         self.health_runner = health_runner
 
-    async def __call__(self, request, call_next):
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
         import time
-        start = time.time()
-        response = await call_next(request)
-        elapsed_ms = (time.time() - start) * 1000
 
-        is_error = response.status_code >= 400
-        self.health_runner.record_request(elapsed_ms, is_error)
+        start = time.perf_counter()
+        status_code = 500
 
-        return response
+        async def send_wrapper(message):
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        finally:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            self.health_runner.record_request(elapsed_ms, status_code >= 500)
 
 
 class HealthEndpointHandler:

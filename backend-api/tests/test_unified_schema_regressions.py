@@ -40,10 +40,10 @@ def test_scoped_list_filters_colors_through_parent_model():
     """Na listagem a família ainda tem de ser respeitada — senão a lista de
     cores de uma família mostrava as cores de todas, que agora partilham
     a mesma tabela física."""
-    from routes.admin_crud import _scoped_list
+    from routes.admin_crud import _scoped
 
     q = _FakeQuery()
-    _scoped_list(q, "modelo_toalha_mesa_cores")
+    _scoped(q, "modelo_toalha_mesa_cores", use_join=True)
     assert q.filters == [("product_models.tipo_catalogo", "toalha_mesa")]
 
 

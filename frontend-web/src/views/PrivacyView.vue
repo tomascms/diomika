@@ -45,7 +45,7 @@
         </ul>
         <p>
           Pode pedir o apagamento dos seus dados através do
-          <RouterLink to="/contact">formulário de contacto</RouterLink>
+          <RouterLink to="/contacto">formulário de contacto</RouterLink>
           (assunto: «Apagar os meus dados»). Tratamos o pedido após verificação de identidade.
         </p>
       </section>
@@ -78,7 +78,7 @@
         <h2>Contacto</h2>
         <p>
           Para questões sobre privacidade, use a página
-          <RouterLink to="/contact">Contacte-nos</RouterLink>.
+          <RouterLink to="/contacto">Contacte-nos</RouterLink>.
         </p>
       </section>
     </article>

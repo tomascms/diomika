@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useCategories } from '@/composables/useCategories'
 import { categoryProductsRoute } from '@/lib/catalogRoutes'
-import LoadingState from '@/components/LoadingState.vue'
+import { COMPANY, whatsappUrl } from '@/lib/constants'
 import SoftImage from '@/components/SoftImage.vue'
 
 const { categories, loading, error, load } = useCategories()
@@ -13,346 +13,432 @@ const pretty = (name) => {
   return t ? t.charAt(0).toUpperCase() + t.slice(1) : ''
 }
 
-/** Pré-visualização curta — a lista completa vive em /categorias */
-const previewCats = computed(() => categories.value.slice(0, 2))
+const withImage = computed(() => categories.value.filter((c) => c.imagem))
+/** Até três imagens reais de categorias para o mosaico do topo. */
+const heroTiles = computed(() => withImage.value.slice(0, 3))
+const featured = computed(() => categories.value.slice(0, 6))
 </script>
 
 <template>
   <div class="home">
     <section class="hero">
-      <div class="page-shell hero-inner">
-        <img src="/brand/logo.svg" alt="Diomika" class="hero-logo" width="320" height="57" fetchpriority="high" decoding="async" />
-        <h1>Almofadas e assentos</h1>
-        <p>Catálogo B2B — consulte modelos e peça orçamento online.</p>
-        <div class="hero-actions">
-          <RouterLink to="/categorias" class="btn btn-primary hero-cta">Ver categorias</RouterLink>
-          <RouterLink to="/carrinho" class="btn btn-secondary hero-cta-alt">Pedir orçamento</RouterLink>
+      <div class="hero-inner">
+        <div class="hero-copy">
+          <h1>Têxteis para o lar, prontos para a sua loja.</h1>
+          <p class="hero-lead">
+            Almofadas, assentos, toalhas de mesa, aventais e mais. Escolha modelos, cores e medidas
+            e receba uma proposta comercial à medida.
+          </p>
+          <div class="hero-actions">
+            <RouterLink to="/categorias" class="btn btn-primary">Ver catálogo</RouterLink>
+            <RouterLink to="/contacto" class="btn btn-secondary">Falar connosco</RouterLink>
+          </div>
+          <p class="hero-note">Pedido mínimo de 500&nbsp;€ + IVA · Sem preços públicos: cada proposta é feita para si.</p>
+        </div>
+
+        <div class="hero-visual" aria-hidden="true">
+          <span class="ribbon ribbon--blue" />
+          <span class="ribbon ribbon--red" />
+          <div class="mosaic" :class="`mosaic--${Math.max(heroTiles.length, 1)}`">
+            <template v-if="heroTiles.length">
+              <SoftImage
+                v-for="(cat, i) in heroTiles"
+                :key="cat.id"
+                :src="cat.imagem"
+                alt=""
+                :eager="true"
+                :fetchpriority="i === 0 ? 'high' : undefined"
+                img-class="mosaic-img"
+              />
+            </template>
+            <span v-else class="mosaic-empty" />
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="how-section">
+    <section class="steps-section" aria-labelledby="how-title">
       <div class="page-shell">
-        <h2 class="section-title">Como pedir</h2>
+        <h2 id="how-title" class="section-title">Como pedir um orçamento</h2>
         <ol class="steps">
           <li>
             <span class="step-n">1</span>
-            <div>
-              <strong>Escolha a categoria</strong>
-              <p>Abra o catálogo e seleccione a gama que interessa.</p>
-            </div>
+            <h3>Escolha os modelos</h3>
+            <p>Percorra o catálogo e abra os modelos que lhe interessam.</p>
           </li>
           <li>
             <span class="step-n">2</span>
-            <div>
-              <strong>Configure o modelo</strong>
-              <p>Cor, variante e quantidade — sem preços no site.</p>
-            </div>
+            <h3>Defina cores e quantidades</h3>
+            <p>Para cada modelo, escolha cor, medida e quantidade e junte ao pedido.</p>
           </li>
           <li>
             <span class="step-n">3</span>
-            <div>
-              <strong>Envie o orçamento</strong>
-              <p>Recebe resposta comercial com a proposta.</p>
-            </div>
+            <h3>Envie o pedido</h3>
+            <p>A equipa comercial responde com a proposta para o seu pedido.</p>
           </li>
         </ol>
       </div>
     </section>
 
-    <section class="preview-section">
+    <section class="catalog-section" aria-labelledby="catalog-title">
       <div class="page-shell">
-        <div class="preview-head">
-          <div>
-            <h2 class="section-title">Destaques do catálogo</h2>
-            <p class="section-lead">Uma amostra das categorias — veja a lista completa na página de categorias.</p>
-          </div>
-          <RouterLink to="/categorias" class="btn btn-secondary preview-all">Todas as categorias</RouterLink>
+        <div class="section-head">
+          <h2 id="catalog-title" class="section-title">Catálogo</h2>
+          <RouterLink to="/categorias" class="btn btn-ghost">Ver todas as categorias</RouterLink>
         </div>
 
-        <LoadingState v-if="loading" message="A carregar…" />
-        <p v-else-if="error" class="alert alert-error">
-          {{ error }}
-          <button type="button" class="btn btn-secondary btn-retry" @click="load(true)">
-            Tentar novamente
-          </button>
-        </p>
-
-        <div v-else-if="previewCats.length" class="preview-grid">
-          <RouterLink
-            v-for="cat in previewCats"
-            :key="cat.id"
-            :to="categoryProductsRoute(cat)"
-            class="preview-card"
-          >
-            <div class="preview-media">
-              <SoftImage
-                v-if="cat.imagem"
-                :src="cat.imagem"
-                :alt="pretty(cat.nome)"
-                width="640"
-                height="480"
-              />
-              <span v-else class="preview-ph">{{ pretty(cat.nome).charAt(0) || 'D' }}</span>
-            </div>
-            <div class="preview-body">
-              <h3>{{ pretty(cat.nome) }}</h3>
-              <span>Ver modelos</span>
-            </div>
-          </RouterLink>
+        <div v-if="loading && !categories.length" class="cat-grid" aria-busy="true" aria-label="A carregar categorias">
+          <span v-for="n in 3" :key="n" class="cat-skeleton" />
         </div>
 
-        <div v-else class="empty-state-block surface-card">
-          <p>Sem categorias disponíveis.</p>
-          <button type="button" class="btn btn-secondary" @click="load(true)">Tentar novamente</button>
+        <div v-else-if="error && !categories.length" class="alert alert-error load-error" role="alert">
+          <p>Não foi possível carregar o catálogo.</p>
+          <button type="button" class="btn btn-secondary btn-sm" @click="load(true)">Tentar de novo</button>
         </div>
+
+        <ul v-else-if="featured.length" class="cat-grid">
+          <li v-for="cat in featured" :key="cat.id">
+            <RouterLink :to="categoryProductsRoute(cat)" class="cat-tile">
+              <span class="cat-media">
+                <SoftImage v-if="cat.imagem" :src="cat.imagem" alt="" img-class="cat-img" />
+                <span v-else class="cat-fallback">{{ pretty(cat.nome).charAt(0) }}</span>
+              </span>
+              <span class="cat-name">{{ pretty(cat.nome) }}</span>
+            </RouterLink>
+          </li>
+        </ul>
       </div>
     </section>
 
-    <section class="cta-section">
-      <div class="page-shell cta-inner">
-        <h2>Precisa de ajuda a escolher?</h2>
-        <p>Envie uma mensagem — respondemos com acompanhamento comercial.</p>
-        <RouterLink to="/contact" class="btn btn-hero">Contactar</RouterLink>
+    <section class="contact-band" aria-labelledby="help-title">
+      <div class="contact-inner">
+        <div>
+          <h2 id="help-title">Precisa de ajuda a escolher?</h2>
+          <p>Fale directamente com a equipa comercial — por telefone, WhatsApp ou mensagem.</p>
+        </div>
+        <div class="contact-actions">
+          <a :href="`tel:${COMPANY.phoneTel}`" class="btn btn-hero">{{ COMPANY.phoneDisplay }}</a>
+          <a :href="whatsappUrl('Olá! Gostaria de pedir um orçamento.')" class="btn btn-hero-outline" target="_blank" rel="noopener">WhatsApp</a>
+          <RouterLink to="/contacto" class="btn btn-hero-outline">Enviar mensagem</RouterLink>
+        </div>
       </div>
     </section>
   </div>
 </template>
 
 <style scoped>
+/* ---------- Topo ---------- */
 .hero {
-  position: relative;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse 70% 90% at 85% 10%, rgba(27, 54, 93, 0.18), transparent 55%),
-    linear-gradient(165deg, #f3f6fa 0%, #dfe8f2 48%, #c9d7e8 100%);
-  min-height: min(68vh, 560px);
-  display: flex;
-  align-items: center;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .hero-inner {
-  position: relative;
-  z-index: 1;
-  padding-top: clamp(3rem, 9vw, 5.5rem);
-  padding-bottom: clamp(3rem, 9vw, 5.5rem);
-  text-align: center;
-  max-width: 720px;
-  margin-left: auto;
-  margin-right: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(2rem, 5vw, 4.5rem);
+  max-width: calc(var(--content-max) + 2 * var(--page-pad));
+  margin: 0 auto;
+  padding: clamp(2.5rem, 6vw, 5rem) var(--page-pad);
 }
 
-.hero-logo {
-  width: min(300px, 78vw);
-  height: auto;
-  margin: 0 auto 1.75rem;
+.hero-copy h1 {
+  max-width: 14ch;
+  font-size: clamp(2.25rem, 5vw, 3.75rem);
 }
 
-.hero h1 {
-  margin: 0 0 0.75rem;
-  font-size: clamp(2.1rem, 5vw, 3.1rem);
-  font-weight: 700;
-  color: var(--color-ink-deep);
-}
-
-.hero p {
-  margin: 0 auto 1.75rem;
-  max-width: 28rem;
-  font-size: 1.1rem;
-  color: var(--color-muted);
+.hero-lead {
+  max-width: 48ch;
+  margin: 1.25rem 0 0;
+  color: var(--color-ink-soft);
+  font-size: 1.125rem;
 }
 
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.65rem;
+  gap: 0.75rem;
+  margin-top: 2rem;
 }
 
-.hero-cta,
-.hero-cta-alt {
-  padding: 0.85rem 1.5rem;
-}
-
-.how-section {
-  background: #fff;
-  padding: 0.5rem 0;
-}
-
-.section-title {
-  text-align: left;
-  margin: 0 0 0.5rem;
-  font-size: clamp(1.45rem, 2.5vw, 1.85rem);
-  color: var(--color-ink-deep);
-}
-
-.section-lead {
-  margin: 0;
-  color: var(--color-muted);
-  font-size: 1.02rem;
-  max-width: 36rem;
-}
-
-.steps {
-  list-style: none;
+.hero-note {
   margin: 1.5rem 0 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.1rem;
-}
-
-.steps li {
-  display: flex;
-  gap: 0.85rem;
-  padding: 1.2rem 1.15rem;
-  background: var(--color-bg);
-  border-radius: 12px;
-  border: 1px solid var(--color-border);
-}
-
-.step-n {
-  flex-shrink: 0;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 999px;
-  background: var(--color-ink-deep);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
+  color: var(--color-muted);
   font-size: 0.9rem;
 }
 
-.steps strong {
+/* A faixa em ângulo do símbolo (D azul, M vermelho) a enquadrar o mosaico. */
+.hero-visual {
+  position: relative;
+  min-height: 360px;
+}
+
+.ribbon {
+  position: absolute;
   display: block;
-  margin-bottom: 0.25rem;
-  color: var(--color-ink-deep);
+  transform: skewY(-24deg);
+  transform-origin: left;
+}
+
+.ribbon--blue {
+  inset: 12% 20% auto -8%;
+  height: 78%;
+  background: var(--brand-blue);
+}
+
+.ribbon--red {
+  top: 6%;
+  right: -6%;
+  width: 22%;
+  height: 54%;
+  background: var(--brand-red);
+}
+
+.mosaic {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  height: 100%;
+  min-height: 360px;
+  margin: 8% 0 0 8%;
+  overflow: hidden;
+  background: var(--color-bg-soft);
+  clip-path: polygon(0 18%, 100% 0, 100% 100%, 0 100%);
+}
+
+.mosaic--2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.mosaic--3 {
+  grid-template-columns: 1.4fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.mosaic--3 > :first-child {
+  grid-row: 1 / 3;
+}
+
+.mosaic :deep(.soft-image),
+.mosaic :deep(.soft-image__img) {
+  width: 100%;
+  height: 100%;
+}
+
+.mosaic :deep(.soft-image__img) {
+  object-fit: cover;
+}
+
+/* ---------- Passos ---------- */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps li {
+  padding-top: 1.25rem;
+  border-top: 2px solid var(--color-ink-deep);
+}
+
+.step-n {
+  display: block;
+  margin-bottom: 0.75rem;
+  color: var(--color-accent);
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.steps h3 {
+  margin-bottom: 0.35rem;
 }
 
 .steps p {
   margin: 0;
+  max-width: 34ch;
   color: var(--color-muted);
-  font-size: 0.92rem;
-  line-height: 1.45;
 }
 
-.preview-section {
-  background: var(--color-bg);
-  padding: 0.5rem 0 1rem;
+/* ---------- Catálogo ---------- */
+.catalog-section .page-shell {
+  padding-top: 0;
 }
 
-.preview-head {
+.section-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
-.preview-all {
-  flex-shrink: 0;
+.section-head .section-title {
+  margin: 0;
 }
 
-.preview-grid {
+.cat-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
   gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.preview-card {
-  text-decoration: none;
-  color: inherit;
+.cat-tile {
   display: grid;
-  grid-template-columns: 1.1fr 1fr;
-  background: #fff;
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  overflow: hidden;
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-  min-height: 180px;
+  gap: 0.75rem;
+  color: inherit;
 }
 
-.preview-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-md);
-}
-
-.preview-media {
-  background: linear-gradient(145deg, #1b365d, #0b1f3a);
-  min-height: 180px;
+.cat-media {
   position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-soft);
 }
 
-.preview-media :deep(.soft-image),
-.preview-media :deep(.soft-image__img) {
+.cat-media :deep(.soft-image),
+.cat-media :deep(.soft-image__img) {
   width: 100%;
   height: 100%;
-  min-height: 180px;
 }
 
-.preview-media :deep(.soft-image__img) {
+.cat-media :deep(.soft-image__img) {
   object-fit: cover;
+  transition: transform 0.5s cubic-bezier(0.2, 0, 0, 1);
 }
 
-.preview-ph {
-  width: 100%;
-  height: 100%;
+.cat-tile:hover :deep(.soft-image__img) {
+  transform: scale(1.03);
+}
+
+.cat-fallback {
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
-  font-size: 2.5rem;
+  color: var(--color-border-strong);
+  font-size: 3.5rem;
   font-weight: 700;
-  color: #fff;
+  font-stretch: 125%;
 }
 
-.preview-body {
-  padding: 1.35rem 1.25rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 0.45rem;
-}
-
-.preview-body h3 {
-  margin: 0;
-  font-size: 1.35rem;
+.cat-name {
   color: var(--color-ink-deep);
+  font-size: 1.1rem;
+  font-weight: 660;
+  font-stretch: 112%;
 }
 
-.preview-body span {
-  font-weight: 600;
-  color: var(--color-ink-soft);
-  font-size: 0.92rem;
+.cat-tile:hover .cat-name {
+  color: var(--color-accent);
 }
 
-.cta-section {
-  background: linear-gradient(155deg, #0b1f3a 0%, #13294b 100%);
+.cat-skeleton {
+  display: block;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(90deg, var(--color-bg-soft), var(--color-bg), var(--color-bg-soft));
+  background-size: 200% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.load-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.load-error p {
+  margin: 0;
+}
+
+/* ---------- Contacto ---------- */
+.contact-band {
+  background: var(--brand-blue-deep);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.contact-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem 3rem;
+  max-width: calc(var(--content-max) + 2 * var(--page-pad));
+  margin: 0 auto;
+  padding: 3rem var(--page-pad);
+}
+
+.contact-inner h2 {
   color: #fff;
 }
 
-.cta-inner {
-  text-align: center;
-  padding-top: 3rem;
-  padding-bottom: 3rem;
+.contact-inner p {
+  margin: 0.5rem 0 0;
 }
 
-.cta-inner h2 {
-  margin: 0 0 0.55rem;
-  color: #fff;
-  font-size: clamp(1.5rem, 3vw, 2rem);
+.contact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 
-.cta-inner p {
-  margin: 0 auto 1.35rem;
-  max-width: 28rem;
-  opacity: 0.92;
-}
-
+/* ---------- Responsivo ---------- */
 @media (max-width: 900px) {
-  .steps { grid-template-columns: 1fr; }
-  .preview-grid { grid-template-columns: 1fr; }
-  .preview-card { grid-template-columns: 1fr; }
-  .preview-media { min-height: 160px; aspect-ratio: 16 / 9; }
+  .hero-inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hero-visual {
+    min-height: 240px;
+  }
+
+  .mosaic {
+    min-height: 240px;
+    margin: 4% 0 0 6%;
+  }
+
+  .steps {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .hero-visual,
+  .mosaic {
+    min-height: 200px;
+  }
+
+  .hero-actions .btn {
+    flex: 1 1 auto;
+  }
+
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .section-head .btn {
+    padding-left: 0;
+  }
 }
 </style>

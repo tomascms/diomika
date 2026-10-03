@@ -12,7 +12,7 @@ export function injectOrganizationJsonLd() {
     '@type': 'Organization',
     name: 'Diomika',
     url: SITE,
-    logo: `${SITE}/brand/logo.svg`,
+    logo: `${SITE}/icon-512.png`,
   })
   document.head.appendChild(script)
 }

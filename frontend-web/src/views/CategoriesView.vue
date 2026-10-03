@@ -3,7 +3,6 @@ import { RouterLink } from 'vue-router'
 import { useCategories } from '@/composables/useCategories'
 import { categoryProductsRoute } from '@/lib/catalogRoutes'
 import Breadcrumbs from '@/components/Breadcrumbs.vue'
-import LoadingState from '@/components/LoadingState.vue'
 import SoftImage from '@/components/SoftImage.vue'
 
 const { categories, loading, error, load } = useCategories()
@@ -15,67 +14,220 @@ const pretty = (name) => {
 
 const breadcrumbItems = [
   { label: 'Início', to: { name: 'home' } },
-  { label: 'Categorias' },
+  { label: 'Catálogo' },
 ]
 </script>
 
 <template>
-  <div class="min-h-screen bg-white">
+  <div class="categories-page">
     <Breadcrumbs :items="breadcrumbItems" />
 
-    <!-- Hero Section -->
-    <header class="bg-gradient-to-r from-slate-900 to-slate-800 text-white py-16 px-4">
-      <div class="max-w-6xl mx-auto">
-        <h1 class="text-4xl md:text-5xl font-bold mb-3">Categorias</h1>
-        <p class="text-lg text-slate-300 max-w-2xl">Escolha uma categoria para ver os modelos e pedir orçamento.</p>
+    <header class="page-head">
+      <div class="page-head-inner">
+        <h1 class="page-title">Catálogo</h1>
+        <p class="page-lead">
+          Escolha uma categoria para ver os modelos, cores e medidas disponíveis e montar o seu pedido de orçamento.
+        </p>
       </div>
     </header>
 
-    <!-- Content -->
-    <div class="max-w-6xl mx-auto px-4 py-12">
-      <LoadingState v-if="loading" message="A carregar categorias…" />
+    <div class="page-shell page-shell--grid">
 
-      <div v-else-if="error" class="alert alert-error rounded-lg p-4 mb-6">
-        <p class="text-red-700 mb-3">{{ error }}</p>
-        <button type="button" class="btn btn-sm" @click="load(true)">Tentar novamente</button>
+      <div v-if="loading && !categories.length" class="grid" aria-busy="true" aria-label="A carregar categorias">
+        <div v-for="n in 6" :key="n" class="tile tile--skeleton">
+          <span class="tile-media" />
+          <span class="tile-body"><span class="sk sk-title" /><span class="sk sk-sub" /></span>
+        </div>
       </div>
 
-      <!-- Grid de Categorias -->
-      <div v-else-if="categories.length" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <RouterLink
-          v-for="cat in categories"
-          :key="cat.id"
-          :to="categoryProductsRoute(cat)"
-          class="group card bg-base-100 shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden h-full"
-        >
-          <!-- Imagem -->
-          <div class="w-full h-48 bg-gradient-to-br from-blue-900 to-slate-900 overflow-hidden flex items-center justify-center">
-            <SoftImage
-              v-if="cat.imagem"
-              :src="cat.imagem"
-              :alt="pretty(cat.nome)"
-              img-class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
-            <span v-else class="text-5xl font-bold text-white opacity-80">{{ pretty(cat.nome).charAt(0) || 'D' }}</span>
-          </div>
-
-          <!-- Corpo -->
-          <div class="card-body p-5 flex flex-col justify-between flex-1">
-            <h2 class="card-title text-lg font-semibold text-slate-900 truncate">{{ pretty(cat.nome) }}</h2>
-            <div class="text-sm text-blue-600 font-medium group-hover:text-blue-700">Ver modelos →</div>
-          </div>
-        </RouterLink>
+      <div v-else-if="error && !categories.length" class="alert alert-error state" role="alert">
+        <p>Não foi possível carregar o catálogo. Verifique a ligação e tente de novo.</p>
+        <button type="button" class="btn btn-secondary btn-sm" @click="load(true)">Tentar de novo</button>
       </div>
 
-      <!-- Vazio -->
-      <div v-else class="card bg-base-100 shadow-sm p-12 text-center">
-        <p class="text-slate-600 mb-4 text-lg">Sem categorias disponíveis.</p>
-        <button type="button" class="btn btn-primary" @click="load(true)">Tentar novamente</button>
+      <ul v-else-if="categories.length" class="grid">
+        <li v-for="(cat, i) in categories" :key="cat.id">
+          <RouterLink :to="categoryProductsRoute(cat)" class="tile">
+            <span class="tile-media">
+              <SoftImage
+                v-if="cat.imagem"
+                :src="cat.imagem"
+                :alt="''"
+                :eager="i < 3"
+                img-class="tile-img"
+              />
+              <span v-else class="tile-fallback" aria-hidden="true">{{ pretty(cat.nome).charAt(0) }}</span>
+            </span>
+            <span class="tile-body">
+              <span class="tile-name">{{ pretty(cat.nome) }}</span>
+              <span class="tile-cta">Ver modelos</span>
+            </span>
+          </RouterLink>
+        </li>
+      </ul>
+
+      <div v-else class="state empty">
+        <p>O catálogo está a ser actualizado. Entretanto, fale connosco para um orçamento.</p>
+        <RouterLink to="/contacto" class="btn btn-primary">Contactar a Diomika</RouterLink>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* Estilos usando Tailwind CSS acima no template */
+.page-head {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.page-head-inner {
+  max-width: calc(var(--content-max) + 2 * var(--page-pad));
+  margin: 0 auto;
+  padding: 2rem var(--page-pad) 2.25rem;
+}
+
+.page-head .page-lead {
+  margin-bottom: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: inherit;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.tile:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-md);
+  color: inherit;
+}
+
+.tile-media {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--color-bg-soft);
+}
+
+.tile-media :deep(.soft-image),
+.tile-media :deep(.soft-image__img) {
+  width: 100%;
+  height: 100%;
+}
+
+.tile-media :deep(.soft-image__img) {
+  object-fit: cover;
+  transition: transform 0.5s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.tile:hover .tile-media :deep(.soft-image__img) {
+  transform: scale(1.03);
+}
+
+.tile-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--color-border-strong);
+  font-size: 4rem;
+  font-weight: 700;
+  font-stretch: 125%;
+}
+
+.tile-body {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.15rem 1.1rem;
+}
+
+.tile-name {
+  color: var(--color-ink-deep);
+  font-size: 1.15rem;
+  font-weight: 680;
+  font-stretch: 112%;
+}
+
+.tile-cta {
+  flex: none;
+  color: var(--color-accent);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.tile:hover .tile-cta {
+  color: var(--color-accent-hover);
+}
+
+.tile--skeleton {
+  pointer-events: none;
+}
+
+.tile--skeleton .tile-media,
+.sk {
+  background: linear-gradient(90deg, var(--color-bg-soft), var(--color-bg), var(--color-bg-soft));
+  background-size: 200% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+
+.sk {
+  display: block;
+  height: 12px;
+  border-radius: var(--radius-sm);
+}
+
+.sk-title {
+  width: 45%;
+}
+
+.sk-sub {
+  width: 22%;
+}
+
+.tile--skeleton .tile-body {
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.state p {
+  margin: 0;
+}
+
+.empty {
+  padding: 2rem;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--color-muted);
+}
 </style>

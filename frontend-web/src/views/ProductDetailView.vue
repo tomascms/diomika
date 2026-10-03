@@ -326,7 +326,7 @@ watch(() => route.fullPath, fetchProduct)
 
         <p class="help-line">
           Dúvidas sobre este modelo?
-          <RouterLink to="/contact">Contacte-nos</RouterLink>
+          <RouterLink to="/contacto">Fale connosco</RouterLink>
         </p>
       </section>
     </article>
@@ -337,7 +337,7 @@ watch(() => route.fullPath, fetchProduct)
 <style scoped>
 .product-detail {
   padding-bottom: 3.5rem;
-  background: #fff;
+  background: var(--color-surface);
 }
 
 .detail-layout {
@@ -350,7 +350,7 @@ watch(() => route.fullPath, fetchProduct)
 
 .gallery {
   position: sticky;
-  top: calc(var(--header-h) + var(--breadcrumb-h) + 0.75rem);
+  top: calc(var(--header-h) + 1rem);
 }
 
 .main-image-wrap {
@@ -359,9 +359,9 @@ watch(() => route.fullPath, fetchProduct)
   padding: 0;
   cursor: zoom-in;
   border: none;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  background: transparent;
+  background: var(--color-bg-soft);
   aspect-ratio: 1;
   appearance: none;
   position: relative;
@@ -374,7 +374,7 @@ watch(() => route.fullPath, fetchProduct)
   z-index: 2;
   padding: 0.35rem 0.65rem;
   border-radius: 999px;
-  background: rgba(12, 18, 28, 0.72);
+  background: rgba(22, 29, 33, 0.72);
   color: #fff;
   font-size: 0.72rem;
   font-weight: 650;
@@ -418,7 +418,7 @@ watch(() => route.fullPath, fetchProduct)
 .color-thumb-btn {
   padding: 0;
   border: 2px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   width: 68px;
   height: 68px;
@@ -433,7 +433,7 @@ watch(() => route.fullPath, fetchProduct)
 }
 
 .color-thumb-btn.active {
-  border-color: var(--color-ink-deep);
+  border-color: var(--color-accent);
 }
 
 .color-thumb-btn :deep(.soft-image),
@@ -460,17 +460,13 @@ watch(() => route.fullPath, fetchProduct)
 }
 
 .cat-link {
-  font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-ink-soft);
-  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-accent);
 }
 
 .cat-link:hover {
-  color: var(--color-ink-deep);
-  text-decoration: underline;
+  color: var(--color-accent-hover);
 }
 
 .product-header h1 {
@@ -489,18 +485,16 @@ watch(() => route.fullPath, fetchProduct)
 .block-title,
 .buy-title {
   margin: 0 0 0.75rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-muted);
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--color-ink-deep);
 }
 
 .buy-box {
   padding: 1.4rem 1.45rem;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #f4f7fb 0%, #eef2f6 100%);
-  border: 1px solid #d5e0ec;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
 }
 
 .buy-note {
@@ -530,7 +524,7 @@ watch(() => route.fullPath, fetchProduct)
 .ref-box {
   margin-top: 1.15rem;
   padding-top: 1rem;
-  border-top: 1px solid #d5e0ec;
+  border-top: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -566,6 +560,11 @@ watch(() => route.fullPath, fetchProduct)
 
   .gallery {
     position: static;
+  }
+
+  .main-image-wrap {
+    aspect-ratio: 4 / 3;
+    max-width: 640px;
   }
 }
 </style>

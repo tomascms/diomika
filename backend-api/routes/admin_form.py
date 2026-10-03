@@ -15,7 +15,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from core.admin_form_schema import build_form_schema
 from core.auth import assert_table_action, require_admin
 from core.local_only import admin_must_be_local
-<<<<<<< HEAD
 from models.catalog_registry import tipo_for_table, product_table_for_tipo, colors_table_for_tipo
 from routes.admin_crud import _db_table, _scoped, relation_options
 from models.catalog_registry import list_select_query

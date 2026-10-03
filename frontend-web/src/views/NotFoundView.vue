@@ -6,7 +6,7 @@
       <p>O endereço que procurou não existe ou foi movido.</p>
       <div class="actions">
         <RouterLink to="/" class="btn btn-primary">Voltar ao início</RouterLink>
-        <RouterLink to="/contact" class="btn btn-secondary">Contacto</RouterLink>
+        <RouterLink to="/contacto" class="btn btn-secondary">Contacto</RouterLink>
       </div>
     </div>
   </div>

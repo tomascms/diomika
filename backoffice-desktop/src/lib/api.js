@@ -1,11 +1,17 @@
-import { loadSettings, clearSession } from './settings'
+import { loadSettings, clearSession, mapApiError } from './settings'
 
 const TIMEOUT_MS = 30000
 const WRITE_TIMEOUT_MS = 90000
 const CATEGORIES_TTL_MS = 5 * 60 * 1000
 const AUTH_STATUS_TTL_MS = 5 * 60 * 1000
 const ME_TTL_MS = 10 * 60 * 1000
-const GENERAL_CACHE_TTL = 10 * 1000 // 10s for list/detail responses
+// Leituras (GET) repetem em falhas transitórias de rede / túnel; escritas nunca
+// repetem sozinhas — um POST que chegou ao servidor não pode ser duplicado.
+const READ_RETRY_DELAYS_MS = [400, 1200]
+const RETRYABLE_STATUS = new Set([502, 503, 504])
+
+/** Disparado quando a API recusa a sessão — o router leva para o login. */
+export const UNAUTHORIZED_EVENT = 'diomika:unauthorized'
 
 // Request deduplication — previne múltiplos requests ao mesmo endpoint
 const pendingRequests = new Map()
@@ -13,11 +19,19 @@ const pendingRequests = new Map()
 const caches = {
   schema: new Map(),
   relation: new Map(),
-  list: new Map(), // Cache para list responses
-  detail: new Map(), // Cache para detail responses
   categories: { value: null, at: 0 },
   authStatus: { value: null, at: 0 },
   me: { value: null, at: 0 },
+}
+
+/** Erro da API com status HTTP; a mensagem já vem pronta para mostrar ao utilizador. */
+export class ApiError extends Error {
+  constructor(message, status = 0) {
+    super(mapApiError({ message, status }))
+    this.name = 'ApiError'
+    this.status = status
+    this.rawMessage = message
+  }
 }
 
 export function clearApiCaches() {
@@ -68,83 +82,122 @@ function parseDetail(body, status) {
   return `Erro HTTP ${status}`
 }
 
-async function request(method, path, { body, params, headers: extraHeaders, noCache } = {}) {
-  let url = `${baseUrl()}${path}`
-  if (params) url += `?${new URLSearchParams(params)}`
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-  // Request deduplication: se já há um request em andamento para o mesmo URL, retorna a mesma promise
-  const cacheKey = `${method}:${url}`
-  if (method === 'GET' && pendingRequests.has(cacheKey)) {
-    return pendingRequests.get(cacheKey)
-  }
+function handleUnauthorized(path) {
+  // O próprio login devolve 401 em credenciais erradas — isso não é sessão expirada.
+  if (path.startsWith('/admin/auth/login') || path.startsWith('/admin/auth/mfa')) return
+  clearApiCaches()
+  clearSession()
+  window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
+}
 
+async function fetchOnce(method, url, path, { body, headers: extraHeaders }) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutFor(method))
-
-  const promise = (async () => {
+  try {
+    let resp
     try {
-      const resp = await fetch(url, {
+      resp = await fetch(url, {
         method,
         headers: { ...headers(body !== undefined), ...(extraHeaders || {}) },
         body: body !== undefined ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       })
-      if (!resp.ok) {
-        if (resp.status === 401) {
-          clearApiCaches()
-          clearSession()
-        }
-        const err = await resp.json().catch(() => ({}))
-        throw new Error(parseDetail(err, resp.status))
-      }
-      const text = await resp.text()
-      const data = text ? JSON.parse(text) : {}
+    } catch (err) {
+      if (err?.name === 'AbortError') throw new ApiError('Timeout ao contactar a API.', 0)
+      throw new ApiError('Sem ligação à API (failed to fetch).', 0)
+    }
+    if (!resp.ok) {
+      if (resp.status === 401) handleUnauthorized(path)
+      const err = await resp.json().catch(() => ({}))
+      throw new ApiError(parseDetail(err, resp.status), resp.status)
+    }
+    const text = await resp.text()
+    return text ? JSON.parse(text) : {}
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
-      // Cache GET responses
-      if (method === 'GET' && !noCache) {
-        if (path.includes('/list') || path.includes('/records')) {
-          caches.list.set(cacheKey, { value: data, at: Date.now() })
-        } else if (path.match(/\/\w+\/[\w-]+$/)) {
-          caches.detail.set(cacheKey, { value: data, at: Date.now() })
+async function request(method, path, { body, params, headers: extraHeaders } = {}) {
+  let url = `${baseUrl()}${path}`
+  if (params) url += `?${new URLSearchParams(params)}`
+
+  // Deduplicação: o mesmo GET em curso devolve a mesma promise.
+  const dedupeKey = `${method}:${url}`
+  if (method === 'GET' && pendingRequests.has(dedupeKey)) {
+    return pendingRequests.get(dedupeKey)
+  }
+
+  const promise = (async () => {
+    try {
+      if (method !== 'GET') return await fetchOnce(method, url, path, { body, headers: extraHeaders })
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          return await fetchOnce(method, url, path, { body, headers: extraHeaders })
+        } catch (err) {
+          const transient = err.status === 0 || RETRYABLE_STATUS.has(err.status)
+          if (!transient || attempt >= READ_RETRY_DELAYS_MS.length) throw err
+          await sleep(READ_RETRY_DELAYS_MS[attempt])
         }
       }
-
-      return data
     } finally {
-      clearTimeout(timer)
-      pendingRequests.delete(cacheKey)
+      pendingRequests.delete(dedupeKey)
     }
   })()
 
-  if (method === 'GET') {
-    pendingRequests.set(cacheKey, promise)
-  }
-
+  if (method === 'GET') pendingRequests.set(dedupeKey, promise)
   return promise
 }
 
 async function downloadBlob(path) {
-  const resp = await fetch(`${baseUrl()}${path}`, { headers: headers(false) })
-  if (!resp.ok) throw new Error(`Erro ao descarregar (${resp.status})`)
+  let resp
+  try {
+    resp = await fetch(`${baseUrl()}${path}`, { headers: headers(false) })
+  } catch {
+    throw new ApiError('Sem ligação à API (failed to fetch).', 0)
+  }
+  if (resp.status === 401) handleUnauthorized(path)
+  if (!resp.ok) throw new ApiError(`Erro ao descarregar (${resp.status})`, resp.status)
   return resp.blob()
 }
 
-async function uploadFile(table, field, file) {
-  const url = `${baseUrl()}/admin/crud/upload-image?table=${encodeURIComponent(table)}&field=${encodeURIComponent(field)}`
+/** POST multipart (upload de imagem / import CSV) com timeout e erros normalizados. */
+async function postForm(path, file) {
   const fd = new FormData()
   fd.append('file', file)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutFor('POST'))
   try {
-    const resp = await fetch(url, { method: 'POST', headers: headers(false), body: fd, signal: controller.signal })
+    let resp
+    try {
+      resp = await fetch(`${baseUrl()}${path}`, {
+        method: 'POST',
+        headers: headers(false),
+        body: fd,
+        signal: controller.signal,
+      })
+    } catch (err) {
+      if (err?.name === 'AbortError') throw new ApiError('Timeout ao enviar o ficheiro.', 0)
+      throw new ApiError('Sem ligação à API (failed to fetch).', 0)
+    }
     if (!resp.ok) {
+      if (resp.status === 401) handleUnauthorized(path)
       const err = await resp.json().catch(() => ({}))
-      throw new Error(parseDetail(err, resp.status))
+      throw new ApiError(parseDetail(err, resp.status), resp.status)
     }
     return resp.json()
   } finally {
     clearTimeout(timer)
   }
+}
+
+function uploadFile(table, field, file) {
+  return postForm(
+    `/admin/crud/upload-image?table=${encodeURIComponent(table)}&field=${encodeURIComponent(field)}`,
+    file,
+  )
 }
 
 function normalizeMergedPage(data) {
@@ -305,28 +358,8 @@ export const api = {
   orderPdf: (id) => downloadBlob(`/encomendas-internas/${id}/pdf`),
   orcamentoPdf: (id) => downloadBlob(`/orcamentos/${id}/pdf`),
   exportCsv: (table) => downloadBlob(`/admin/export/${table}`),
-  importCsv: async (table, file, dryRun = false) => {
-    const url = `${baseUrl()}/admin/import/${table}?dry_run=${dryRun}`
-    const fd = new FormData()
-    fd.append('file', file)
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutFor('POST'))
-    try {
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: headers(false),
-        body: fd,
-        signal: controller.signal,
-      })
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}))
-        throw new Error(parseDetail(err, resp.status))
-      }
-      return resp.json()
-    } finally {
-      clearTimeout(timer)
-    }
-  },
+  importCsv: (table, file, dryRun = false) =>
+    postForm(`/admin/import/${encodeURIComponent(table)}?dry_run=${dryRun}`, file),
   listContact: async () => {
     const data = await request('GET', '/contacto', { params: { limit: '200', offset: '0' } })
     return Array.isArray(data) ? data : data?.items || []

@@ -1,6 +1,6 @@
 {
   "name": "backoffice-desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Diomika Backoffice — app de secretária (Windows / macOS / Linux)",
   "author": "Diomika",
@@ -36,10 +36,13 @@
       "main": "electron/main.cjs"
     },
     "win": {
-      "target": ["zip"],
+      "target": [
+        "zip"
+      ],
       "signAndEditExecutable": false,
       "requestedExecutionLevel": "asInvoker",
-      "artifactName": "Diomika-Backoffice-${version}-windows.zip"
+      "artifactName": "Diomika-Backoffice-${version}-windows.zip",
+      "icon": "electron/icon.ico"
     },
     "nsis": {
       "packElevateHelper": false,
@@ -51,20 +54,27 @@
       "artifactName": "Diomika-Backoffice-${version}-windows.exe"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "category": "public.app-category.business",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "identity": "-",
-      "artifactName": "Diomika-Backoffice-${version}-mac.dmg"
+      "artifactName": "Diomika-Backoffice-${version}-mac.dmg",
+      "icon": "electron/icon.png"
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "category": "Office",
-      "artifactName": "Diomika-Backoffice-${version}-linux.AppImage"
+      "artifactName": "Diomika-Backoffice-${version}-linux.AppImage",
+      "icon": "electron/icon.png"
     }
   },
   "dependencies": {
+    "@fontsource-variable/archivo": "^5.3.0",
     "vue": "^3.5.32",
     "vue-router": "^5.0.4"
   },

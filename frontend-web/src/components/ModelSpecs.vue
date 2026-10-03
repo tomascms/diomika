@@ -60,12 +60,9 @@ const rows = computed(() =>
 
 .specs-title {
   margin: 0 0 0.85rem;
-  font-family: var(--font-body);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-muted);
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--color-ink-deep);
 }
 
 .specs-grid {

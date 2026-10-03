@@ -73,10 +73,11 @@ onMounted(load)
   <div class="contact-layout">
     <div class="list-pane">
       <h2>Mensagens de contacto</h2>
-      <p class="hint">Acompanhamento de conversas por email — responde no teu cliente de email.</p>
+      <p class="hint">As respostas são enviadas a partir do seu programa de email.</p>
       <p v-if="message" class="ok">{{ message }}</p>
       <p v-if="error" class="err">{{ error }}</p>
       <DataList
+        :active-id="selected?.id"
         variant="conversation"
         :rows="rows"
         :columns="columns"

@@ -90,12 +90,12 @@ onUnmounted(() => {
 
 <template>
   <div class="app-container">
-    <a href="#main-content" class="skip-link">Saltar para conteúdo</a>
+    <a href="#main-content" class="skip-link">Saltar para o conteúdo</a>
 
     <header class="app-header">
-      <div class="page-shell header-inner">
-        <RouterLink to="/" class="logo-link" @click="closeMenu">
-          <img src="/brand/logo.svg" alt="Diomika" class="brand-logo" width="200" height="36" fetchpriority="high" decoding="async" />
+      <div class="header-inner">
+        <RouterLink to="/" class="logo-link" aria-label="Diomika — página inicial" @click="closeMenu">
+          <img src="/brand/logo.svg" alt="Diomika" class="brand-logo" width="188" height="34" fetchpriority="high" decoding="async" />
         </RouterLink>
 
         <button
@@ -103,29 +103,31 @@ onUnmounted(() => {
           class="menu-btn"
           :aria-label="isMenuOpen ? 'Fechar menu' : 'Abrir menu'"
           :aria-expanded="isMenuOpen"
+          aria-controls="main-nav"
           @click="isMenuOpen = !isMenuOpen"
         >
-          {{ isMenuOpen ? 'Fechar' : 'Menu' }}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path v-if="isMenuOpen" d="M6 6l12 12M18 6 6 18" />
+            <path v-else d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
         </button>
 
-        <nav class="main-nav" :class="{ open: isMenuOpen }" aria-label="Principal">
+        <nav id="main-nav" class="main-nav" :class="{ open: isMenuOpen }" aria-label="Principal">
           <RouterLink
             to="/categorias"
             @click="closeMenu"
             @pointerenter="prefetchRoute('categories')"
-          >Categorias</RouterLink>
+          >Catálogo</RouterLink>
           <RouterLink to="/pesquisa" @click="closeMenu">Pesquisar</RouterLink>
           <RouterLink to="/sobre" @click="closeMenu">Sobre nós</RouterLink>
+          <RouterLink to="/contacto" @click="closeMenu">Contacto</RouterLink>
           <RouterLink
             to="/carrinho"
-            class="nav-cart"
+            class="nav-quote"
             @click="refreshCartCount(); closeMenu()"
           >
-            Carrinho
-            <span v-if="cartCount > 0" class="cart-badge">{{ cartCount }}</span>
-          </RouterLink>
-          <RouterLink to="/contact" class="btn nav-cta" @click="closeMenu">
-            Contacto
+            Pedido de orçamento
+            <span v-if="cartCount > 0" class="cart-badge" :aria-label="`${cartCount} artigos no pedido`">{{ cartCount }}</span>
           </RouterLink>
         </nav>
       </div>
@@ -142,36 +144,20 @@ onUnmounted(() => {
     </main>
 
     <footer class="app-footer">
-      <div class="page-shell footer-grid">
+      <div class="footer-grid">
         <div class="footer-brand">
-          <img src="/brand/logo.svg" alt="Diomika" width="170" height="30" />
+          <img src="/brand/logo.svg" alt="Diomika" width="160" height="29" loading="lazy" />
           <p>
-            Catálogo B2B de almofadas e assentos. Consulte modelos e variantes
-            e peça orçamento online.
+            Têxteis para o lar, para revenda: almofadas, assentos, toalhas, aventais e mais.
+            Pedido mínimo de 500&nbsp;€ + IVA.
           </p>
         </div>
 
         <div>
-          <h3 class="footer-title">Navegação</h3>
-          <ul class="footer-links">
-            <li><RouterLink to="/categorias">Categorias</RouterLink></li>
-            <li><RouterLink to="/pesquisa">Pesquisar</RouterLink></li>
-            <li><RouterLink to="/sobre">Sobre nós</RouterLink></li>
-            <li><RouterLink to="/contact">Contacto</RouterLink></li>
-            <li><RouterLink to="/carrinho">Pedido de orçamento</RouterLink></li>
-            <li><RouterLink to="/privacidade">Privacidade</RouterLink></li>
-            <li><RouterLink to="/termos">Aviso legal</RouterLink></li>
-            <li><RouterLink to="/cookies">Cookies</RouterLink></li>
-          </ul>
-        </div>
-
-        <div>
-          <h3 class="footer-title">Categorias</h3>
+          <h2 class="footer-title">Catálogo</h2>
           <ul class="footer-links">
             <li v-for="cat in categories" :key="cat.id">
-              <RouterLink :to="categoryProductsRoute(cat)">
-                {{ pretty(cat.nome) }}
-              </RouterLink>
+              <RouterLink :to="categoryProductsRoute(cat)">{{ pretty(cat.nome) }}</RouterLink>
             </li>
             <li v-if="!categories.length">
               <RouterLink to="/categorias">Ver categorias</RouterLink>
@@ -180,27 +166,28 @@ onUnmounted(() => {
         </div>
 
         <div>
-          <h3 class="footer-title">Contacto</h3>
-          <ul class="footer-links footer-contact">
-            <li>
-              <a :href="`tel:${COMPANY.phoneTel}`">{{ COMPANY.phoneDisplay }}</a>
-            </li>
-            <li>{{ COMPANY.address }}<br />{{ COMPANY.postal }}</li>
-            <li>NIF {{ COMPANY.nif }}</li>
+          <h2 class="footer-title">Empresa</h2>
+          <ul class="footer-links">
+            <li><RouterLink to="/sobre">Sobre nós</RouterLink></li>
+            <li><RouterLink to="/contacto">Contacto</RouterLink></li>
+            <li><RouterLink to="/carrinho">Pedido de orçamento</RouterLink></li>
+            <li><RouterLink to="/privacidade">Privacidade</RouterLink></li>
+            <li><RouterLink to="/termos">Aviso legal</RouterLink></li>
+            <li><RouterLink to="/cookies">Cookies</RouterLink></li>
           </ul>
         </div>
 
         <div>
-          <h3 class="footer-title">Orçamento</h3>
-          <p class="footer-note">
-            Sem preços no site — monte o pedido no carrinho ou envie mensagem
-            pelo formulário de contacto.
-          </p>
-          <RouterLink to="/carrinho" class="footer-cta">Pedir orçamento</RouterLink>
+          <h2 class="footer-title">Contacto</h2>
+          <ul class="footer-links">
+            <li><a :href="`tel:${COMPANY.phoneTel}`">{{ COMPANY.phoneDisplay }}</a></li>
+            <li>{{ COMPANY.address }}<br />{{ COMPANY.postal }}</li>
+            <li>NIF {{ COMPANY.nif }}</li>
+          </ul>
         </div>
       </div>
 
-      <div class="footer-bottom page-shell">
+      <div class="footer-bottom">
         <p>© {{ new Date().getFullYear() }} Diomika. Todos os direitos reservados.</p>
       </div>
     </footer>
@@ -223,260 +210,263 @@ onUnmounted(() => {
   top: 0;
   z-index: 2000;
   padding: 0.75rem 1rem;
-  background: #fff;
+  background: var(--color-surface);
   color: var(--color-ink-deep);
-  text-decoration: none;
   font-weight: 600;
 }
 
-.skip-link:focus { left: 0; }
+.skip-link:focus {
+  left: 0;
+}
 
+/* ---------- Cabeçalho ---------- */
 .app-header {
-  background: var(--color-ink-deep);
   position: sticky;
   top: 0;
   z-index: 1000;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid var(--color-border);
+  backdrop-filter: saturate(1.4) blur(8px);
 }
 
 .header-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1.25rem;
-  padding-top: 0.95rem;
-  padding-bottom: 0.95rem;
+  gap: 1.5rem;
+  max-width: calc(var(--content-max) + 2 * var(--page-pad));
+  height: var(--header-h);
+  margin: 0 auto;
+  padding: 0 var(--page-pad);
 }
 
 .logo-link {
   display: inline-flex;
-  align-items: center;
-  text-decoration: none;
   flex-shrink: 0;
 }
 
 .brand-logo {
-  width: min(200px, 52vw);
+  width: min(188px, 48vw);
   height: auto;
-  filter: brightness(0) invert(1);
 }
 
 .menu-btn {
   display: none;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  background: transparent;
-  border-radius: 8px;
-  padding: 0.45rem 0.8rem;
-  font: inherit;
-  font-weight: 600;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-ink);
   cursor: pointer;
-  color: #fff;
 }
 
 .main-nav {
   display: flex;
   align-items: center;
-  gap: 0.35rem 1.4rem;
+  gap: 0.25rem;
 }
 
 .main-nav > a {
-  color: rgba(255, 255, 255, 0.92);
-  text-decoration: none;
-  font-weight: 500;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 40px;
+  padding: 0 0.8rem;
+  border-radius: var(--radius-md);
+  color: var(--color-ink-soft);
   font-size: 0.95rem;
+  font-weight: 550;
 }
 
-.main-nav > a:hover,
+.main-nav > a:hover {
+  color: var(--color-ink-deep);
+  background: var(--color-bg);
+}
+
 .main-nav > a.router-link-active {
-  color: #fff;
+  color: var(--color-accent);
 }
 
-.nav-cart { position: relative; }
+.main-nav > a.router-link-active::after {
+  content: '';
+  position: absolute;
+  left: 0.8rem;
+  right: 0.8rem;
+  bottom: -14px;
+  height: 2px;
+  background: var(--color-accent);
+}
 
+.main-nav > .nav-quote {
+  margin-left: 0.5rem;
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-ink);
+}
+
+.main-nav > .nav-quote:hover {
+  border-color: var(--color-ink-soft);
+  background: var(--color-surface);
+}
+
+.main-nav > .nav-quote.router-link-active::after {
+  display: none;
+}
+
+/* O único uso do vermelho da marca: quantos artigos estão no pedido. */
 .cart-badge {
-  margin-left: 0.25rem;
-  background: #e85d4c;
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-red);
   color: #fff;
-  border-radius: 999px;
-  padding: 0.05rem 0.4rem;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
-.nav-cta {
-  background: #fff !important;
-  color: var(--color-ink-deep) !important;
-  border: 0 !important;
-  padding: 0.5rem 1.15rem !important;
+.app-main {
+  flex: 1;
 }
 
-.nav-cta:hover {
-  background: #eef2f6 !important;
-  color: var(--color-ink-deep) !important;
-}
-
-.app-main { flex: 1; width: 100%; min-width: 0; }
-
+/* ---------- Rodapé ---------- */
 .app-footer {
-  background: #071526;
-  color: rgba(255, 255, 255, 0.82);
-  margin-top: auto;
-  padding-top: 3rem;
+  background: var(--color-ink-deep);
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .footer-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 1.5rem 1rem;
-  padding-top: 0;
-  padding-bottom: 2.25rem;
-  max-width: none;
-  width: 100%;
+  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+  gap: 2.5rem;
+  max-width: calc(var(--content-max) + 2 * var(--page-pad));
+  margin: 0 auto;
+  padding: 3.5rem var(--page-pad) 2.5rem;
 }
 
 .footer-brand img {
-  width: 170px;
+  width: 160px;
   height: auto;
   margin-bottom: 1rem;
   filter: brightness(0) invert(1);
 }
 
-.footer-brand p,
-.footer-note {
+.footer-brand p {
+  max-width: 36ch;
   margin: 0;
-  font-size: 0.92rem;
-  line-height: 1.55;
-  color: rgba(255, 255, 255, 0.72);
-  max-width: 32ch;
+  font-size: 0.95rem;
 }
 
 .footer-title {
   margin: 0 0 0.9rem;
   color: #fff;
   font-size: 0.95rem;
-  font-weight: 700;
+  font-weight: 650;
+  font-stretch: 112%;
+  letter-spacing: 0.01em;
 }
 
 .footer-links {
-  list-style: none;
+  display: grid;
+  gap: 0.5rem;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: 0.55rem;
+  list-style: none;
+  font-size: 0.95rem;
 }
 
-.footer-links a,
-.footer-links span {
-  color: rgba(255, 255, 255, 0.78);
-  text-decoration: none;
-  font-size: 0.92rem;
+.footer-links a {
+  color: rgba(255, 255, 255, 0.72);
 }
 
-.footer-links a:hover { color: #fff; }
-
-.footer-contact li {
-  line-height: 1.55;
-}
-
-.footer-cta {
-  display: inline-flex;
-  margin-top: 1rem;
-  padding: 0.55rem 1rem;
-  border-radius: 8px;
-  background: #fff;
-  color: var(--color-ink-deep);
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-.footer-cta:hover {
-  background: #eef2f6;
-  color: var(--color-ink-deep);
+.footer-links a:hover {
+  color: #fff;
 }
 
 .footer-bottom {
+  max-width: calc(var(--content-max) + 2 * var(--page-pad));
+  margin: 0 auto;
+  padding: 1.25rem var(--page-pad) 1.5rem;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 1.15rem;
-  padding-bottom: 1.15rem;
-  text-align: center;
   font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.5);
 }
 
-.footer-bottom p { margin: 0; }
-
-@media (max-width: 992px) {
-  .footer-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+.footer-bottom p {
+  margin: 0;
 }
 
-@media (max-width: 720px) {
-  .footer-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+/* ---------- Transição de página ---------- */
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.14s ease;
 }
 
-@media (max-width: 860px) {
-  .menu-btn { display: inline-flex; }
+.page-fade-enter-from,
+.page-fade-leave-to {
+  opacity: 0;
+}
+
+/* ---------- Responsivo ---------- */
+@media (max-width: 980px) {
+  .menu-btn {
+    display: inline-flex;
+  }
 
   .main-nav {
+    position: fixed;
+    inset: var(--header-h) 0 auto 0;
     display: none;
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 100%;
-    background: var(--color-ink-deep);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
     flex-direction: column;
     align-items: stretch;
-    padding: 0.75rem 1rem 1rem;
-    gap: 0.15rem;
+    gap: 0;
+    padding: 0.5rem var(--page-pad) 1rem;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
     box-shadow: var(--shadow-md);
   }
 
-  .main-nav.open { display: flex; }
+  .main-nav.open {
+    display: flex;
+  }
 
   .main-nav > a {
-    padding: 0.75rem 0.5rem;
-    border-radius: 8px;
+    min-height: 48px;
+    padding: 0 0.25rem;
+    border-radius: 0;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 1.05rem;
   }
 
-  .main-nav > a:hover {
-    background: rgba(255, 255, 255, 0.08);
+  .main-nav > a.router-link-active::after {
+    display: none;
   }
 
-  .nav-cta {
-    margin-top: 0.4rem;
-    text-align: center;
+  .main-nav > .nav-quote {
     justify-content: center;
+    margin: 0.75rem 0 0;
+    border-radius: var(--radius-md);
+  }
+
+  .footer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .footer-brand {
+    grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 560px) {
-  .footer-grid { grid-template-columns: 1fr; }
-}
-
-.page-fade-enter-active,
-.page-fade-leave-active {
-  transition: opacity 0.22s ease, transform 0.22s ease;
-}
-
-.page-fade-enter-from {
-  opacity: 0;
-  transform: translateY(6px);
-}
-
-.page-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .page-fade-enter-active,
-  .page-fade-leave-active {
-    transition: none;
+  .footer-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
   }
 }
 </style>

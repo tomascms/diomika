@@ -21,52 +21,49 @@ defineProps({
 </template>
 
 <style scoped>
+/* Trilho discreto por cima do título — já não é uma barra escura fixa. */
 .breadcrumbs {
-  position: sticky;
-  top: var(--header-h);
-  z-index: 990;
-  background: var(--color-ink-deep);
+  background: var(--color-surface);
 }
 
 .breadcrumbs-inner {
-  padding-top: 0.65rem;
-  padding-bottom: 0.65rem;
+  padding-top: 1.1rem;
+  padding-bottom: 0;
 }
 
 .breadcrumb-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.88rem;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
 }
 
 .breadcrumb-item {
   display: inline-flex;
   align-items: center;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--color-muted);
 }
 
 .breadcrumb-item:not(:last-child)::after {
   content: '/';
-  margin-left: 0.35rem;
-  opacity: 0.6;
+  margin-left: 0.4rem;
+  color: var(--color-border-strong);
 }
 
 .breadcrumb-item a {
-  color: rgba(255, 255, 255, 0.9);
-  text-decoration: none;
+  color: var(--color-muted);
 }
 
 .breadcrumb-item a:hover {
-  text-decoration: underline;
+  color: var(--color-accent);
 }
 
 .breadcrumb-item .current {
-  color: #fff;
-  font-weight: 600;
+  color: var(--color-ink);
+  font-weight: 560;
 }
 </style>
