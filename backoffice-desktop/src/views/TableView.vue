@@ -494,22 +494,25 @@ onActivated(() => {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   transition: all var(--transition);
+  animation: slideDown 0.4s ease-out;
 }
 
 .toolbar-panel:focus-within {
   border-color: var(--accent);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 .input {
   padding: 11px 13px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(59, 130, 246, 0.1);
   border-radius: var(--radius-sm);
   font-family: inherit;
   font-size: 14px;
-  background: var(--surface);
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(59, 130, 246, 0.01) 100%);
   color: var(--text-primary);
-  transition: all var(--transition);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.04);
 }
 
 .input::placeholder {
@@ -517,14 +520,15 @@ onActivated(() => {
 }
 
 .input:hover {
-  border-color: var(--accent-light);
+  border-color: rgba(59, 130, 246, 0.2);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
 }
 
 .input:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12), inset 0 0 0 1px rgba(59, 130, 246, 0.1);
-  background: linear-gradient(to bottom, var(--surface), rgba(59, 130, 246, 0.02));
+  background: linear-gradient(to bottom, var(--surface), rgba(59, 130, 246, 0.03));
 }
 
 .input.search {
@@ -547,10 +551,11 @@ onActivated(() => {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0.04) 100%);
   color: var(--accent);
   border: 1px solid rgba(59, 130, 246, 0.3);
+  border-left: 4px solid var(--accent);
   font-size: 14px;
-  font-weight: 500;
-  animation: slideDown 0.3s ease-out;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+  font-weight: 600;
+  animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12);
 }
 
 @keyframes slideDown {
@@ -568,10 +573,10 @@ onActivated(() => {
   padding: 22px;
   margin-bottom: 18px;
   background: linear-gradient(135deg, var(--surface) 0%, rgba(59, 130, 246, 0.02) 100%);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(59, 130, 246, 0.1);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  animation: slideUp 0.3s ease-out;
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.12);
+  animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
   overflow: hidden;
 }
@@ -582,31 +587,46 @@ onActivated(() => {
   top: 0;
   left: 0;
   right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.2) 50%, transparent 100%);
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, rgba(59, 130, 246, 0.3) 50%, transparent 100%);
   pointer-events: none;
 }
 
+.picker::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 100% 80% at 50% 0%, rgba(59, 130, 246, 0.03), transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
 .picker h3 {
+  position: relative;
+  z-index: 1;
   margin: 0 0 18px 0;
   font-family: var(--font-display);
   font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-weight: 800;
+  letter-spacing: -0.015em;
   color: var(--text-primary);
 }
 
 .picker label {
+  position: relative;
+  z-index: 1;
   display: block;
   margin: 18px 0 10px 0;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.7px;
   color: var(--accent);
 }
 
 .picker-actions {
+  position: relative;
+  z-index: 1;
   display: flex;
   gap: 12px;
   margin-top: 24px;
@@ -617,29 +637,29 @@ onActivated(() => {
 .ok {
   color: var(--success);
   margin: 0 0 14px 0;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 13px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.04) 100%);
   border-radius: var(--radius-md);
   border: 1px solid rgba(16, 185, 129, 0.3);
-  border-left: 3px solid var(--success);
-  animation: slideDown 0.3s ease-out;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
+  border-left: 4px solid var(--success);
+  animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.12);
 }
 
 .err {
   color: var(--danger);
   margin: 0 0 14px 0;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 13px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.04) 100%);
   border-radius: var(--radius-md);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-left: 3px solid var(--danger);
-  animation: slideDown 0.3s ease-out;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.1);
+  border-left: 4px solid var(--danger);
+  animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.12);
 }
 
 .pager {
@@ -650,23 +670,25 @@ onActivated(() => {
   margin-top: 20px;
   padding: 14px 16px;
   background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(59, 130, 246, 0.04) 100%);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(59, 130, 246, 0.1);
   border-radius: var(--radius-md);
   flex-wrap: wrap;
-  transition: all var(--transition);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: slideUp 0.4s ease-out 0.1s both;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.04);
 }
 
 .pager:hover {
-  border-color: var(--accent-light);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.2);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.12);
 }
 
 .pager-meta {
   margin: 0;
   font-size: 11px;
   color: var(--text-secondary);
-  font-weight: 700;
-  letter-spacing: 0.3px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
   text-transform: uppercase;
 }
 
