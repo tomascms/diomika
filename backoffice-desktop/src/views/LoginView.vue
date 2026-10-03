@@ -27,9 +27,14 @@ onMounted(async () => {
   try {
     const st = await api.authStatus()
     loginRequired.value = Boolean(st.login_required)
-    if (!st.login_required && isAuthenticated()) {
+    if (!st.login_required) {
+      // Sem autenticação necessária, entra direto
+      saveSettings({ accessToken: 'no-auth' })
+      writeSessionUser({ username: 'admin', role: 'admin' })
       router.replace({ name: 'workspace', params: { table: 'categories' } })
-    } else if (st.login_required && isAuthenticated()) {
+      return
+    }
+    if (isAuthenticated()) {
       try {
         await api.me()
         router.replace({ name: 'workspace', params: { table: 'categories' } })
