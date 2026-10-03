@@ -52,55 +52,97 @@ const rows = computed(() =>
 <style scoped>
 .specs-panel {
   margin-top: 1.25rem;
-  padding: 1.15rem 1.25rem;
-  background: var(--color-cream);
-  border: 1px solid var(--color-border);
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.02) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.15);
   border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+  animation: slideUp 0.4s ease-out;
 }
 
 .specs-title {
-  margin: 0 0 0.85rem;
+  margin: 0 0 1.2rem;
   font-family: var(--font-body);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--color-muted);
+  color: var(--accent);
+  padding-bottom: 10px;
+  border-bottom: 2px solid rgba(59, 130, 246, 0.2);
 }
 
 .specs-grid {
   margin: 0;
   display: grid;
-  gap: 0.85rem;
+  gap: 1rem;
+}
+
+.spec-item {
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+}
+
+.spec-item:hover {
+  background: rgba(59, 130, 246, 0.06);
+  border-color: rgba(59, 130, 246, 0.2);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
 }
 
 .spec-item dt {
-  margin: 0 0 0.2rem;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--color-muted);
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
 }
 
 .spec-item dd {
   margin: 0;
-  font-size: 1rem;
-  color: var(--color-ink);
-  line-height: 1.45;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--color-ink-deep);
+  line-height: 1.5;
 }
 
 .composition-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
 .mat-tag {
   display: inline-block;
-  padding: 0.3rem 0.65rem;
-  background: #fff;
-  border: 1px solid var(--color-border);
+  padding: 0.4rem 0.8rem;
+  background: linear-gradient(135deg, #fff 0%, rgba(59, 130, 246, 0.02) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
   border-radius: var(--radius-pill);
-  font-size: 0.88rem;
-  font-weight: 500;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-ink-soft);
+  transition: all var(--transition);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.mat-tag:hover {
+  background: linear-gradient(135deg, #fff 0%, rgba(59, 130, 246, 0.04) 100%);
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>
