@@ -106,10 +106,104 @@ const create = async () => {
 </template>
 
 <style scoped>
-.panel { padding: 1.2rem 1.25rem; margin-bottom: 1rem; display: grid; gap: 0.65rem; }
-.panel h3 { margin: 0; font-family: var(--font-display); font-weight: 560; }
-.hint { color: var(--text-muted); font-size: 0.9rem; margin: 0; }
-.hint.small { font-size: 0.78rem; }
-label { font-size: 0.84rem; font-weight: 600; color: var(--text-muted); }
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.panel {
+  padding: 20px;
+  margin-bottom: 16px;
+  display: grid;
+  gap: 14px;
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(59, 130, 246, 0.02) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.panel h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.1);
+}
+
+.hint {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin: 0;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.hint.small {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  padding: 10px;
+  background: rgba(59, 130, 246, 0.04);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent);
+}
+
+label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.panel .input {
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.95rem;
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(59, 130, 246, 0.01) 100%);
+  color: var(--text-primary);
+  transition: all var(--transition);
+}
+
+.panel .input::placeholder {
+  color: var(--text-muted);
+}
+
+.panel .input:hover {
+  border-color: var(--accent-light);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.08);
+  background: linear-gradient(135deg, var(--surface), rgba(59, 130, 246, 0.03));
+}
+
+.panel .input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12), inset 0 0 0 1px rgba(59, 130, 246, 0.1);
+  background: linear-gradient(135deg, var(--surface), rgba(59, 130, 246, 0.04));
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.grid-2 > div {
+  display: grid;
+  gap: 6px;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 </style>
